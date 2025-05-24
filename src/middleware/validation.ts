@@ -55,3 +55,31 @@ export const validateFolderUpdate = [
     .trim(), // Allow empty string for description
   handleValidationErrors, // Reuse existing error handler
 ];
+
+export const validateQuestionSetCreate = [
+  check('name')
+    .isString() // Check if it's a string first
+    .withMessage('Question set name must be a string')
+    .trim()
+    .notEmpty()
+    .withMessage('Question set name cannot be empty'),
+  handleValidationErrors,
+];
+
+export const validateIdParam = [
+  check('id')
+    .isInt({ gt: 0 })
+    .withMessage('ID parameter must be a positive integer'),
+  handleValidationErrors,
+];
+
+export const validateQuestionSetUpdate = [
+  body('name')
+    .optional() // Name is optional for updates
+    .isString()
+    .withMessage('Name, if provided, must be a string')
+    .trim()
+    .notEmpty()
+    .withMessage('Name, if provided, cannot be empty'),
+  handleValidationErrors,
+];

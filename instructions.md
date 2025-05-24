@@ -41,7 +41,7 @@ This is the full list of features (user stories and tasks) to be built, organize
 ### Epic: Core Content Management
 - **Task:** Define Folder, QuestionSet, and Question models in Prisma.
 - **User Story:** As a user, I want to create, view, update, and delete folders.
-- **User Story:** As a user, I want to view all question sets within a folder.
+- **User Story:** As a user, I want to create, view, update, and delete question sets within a folder.
 
 ### Epic: AI Service Integration
 - **User Story:** As a user, I want to provide text to create a new question set (requires POST /api/sets endpoint).
@@ -89,15 +89,31 @@ The goal is to create a set of secure API endpoints that allow an authenticated 
 
 All endpoints must be prefixed with `/api/folders` and must be protected by the existing `protect` middleware.
 
-- **[ ] `POST /api/folders`**: Create a new folder.
-- **[ ] `GET /api/folders`**: Get all folders belonging to the logged-in user.
-- **[ ] `GET /api/folders/:id`**: Get a single folder by its ID.
-- **[ ] `PUT /api/folders/:id`**: Update a folder's name by its ID.
-- **[ ] `DELETE /api/folders/:id`**: Delete a folder by its ID.
+- **[x] `POST /api/folders`**: Create a new folder.
+- **[x] `GET /api/folders`**: Get all folders belonging to the logged-in user.
+- **[x] `GET /api/folders/:id`**: Get a single folder by its ID.
+- **[x] `PUT /api/folders/:id`**: Update a folder's name by its ID.
+- **[x] `DELETE /api/folders/:id`**: Delete a folder by its ID.
 
 ---
 
-## Implementation Details & Constraints:
+## Immediate Objective: Build the Question Sets API
+
+The goal is to create a set of secure API endpoints that allow an authenticated user to manage their own question sets, which are always associated with one of their folders.
+
+### Required Endpoints:
+
+All endpoints must be prefixed with `/api/folders/:folderId/questionsets` and must be protected by the existing `protect` middleware. The `:folderId` in the path refers to the ID of the folder to which the question set belongs or will belong.
+
+- **[x] `POST /api/folders/:folderId/questionsets`**: Create a new question set within the specified folder.
+- **[x] `GET /api/folders/:folderId/questionsets`**: Get all question sets within the specified folder.
+- **[x] `GET /api/folders/:folderId/questionsets/:id`**: Get a single question set by its ID from within the specified folder.
+- **[x] `PUT /api/folders/:folderId/questionsets/:id`**: Update a question set's name by its ID within the specified folder.
+- **[x] `DELETE /api/folders/:folderId/questionsets/:id`**: Delete a question set by its ID from within the specified folder.
+
+---
+
+## Implementation Details & Constraints (Folders):
 
 1.  **Authentication:** Every endpoint in this feature **must** use the `protect` middleware to ensure only authenticated users can access them.
 2.  **Authorization:** All database queries must be scoped to the authenticated user's ID (`req.user.userId`). A user must not be able to view, edit, or delete folders belonging to another user.
@@ -107,11 +123,33 @@ All endpoints must be prefixed with `/api/folders` and must be protected by the 
 
 ---
 
+## Implementation Details & Constraints (Question Sets):
+
+1.  **Authentication:** Every endpoint **must** use the `protect` middleware.
+2.  **Authorization:** 
+    - All database queries must be scoped to ensure the authenticated user (`req.user.userId`) owns the parent folder specified by `:folderId`.
+    - A user must not be able to create, view, edit, or delete question sets in folders belonging to another user.
+3.  **Database:** Use `PrismaClient`.
+4.  **Validation:** 
+    - Implement input validation for `POST` and `PUT` routes. The `name` field for a question set should be a non-empty string.
+    - The `:folderId` and `:id` (question set ID) URL parameters must be validated as positive integers.
+5.  **Error Handling:** Use existing global error handling.
+
+---
+
 ## Suggested File Structure:
 
 -   **Routes:** Create `src/routes/folder.routes.ts` to define the five endpoints.
 -   **Controllers:** Create `src/controllers/folder.controller.ts` to house the five controller functions (`createFolder`, `getFolders`, `getFolderById`, `updateFolder`, `deleteFolder`).
 -   **Main App:** Update `src/app.ts` to import and use the new `folderRouter`.
+
+---
+
+## Suggested File Structure (Question Sets):
+
+-   **Routes:** `src/routes/questionset.routes.ts` (already created and used).
+-   **Controllers:** `src/controllers/questionset.controller.ts` (already created and used).
+-   **Main App:** `src/app.ts` already mounts the `folderRouter`, and `questionsetRouter` is nested under it with `mergeParams: true`.
 
 ---
 
@@ -128,3 +166,20 @@ All endpoints must be prefixed with `/api/folders` and must be protected by the 
     -   Use `prisma.folder.create` to save a new folder to the database, ensuring you pass both the `name` and the `userId`.
     -   Send a `201 Created` response with the new folder data.
 4.  Import and mount the new router in `app.ts` under the path `/api/folders`.
+
+---
+
+## First Task: Create the "Create Question Set" Endpoint
+
+**Action:** Implement the `POST /api/folders/:folderId/questionsets` endpoint.
+
+**Steps:**
+1.  Create the `questionset.routes.ts` file and define the `POST /` route, applying the `protect` middleware.
+2.  Create the `questionset.controller.ts` file with an async `createQuestionSet` function.
+3.  Inside `createQuestionSet`:
+    -   Extract the `name` from the request body.
+    -   Extract the `folderId` from the URL parameters.
+    -   Extract the `userId` from the `req.user` object (which is added by the `protect` middleware).
+    -   Use `prisma.questionSet.create` to save a new question set to the database, ensuring you pass both the `name` and the `folderId`, and validate the `folderId` belongs to the `userId`.
+    -   Send a `201 Created` response with the new question set data.
+4.  Import and mount the new router in `app.ts` under the path `/api/folders/:folderId/questionsets`.

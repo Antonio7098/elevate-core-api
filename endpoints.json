@@ -44,5 +44,32 @@
       "path": "/api/folders/:id",
       "description": "Delete a specific folder. Requires JWT."
     }
+  ],
+  "questionSets": [
+    {
+      "method": "POST",
+      "path": "/api/folders/:folderId/questionsets",
+      "description": "Create a new question set within a specific folder for the authenticated user. Requires JWT."
+    },
+    {
+      "method": "GET",
+      "path": "/api/folders/:folderId/questionsets",
+      "description": "Retrieve all question sets within a specific folder for the authenticated user. Requires JWT."
+    },
+    {
+      "method": "GET",
+      "path": "/api/folders/:folderId/questionsets/:id",
+      "description": "Retrieve a specific question set by its ID, within a specific folder for the authenticated user. Requires JWT."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/folders/:folderId/questionsets/:id",
+      "description": "Update a specific question set's name by its ID, within a specific folder for the authenticated user. Requires JWT."
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/folders/:folderId/questionsets/:id",
+      "description": "Delete a specific question set by its ID, within a specific folder for the authenticated user. Requires JWT."
+    }
   ]
 }

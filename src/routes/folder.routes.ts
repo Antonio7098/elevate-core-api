@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { protect } from '../middleware/auth.middleware';
 import { validateFolderCreate, validateFolderUpdate } from '../middleware/validation';
 import { createFolder, getFolders, getFolderById, updateFolder, deleteFolder } from '../controllers/folder.controller.ts'; 
+import questionSetRoutes from './questionset.routes';
 
 const router = Router();
 
@@ -20,5 +21,8 @@ router.put('/:id', protect, ...validateFolderUpdate, updateFolder);
 
 // DELETE /api/folders/:id - Delete a folder by ID
 router.delete('/:id', protect, deleteFolder);
+
+// Nested routes for question sets within a folder
+router.use('/:folderId/questionsets', questionSetRoutes);
 
 export default router;
