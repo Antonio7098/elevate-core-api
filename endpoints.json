@@ -1,0 +1,48 @@
+{
+  "authentication": [
+    {
+      "method": "POST",
+      "path": "/api/auth/register",
+      "description": "Register a new user."
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "description": "Log in an existing user and receive a JWT."
+    }
+  ],
+  "users": [
+    {
+      "method": "GET",
+      "path": "/api/users/profile",
+      "description": "Get the profile (id and email) of the authenticated user. Requires JWT."
+    }
+  ],
+  "folders": [
+    {
+      "method": "POST",
+      "path": "/api/folders",
+      "description": "Create a new folder for the authenticated user. Requires JWT."
+    },
+    {
+      "method": "GET",
+      "path": "/api/folders",
+      "description": "Retrieve all folders for the authenticated user. Requires JWT."
+    },
+    {
+      "method": "GET",
+      "path": "/api/folders/:id",
+      "description": "Retrieve a specific folder by its ID for the authenticated user. Requires JWT."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/folders/:id",
+      "description": "Update a specific folder's name and/or description. Requires JWT."
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/folders/:id",
+      "description": "Delete a specific folder. Requires JWT."
+    }
+  ]
+}
