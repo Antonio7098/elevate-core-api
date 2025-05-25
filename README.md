@@ -242,7 +242,89 @@ All AI routes are protected and require authentication.
     4. If context was provided, the AI incorporates information from your question sets or folders
     5. The AI response is returned, along with any context information that was used
 
-### (Planned) Reviews & Spaced Repetition (`/api/reviews`)
+### Reviews & Spaced Repetition (`/api/reviews`)
+
+All review routes are protected and require authentication.
+
+-   **`GET /today`**: Get questions due for review today.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Response:** An array of questions that are due for review today.
+    ```json
+    {
+      "count": 5,
+      "questions": [
+        {
+          "id": 1,
+          "text": "What is spaced repetition?",
+          "questionType": "multiple-choice",
+          "options": ["A learning technique", "A memorization method", "A scheduling system"],
+          "masteryScore": 2,
+          "nextReviewAt": "2023-06-01T12:00:00Z",
+          "questionSetId": 1,
+          "questionSetName": "Learning Techniques",
+          "folderId": 1,
+          "folderName": "Study Methods"
+        },
+        // More questions...
+      ]
+    }
+    ```
+
+-   **`POST /`**: Submit a review for a question.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Body:** 
+    ```json
+    { 
+      "questionId": 1,
+      "answeredCorrectly": true,
+      "userAnswer": "Optional user's answer text"
+    }
+    ```
+    -   **Response:** The updated question with review results.
+    ```json
+    {
+      "question": {
+        "id": 1,
+        "text": "What is spaced repetition?",
+        "masteryScore": 3,
+        "nextReviewAt": "2023-06-08T12:00:00Z",
+        // Other question properties...
+      },
+      "reviewResult": {
+        "answeredCorrectly": true,
+        "oldMasteryScore": 2,
+        "newMasteryScore": 3,
+        "nextReviewAt": "2023-06-08T12:00:00Z"
+      }
+    }
+    ```
+
+-   **`GET /stats`**: Get review statistics for the authenticated user.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Response:** Statistics about the user's review progress.
+    ```json
+    {
+      "totalQuestions": 50,
+      "reviewedQuestions": 30,
+      "masteredQuestions": 15,
+      "dueQuestions": 8,
+      "questionsByMastery": [
+        { "level": 0, "count": 20 },
+        { "level": 1, "count": 5 },
+        { "level": 2, "count": 10 },
+        { "level": 3, "count": 5 },
+        { "level": 4, "count": 7 },
+        { "level": 5, "count": 3 }
+      ],
+      "completionRate": 30
+    }
+    ```
+
+    **How it works:**
+    1. The spaced repetition system uses a simplified version of the SM-2 algorithm
+    2. Questions are assigned a mastery score (0-5) that increases when answered correctly and decreases when answered incorrectly
+    3. The next review date is calculated based on the mastery score - higher mastery means longer intervals between reviews
+    4. Questions are prioritized for review based on their mastery score and how overdue they are
 
 ---
 

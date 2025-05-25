@@ -110,5 +110,22 @@
       "path": "/api/ai/chat",
       "description": "Chat with AI about study materials with optional context from question sets or folders. Requires JWT."
     }
+  ],
+  "reviews": [
+    {
+      "method": "GET",
+      "path": "/api/reviews/today",
+      "description": "Get questions due for review today based on the spaced repetition algorithm. Requires JWT."
+    },
+    {
+      "method": "POST",
+      "path": "/api/reviews",
+      "description": "Submit a review for a question, updating its mastery score and next review date. Requires JWT."
+    },
+    {
+      "method": "GET",
+      "path": "/api/reviews/stats",
+      "description": "Get statistics about the user's review progress and mastery levels. Requires JWT."
+    }
   ]
 }

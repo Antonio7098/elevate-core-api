@@ -182,3 +182,24 @@ export const validateChatWithAI = [
     .toInt(),
   handleValidationErrors,
 ];
+
+export const validateSubmitReview = [
+  check('questionId')
+    .notEmpty()
+    .withMessage('Question ID is required')
+    .isInt({ gt: 0 })
+    .withMessage('Question ID must be a positive integer')
+    .toInt(),
+  check('answeredCorrectly')
+    .notEmpty()
+    .withMessage('answeredCorrectly is required')
+    .isBoolean()
+    .withMessage('answeredCorrectly must be a boolean')
+    .toBoolean(),
+  check('userAnswer')
+    .optional()
+    .isString()
+    .withMessage('User answer must be a string')
+    .trim(),
+  handleValidationErrors,
+];
