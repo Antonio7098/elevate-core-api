@@ -6,6 +6,10 @@
  */
 
 import axios, { AxiosError, AxiosInstance } from 'axios';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 import {
   AIServiceBaseResponse,
   AIServiceErrorResponse,
@@ -31,13 +35,20 @@ export class AIService {
    * Create a new AI Service instance
    */
   constructor() {
-    this.baseUrl = process.env.AI_SERVICE_URL || 'http://localhost:5000';
+    // Ensure environment variables are loaded
+    dotenv.config();
+    
+    this.baseUrl = process.env.AI_SERVICE_BASE_URL || 'http://localhost:8000';
     this.apiKey = process.env.AI_SERVICE_API_KEY || '';
     this.apiVersion = process.env.AI_SERVICE_API_VERSION || 'v1';
+    
+    console.log(`[AIService] Using base URL: ${this.baseUrl}`);
+    console.log(`[AIService] API Key length: ${this.apiKey.length}`);
+    console.log(`[AIService] API Version: ${this.apiVersion}`);
 
     // Create an axios instance with default configuration
     this.client = axios.create({
-      baseURL: `${this.baseUrl}/${this.apiVersion}`,
+      baseURL: this.baseUrl,  // Don't include version in base URL
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.apiKey}`
@@ -55,8 +66,9 @@ export class AIService {
    */
   async generateQuestions(request: GenerateQuestionsRequest): Promise<GenerateQuestionsResponse> {
     try {
+      console.log('[AIService] Generating questions with request:', JSON.stringify(request));
       const response = await this.client.post<GenerateQuestionsResponse | AIServiceErrorResponse>(
-        '/api/generate-questions',
+        '/generate-questions',
         request
       );
 
@@ -88,8 +100,9 @@ export class AIService {
    */
   async chat(request: ChatRequest): Promise<ChatResponse> {
     try {
+      console.log('[AIService] Chatting with AI with request:', JSON.stringify(request));
       const response = await this.client.post<ChatResponse | AIServiceErrorResponse>(
-        '/api/chat',
+        '/chat',
         request
       );
 
@@ -119,10 +132,20 @@ export class AIService {
    */
   async isAvailable(): Promise<boolean> {
     try {
-      await this.client.get('/health');
+      console.log('[AIService] Checking if AI service is available...');
+      console.log('[AIService] API Key:', this.apiKey);
+      console.log('[AIService] Request URL:', `${this.baseUrl}/${this.apiVersion}/health-check`);
+      console.log('[AIService] Request headers:', this.client.defaults.headers);
+      
+      const response = await this.client.get('/health-check');
+      console.log('[AIService] Health check response:', response.status, response.data);
       return true;
-    } catch (error) {
-      console.error('AI Service health check failed:', error);
+    } catch (error: any) {
+      console.error('[AIService] Health check failed:', error.message);
+      if (error.response) {
+        console.error('[AIService] Response status:', error.response.status);
+        console.error('[AIService] Response data:', error.response.data);
+      }
       return false;
     }
   }
@@ -145,8 +168,9 @@ export class AIService {
    */
   async evaluateAnswer(request: EvaluateAnswerRequest): Promise<EvaluateAnswerResponse> {
     try {
+      console.log('[AIService] Evaluating answer with request:', JSON.stringify(request));
       const response = await this.client.post<EvaluateAnswerResponse | AIServiceErrorResponse>(
-        '/api/evaluate-answer',
+        '/evaluate-answer',
         request
       );
 
