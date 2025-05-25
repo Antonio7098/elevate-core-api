@@ -8,6 +8,7 @@ import userRouter from './routes/user.routes.ts';
 import folderRouter from './routes/folder.routes.ts';
 import aiRouter from './routes/ai.routes.ts';
 import reviewRouter from './routes/review.routes.ts';
+import evaluationRouter from './routes/evaluation.routes.ts';
 
 // Load environment variables
 dotenv.config();
@@ -25,6 +26,7 @@ app.use('/api/users', userRouter);
 app.use('/api/folders', folderRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/reviews', reviewRouter);
+app.use('/api/ai', evaluationRouter);
 
 // Error handling middleware
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {

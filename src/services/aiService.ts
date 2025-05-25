@@ -6,13 +6,15 @@
  */
 
 import axios, { AxiosError, AxiosInstance } from 'axios';
-import { 
+import {
   AIServiceBaseResponse,
   AIServiceErrorResponse,
   GenerateQuestionsRequest,
   GenerateQuestionsResponse,
   ChatRequest,
   ChatResponse,
+  EvaluateAnswerRequest,
+  EvaluateAnswerResponse,
   isErrorResponse
 } from '../types/ai-service.types';
 
@@ -132,6 +134,39 @@ export class AIService {
    */
   getApiVersion(): string {
     return this.apiVersion;
+  }
+
+  /**
+   * Evaluate a user's answer to a question
+   * 
+   * @param request - The request object containing the question and user's answer
+   * @returns A promise that resolves to the evaluation of the answer
+   * @throws Error if the request fails or the AI service returns an error
+   */
+  async evaluateAnswer(request: EvaluateAnswerRequest): Promise<EvaluateAnswerResponse> {
+    try {
+      const response = await this.client.post<EvaluateAnswerResponse | AIServiceErrorResponse>(
+        '/api/evaluate-answer',
+        request
+      );
+
+      const data = response.data;
+
+      if (isErrorResponse(data)) {
+        throw new Error(`AI Service Error: ${data.error.code} - ${data.error.message}`);
+      }
+
+      return data;
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        if (error.response?.data && typeof error.response.data === 'object' && 'error' in error.response.data) {
+          const errorData = error.response.data as AIServiceErrorResponse;
+          throw new Error(`AI Service Error: ${errorData.error.code} - ${errorData.error.message}`);
+        }
+        throw new Error(`Network Error: ${error.message}`);
+      }
+      throw error;
+    }
   }
 }
 

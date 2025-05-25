@@ -147,3 +147,48 @@ export function isGenerateQuestionsResponse(
 export function isChatResponse(response: AIServiceBaseResponse): response is ChatResponse {
   return response.success && 'response' in response;
 }
+
+// Answer Evaluation Types
+
+/**
+ * Request to evaluate a user's answer to a question
+ */
+export interface EvaluateAnswerRequest {
+  questionId: number;
+  questionText: string;
+  expectedAnswer?: string;
+  questionType: string;
+  userAnswer: string;
+  options?: string[];
+  context?: {
+    questionSetName?: string;
+    folderName?: string;
+  };
+}
+
+/**
+ * Response from the answer evaluation endpoint
+ */
+export interface EvaluateAnswerResponse extends AIServiceBaseResponse {
+  success: true;
+  evaluation: {
+    isCorrect: boolean | 'partially_correct';
+    score: number; // 0.0 to 1.0
+    feedback: string;
+    correctedAnswer?: string;
+  };
+  metadata: {
+    processingTime: string;
+    model: string;
+    confidenceScore: number;
+  };
+}
+
+/**
+ * Type guard to check if a response is a successful answer evaluation response
+ */
+export function isEvaluateAnswerResponse(
+  response: AIServiceBaseResponse
+): response is EvaluateAnswerResponse {
+  return response.success && 'evaluation' in response;
+}
