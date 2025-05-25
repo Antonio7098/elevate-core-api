@@ -112,10 +112,11 @@ export const getQuestionById = async (req: AuthRequest, res: Response, next: Nex
   }
 
   try {
-    // Use a single efficient query that handles potential type mismatches
+    // Use a query that verifies ownership and retrieves the question
     const question = await prisma.question.findFirst({
       where: {
         id: questionId,
+        questionSetId: setIdNum,
         questionSet: {
           id: setIdNum,
           folderId: folderIdNum,
@@ -145,7 +146,7 @@ export const updateQuestion = async (req: AuthRequest, res: Response, next: Next
   const folderIdNum = parseInt(folderId);
   const setIdNum = parseInt(setId);
   const userId = req.user?.userId;
-  const { text, answer, options, questionType } = req.body;
+  const updateData = req.body;
 
   if (isNaN(questionId) || isNaN(folderIdNum) || isNaN(setIdNum)) {
     res.status(400).json({ message: 'Invalid ID format for question, folder, or set.' });
@@ -158,10 +159,11 @@ export const updateQuestion = async (req: AuthRequest, res: Response, next: Next
   }
 
   try {
-    // Use a single query to verify ownership and find the question
+    // Check if the question exists and belongs to the user
     const question = await prisma.question.findFirst({
       where: {
         id: questionId,
+        questionSetId: setIdNum,
         questionSet: {
           id: setIdNum,
           folderId: folderIdNum,
@@ -181,12 +183,7 @@ export const updateQuestion = async (req: AuthRequest, res: Response, next: Next
     // Update the question
     const updatedQuestion = await prisma.question.update({
       where: { id: questionId },
-      data: {
-        ...(text !== undefined && { text }),
-        ...(answer !== undefined && { answer }),
-        ...(options !== undefined && { options }),
-        ...(questionType !== undefined && { questionType }),
-      },
+      data: updateData,
     });
 
     res.status(200).json(updatedQuestion);
@@ -214,10 +211,11 @@ export const deleteQuestion = async (req: AuthRequest, res: Response, next: Next
   }
 
   try {
-    // Use a single query to verify ownership and find the question
-    const existingQuestion = await prisma.question.findFirst({
+    // Check if the question exists and belongs to the user
+    const question = await prisma.question.findFirst({
       where: {
         id: questionId,
+        questionSetId: setIdNum,
         questionSet: {
           id: setIdNum,
           folderId: folderIdNum,
@@ -229,7 +227,7 @@ export const deleteQuestion = async (req: AuthRequest, res: Response, next: Next
       },
     });
 
-    if (!existingQuestion) {
+    if (!question) {
       res.status(404).json({ message: 'Question not found or access denied.' });
       return;
     }

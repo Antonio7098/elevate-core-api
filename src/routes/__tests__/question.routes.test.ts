@@ -315,18 +315,14 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
       // Clean up existing questions
       await prisma.question.deleteMany();
       
-      console.log('Before creating test question - user1Qs1:', {
-        id: user1Qs1.id,
-        name: user1Qs1.name,
-        folderId: user1Qs1.folderId
-      });
+
       
       // Verify the question set exists before creating the question
       const verifiedQuestionSet = await prisma.questionSet.findUnique({
         where: { id: user1Qs1.id }
       });
       
-      console.log('Verified question set:', verifiedQuestionSet);
+
       
       if (!verifiedQuestionSet) {
         throw new Error('Question set not found before creating test question');
@@ -348,14 +344,7 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
         where: { id: testQuestion.id }
       });
       
-      console.log('Created test question:', {
-        id: testQuestion.id,
-        text: testQuestion.text,
-        questionSetId: testQuestion.questionSetId,
-        verifiedQuestionSetId: verifiedQuestion?.questionSetId,
-        user1Qs1Id: user1Qs1.id,
-        match: Number(verifiedQuestion?.questionSetId) === Number(user1Qs1.id)
-      });
+
 
       // Create a folder, question set, and question for user2 to test authorization
       otherUserFolder = await prisma.folder.create({
@@ -379,40 +368,43 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
         }
       });
       
-      console.log('GET by ID test setup:', {
-        user1FolderId: user1Folder1.id,
-        user1QuestionSetId: user1Qs1.id,
-        testQuestionId: testQuestion.id,
-        otherUserFolderId: otherUserFolder.id,
-        otherUserQuestionSetId: otherUserQuestionSet.id,
-        otherUserQuestionId: otherUserQuestion.id
-      });
+
     });
 
-    // TEMPORARILY COMMENTED OUT - Failing test
-  /*
   it('should retrieve a specific question by ID', async () => {
-      console.log('Test data for GET by ID:', {
-        testQuestionId: testQuestion.id,
-        testQuestionSetId: testQuestion.questionSetId,
-        user1Qs1Id: user1Qs1.id,
-        match: testQuestion.questionSetId === user1Qs1.id
+
+      
+      // Create a test question specifically for this test
+      const testQuestion = await prisma.question.create({
+        data: {
+          text: 'Test Question for GET by ID',
+          answer: 'Test Answer',
+          questionType: 'flashcard',
+          options: [],
+          questionSet: { connect: { id: user1Qs1.id } }
+        } as any // Type assertion to bypass TypeScript error
       });
+      
+
+      
+      // Double-check the question exists in the database
+      const dbQuestion = await prisma.question.findUnique({
+        where: { id: testQuestion.id },
+        include: { questionSet: true }
+      });
+      
+
       
       const res = await request(app)
         .get(`/api/folders/${user1Folder1.id}/questionsets/${user1Qs1.id}/questions/${testQuestion.id}`)
         .set('Authorization', `Bearer ${user1Token}`);
       
-      console.log('GET by ID response:', {
-        status: res.statusCode,
-        body: res.body
-      });
+
       
       expect(res.statusCode).toEqual(200);
       expect(res.body.id).toEqual(testQuestion.id);
       expect(res.body.text).toEqual('Test Question for GET by ID');
     });
-  */
 
     it('should return 401 if no token is provided', async () => {
       const res = await request(app)
@@ -467,17 +459,9 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
         where: { id: updateTestQuestion.id }
       });
       
-      console.log('Created update test question:', {
-        id: updateTestQuestion.id,
-        questionSetId: updateTestQuestion.questionSetId,
-        verifiedQuestionSetId: verifiedUpdateQuestion?.questionSetId,
-        user1Qs1Id: user1Qs1.id,
-        match: Number(verifiedUpdateQuestion?.questionSetId) === Number(user1Qs1.id)
-      });
+
       
-      console.log('Update test setup:', {
-        updateTestQuestionId: updateTestQuestion.id
-      });
+
     });
 
     const updateData = {
@@ -488,10 +472,35 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
     };
 
     it('should update a question successfully with all fields', async () => {
+
+      
+      // Create a test question specifically for this test
+      const updateTestQuestion = await prisma.question.create({
+        data: {
+          text: 'Original Question Text',
+          answer: 'Original Answer',
+          questionType: 'flashcard',
+          options: [],
+          questionSet: { connect: { id: user1Qs1.id } }
+        } as any // Type assertion to bypass TypeScript error
+      });
+      
+
+      
+      // Double-check the question exists in the database
+      const dbQuestion = await prisma.question.findUnique({
+        where: { id: updateTestQuestion.id },
+        include: { questionSet: true }
+      });
+      
+
+      
       const res = await request(app)
         .put(`/api/folders/${user1Folder1.id}/questionsets/${user1Qs1.id}/questions/${updateTestQuestion.id}`)
         .set('Authorization', `Bearer ${user1Token}`)
         .send(updateData);
+      
+
       
       expect(res.statusCode).toEqual(200);
       expect(res.body.text).toEqual(updateData.text);
@@ -636,13 +645,7 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
         where: { id: deleteTestQuestion.id }
       });
       
-      console.log('Created delete test question:', {
-        id: deleteTestQuestion.id,
-        questionSetId: deleteTestQuestion.questionSetId,
-        verifiedQuestionSetId: verifiedDeleteQuestion?.questionSetId,
-        user1Qs1Id: user1Qs1.id,
-        match: Number(verifiedDeleteQuestion?.questionSetId) === Number(user1Qs1.id)
-      });
+
       
       // Create a question for user2 to test authorization
       const otherUserFolder = await prisma.folder.create({
@@ -666,18 +669,38 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
         }
       });
       
-      console.log('Delete test setup:', {
-        deleteTestQuestionId: deleteTestQuestion.id,
-        otherUserDeleteQuestionId: otherUserDeleteQuestion.id
-      });
+
     });
 
-    // TEMPORARILY COMMENTED OUT - Failing test
-    /*
     it('should delete a question successfully', async () => {
+
+      
+      // Create a test question specifically for this test
+      const deleteTestQuestion = await prisma.question.create({
+        data: {
+          text: 'Question to be deleted',
+          answer: 'Answer to be deleted',
+          questionType: 'flashcard',
+          options: [],
+          questionSet: { connect: { id: user1Qs1.id } }
+        } as any // Type assertion to bypass TypeScript error
+      });
+      
+
+      
+      // Double-check the question exists in the database
+      const dbQuestion = await prisma.question.findUnique({
+        where: { id: deleteTestQuestion.id },
+        include: { questionSet: true }
+      });
+      
+
+      
       const res = await request(app)
         .delete(`/api/folders/${user1Folder1.id}/questionsets/${user1Qs1.id}/questions/${deleteTestQuestion.id}`)
         .set('Authorization', `Bearer ${user1Token}`);
+      
+
       
       expect(res.statusCode).toEqual(204);
       
@@ -686,9 +709,10 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
         .get(`/api/folders/${user1Folder1.id}/questionsets/${user1Qs1.id}/questions/${deleteTestQuestion.id}`)
         .set('Authorization', `Bearer ${user1Token}`);
       
+
+      
       expect(checkRes.statusCode).toEqual(404);
     });
-    */
 
     it('should return 401 if no token is provided', async () => {
       // Create another question for this test

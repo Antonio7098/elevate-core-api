@@ -141,3 +141,24 @@ export const validateQuestionUpdate = [
     }),
   handleValidationErrors,
 ];
+
+export const validateGenerateFromSource = [
+  check('sourceText')
+    .notEmpty()
+    .withMessage('Source text cannot be empty')
+    .isString()
+    .withMessage('Source text must be a string')
+    .trim(),
+  check('folderId')
+    .notEmpty()
+    .withMessage('Folder ID is required')
+    .isInt({ gt: 0 })
+    .withMessage('Folder ID must be a positive integer')
+    .toInt(),
+  check('questionCount')
+    .optional()
+    .isInt({ min: 1, max: 20 })
+    .withMessage('Question count must be between 1 and 20')
+    .toInt(),
+  handleValidationErrors,
+];
