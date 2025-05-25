@@ -14,6 +14,7 @@ This Core API is responsible for user authentication, content management (folder
 -   **ORM:** Prisma
 -   **Authentication:** JWT (JSON Web Tokens)
 -   **Testing:** Jest & Supertest
+-   **AI Integration:** Built-in AI simulation (with planned integration to Python AI service)
 -   **Package Manager:** npm
 
 ---
@@ -169,7 +170,52 @@ All question routes are protected and require authentication.
     -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
     -   **Response:** 204 No Content on success.
 
-### (Planned) AI Service Integration (`/api/ai`)
+### AI Service Integration (`/api/ai`)
+
+All AI routes are protected and require authentication.
+-   **`POST /generate-from-source`**: Generate questions from source text.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Body:** 
+    ```json
+    { 
+      "sourceText": "Your study text here...", 
+      "folderId": 1, 
+      "questionCount": 5,
+      "questionSetName": "Optional custom name" // If not provided, a default name will be generated
+    }
+    ```
+    -   **Response:** A newly created question set with AI-generated questions.
+    ```json
+    {
+      "questionSet": {
+        "id": 123,
+        "name": "Questions from Source - May 25, 2025",
+        "folderId": 1,
+        "createdAt": "2025-05-25T07:30:00.000Z",
+        "updatedAt": "2025-05-25T07:30:00.000Z"
+      },
+      "questions": [
+        {
+          "id": 456,
+          "text": "What is the main concept discussed in the text?",
+          "answer": "The main concept is...",
+          "questionType": "flashcard",
+          "options": [],
+          "questionSetId": 123,
+          "createdAt": "2025-05-25T07:30:00.000Z",
+          "updatedAt": "2025-05-25T07:30:00.000Z"
+        },
+        // Additional questions...
+      ]
+    }
+    ```
+
+    **How it works:**
+    1. The API receives source text from which questions should be generated
+    2. It processes the text using AI algorithms to identify key concepts and create relevant questions
+    3. A new question set is created in the specified folder
+    4. The generated questions are saved to the database and linked to the question set
+    5. The complete question set with all questions is returned in the response
 
 ### (Planned) Reviews & Spaced Repetition (`/api/reviews`)
 
@@ -200,10 +246,23 @@ elevate-core-api/
 │   ├── server.ts         # Server entry point (starts the app)
 │   ├── config/           # Configuration files (e.g., for .env loading)
 │   ├── controllers/      # Request handlers (business logic)
+│   │   ├── auth.controller.ts     # Authentication logic
+│   │   ├── folder.controller.ts   # Folder management
+│   │   ├── question.controller.ts # Question and AI generation
+│   │   ├── questionset.controller.ts # Question set management
+│   │   └── user.controller.ts     # User profile management
 │   ├── db/
 │   │   └── prisma/       # Prisma schema and migrations (current location)
 │   ├── middleware/       # Express middleware (auth, error handling, validation)
+│   │   ├── auth.middleware.ts     # JWT authentication
+│   │   └── validation.ts          # Request validation
 │   ├── routes/           # API route definitions
+│   │   ├── ai.ts         # AI-related routes
+│   │   ├── auth.ts       # Authentication routes
+│   │   ├── folder.ts     # Folder management routes
+│   │   ├── question.ts   # Question management routes
+│   │   ├── questionset.ts # Question set routes
+│   │   └── user.ts       # User profile routes
 │   ├── services/         # Business logic services (if needed for complex tasks)
 │   └── utils/            # Utility functions
 ├── .gitignore

@@ -98,5 +98,12 @@
       "path": "/api/folders/:folderId/questionsets/:setId/questions/:id",
       "description": "Delete a specific question. Requires JWT."
     }
+  ],
+  "ai": [
+    {
+      "method": "POST",
+      "path": "/api/ai/generate-from-source",
+      "description": "Generate questions from source text and create a question set. Requires JWT."
+    }
   ]
 }

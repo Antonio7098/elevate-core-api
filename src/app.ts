@@ -6,6 +6,7 @@ import { PrismaClient } from '@prisma/client';
 import { authRouter } from './routes/auth.ts';
 import userRouter from './routes/user.routes.ts';
 import folderRouter from './routes/folder.routes.ts';
+import aiRouter from './routes/ai.routes.ts';
 
 // Load environment variables
 dotenv.config();
@@ -21,6 +22,7 @@ app.use(express.json());
 app.use('/api/auth', authRouter);
 app.use('/api/users', userRouter);
 app.use('/api/folders', folderRouter);
+app.use('/api/ai', aiRouter);
 
 // Error handling middleware
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
