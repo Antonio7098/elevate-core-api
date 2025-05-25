@@ -106,21 +106,68 @@ The API base path is `/api`.
     -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
     -   **Response:** `{ "id": 1, "email": "..." }`
 
-### Folders (`/api/folders`) (Work in Progress)
+### Folders (`/api/folders`)
 
 All folder routes are protected and require authentication.
 -   **`POST /`**: Create a new folder.
     -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
-    -   **Body:** `{ "name": "My New Folder" }`
+    -   **Body:** `{ "name": "My New Folder", "description": "Optional description" }`
     -   **Response:** The newly created folder object.
 -   **`GET /`**: Get all folders for the authenticated user.
     -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
     -   **Response:** An array of folder objects.
--   **(Planned) `GET /:id`**: Get a specific folder by ID.
--   **(Planned) `PUT /:id`**: Update a specific folder.
--   **(Planned) `DELETE /:id`**: Delete a specific folder.
+-   **`GET /:id`**: Get a specific folder by ID.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Response:** The folder object if it belongs to the user.
+-   **`PUT /:id`**: Update a specific folder.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Body:** `{ "name": "Updated Folder Name", "description": "Updated description" }`
+    -   **Response:** The updated folder object.
+-   **`DELETE /:id`**: Delete a specific folder.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Response:** 204 No Content on success.
 
-### (Planned) Question Sets (`/api/sets`)
+### Question Sets (`/api/folders/:folderId/questionsets`)
+
+All question set routes are protected and require authentication.
+-   **`POST /`**: Create a new question set within a folder.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Body:** `{ "name": "My New Question Set" }`
+    -   **Response:** The newly created question set object.
+-   **`GET /`**: Get all question sets within a specific folder.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Response:** An array of question set objects.
+-   **`GET /:id`**: Get a specific question set by ID.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Response:** The question set object if it belongs to the user.
+-   **`PUT /:id`**: Update a specific question set.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Body:** `{ "name": "Updated Question Set Name" }`
+    -   **Response:** The updated question set object.
+-   **`DELETE /:id`**: Delete a specific question set.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Response:** 204 No Content on success.
+
+### Questions (`/api/folders/:folderId/questionsets/:setId/questions`)
+
+All question routes are protected and require authentication.
+-   **`POST /`**: Create a new question within a question set.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Body:** `{ "text": "What is 2+2?", "answer": "4", "questionType": "flashcard", "options": [] }`
+    -   **Response:** The newly created question object.
+-   **`GET /`**: Get all questions within a specific question set.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Response:** An array of question objects.
+-   **`GET /:id`**: Get a specific question by ID.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Response:** The question object if it belongs to the user.
+-   **`PUT /:id`**: Update a specific question.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Body:** `{ "text": "Updated question text", "answer": "Updated answer" }`
+    -   **Response:** The updated question object.
+-   **`DELETE /:id`**: Delete a specific question.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Response:** 204 No Content on success.
 
 ### (Planned) AI Service Integration (`/api/ai`)
 

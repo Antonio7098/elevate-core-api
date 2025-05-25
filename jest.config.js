@@ -8,7 +8,7 @@ module.exports = {
     '**/?(*.)+(spec|test).+(ts|tsx|js)',
   ],
   transform: {
-    '^.+\.(ts|tsx)$': 'ts-jest',
+    '^.+\.(ts|tsx)$': ['ts-jest', { isolatedModules: true }],
   },
   moduleNameMapper: {
     // Handle module aliases (if you have them in tsconfig.json)

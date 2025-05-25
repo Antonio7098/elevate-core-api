@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { check, body, validationResult } from 'express-validator';
+import { check, param, body, validationResult } from 'express-validator';
 
 const handleValidationErrors = (req: Request, res: Response, next: NextFunction) => {
   const errors = validationResult(req);
@@ -54,4 +54,90 @@ export const validateFolderUpdate = [
     .withMessage('Description, if provided and not null, must be a string')
     .trim(), // Allow empty string for description
   handleValidationErrors, // Reuse existing error handler
+];
+
+export const validateSetIdParams = [
+  check('folderId')
+    .isInt({ gt: 0 })
+    .withMessage('Folder ID parameter must be a positive integer'),
+  check('setId')
+    .isInt({ gt: 0 })
+    .withMessage('Set ID parameter must be a positive integer'),
+  handleValidationErrors,
+];
+
+export const validateQuestionCreate = [
+  check('text')
+    .notEmpty()
+    .withMessage('Question text cannot be empty')
+    .isString()
+    .withMessage('Question text must be a string')
+    .trim(),
+  check('questionType')
+    .notEmpty()
+    .withMessage('Question type cannot be empty')
+    .isString()
+    .withMessage('Question type must be a string')
+    .trim(),
+  // 'answer' is optional in the schema (String?)
+  check('answer')
+    .optional({ nullable: true })
+    .isString()
+    .withMessage('Answer, if provided, must be a string')
+    .trim(),
+  // 'options' is an array of strings (String[])
+  check('options')
+    .optional()
+    .isArray()
+    .withMessage('Options, if provided, must be an array'),
+  check('options.*') // Validate each item in the options array
+    .if((value, { req }) => req.body.options && Array.isArray(req.body.options)) // only run if options is an array
+    .isString()
+    .withMessage('Each option must be a string')
+    .notEmpty()
+    .withMessage('Options cannot contain empty strings')
+    .trim(),
+  // masteryScore defaults to 0, nextReviewAt is optional DateTime - no specific validation here for creation unless required
+  handleValidationErrors,
+];
+
+export const validateQuestionId = [
+  param('id')
+    .isInt({ min: 1 })
+    .withMessage('Question ID must be a positive integer')
+    .toInt(),
+  handleValidationErrors,
+];
+
+export const validateQuestionUpdate = [
+  check('text')
+    .optional()
+    .isString()
+    .withMessage('Question text must be a string')
+    .trim(),
+  check('questionType')
+    .optional()
+    .isString()
+    .withMessage('Question type must be a string')
+    .trim(),
+  check('answer')
+    .optional()
+    .isString()
+    .withMessage('Answer must be a string')
+    .trim(),
+  check('options')
+    .optional()
+    .isArray()
+    .withMessage('Options must be an array')
+    .custom((options) => {
+      if (options && options.length > 0) {
+        for (const option of options) {
+          if (typeof option !== 'string' || option.trim() === '') {
+            throw new Error('Options must be non-empty strings');
+          }
+        }
+      }
+      return true;
+    }),
+  handleValidationErrors,
 ];
