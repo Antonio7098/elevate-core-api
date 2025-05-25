@@ -65,12 +65,24 @@ async function testAIServiceConnection() {
     
     // Test 4: Evaluate answer
     console.log('\n4. Testing answer evaluation...');
-    const evaluateRequest: EvaluateAnswerRequest = {
-      questionId: 1,
-      questionText: 'What is the function of mitochondria?',
-      expectedAnswer: 'Generate energy in the form of ATP',
-      questionType: 'short-answer',
-      userAnswer: 'They produce energy for the cell'
+    const evaluateRequest = {
+      questionContext: {
+        questionId: 'bio1',
+        questionText: 'What is the function of mitochondria?',
+        expectedAnswer: 'Generate energy in the form of ATP',
+        questionType: 'short-answer',
+        options: [
+          'Generate energy in the form of ATP',
+          'Store genetic information',
+          'Produce proteins',
+          'Transport molecules'
+        ]
+      },
+      userAnswer: 'They produce energy for the cell',
+      context: {
+        questionSetName: 'Biology 101',
+        folderName: 'Biology'
+      }
     };
     
     const evaluateResponse = await aiService.evaluateAnswer(evaluateRequest);

@@ -134,10 +134,10 @@ export class AIService {
     try {
       console.log('[AIService] Checking if AI service is available...');
       console.log('[AIService] API Key:', this.apiKey);
-      console.log('[AIService] Request URL:', `${this.baseUrl}/${this.apiVersion}/health-check`);
+      console.log('[AIService] Request URL:', `${this.baseUrl}/health`);
       console.log('[AIService] Request headers:', this.client.defaults.headers);
       
-      const response = await this.client.get('/health-check');
+      const response = await this.client.get('/health');
       console.log('[AIService] Health check response:', response.status, response.data);
       return true;
     } catch (error: any) {

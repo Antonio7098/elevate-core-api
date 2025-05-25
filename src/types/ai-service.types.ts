@@ -154,12 +154,14 @@ export function isChatResponse(response: AIServiceBaseResponse): response is Cha
  * Request to evaluate a user's answer to a question
  */
 export interface EvaluateAnswerRequest {
-  questionId: number;
-  questionText: string;
-  expectedAnswer?: string;
-  questionType: string;
+  questionContext: {
+    questionId: string | number;
+    questionText: string;
+    expectedAnswer?: string;
+    questionType: string;
+    options?: string[];
+  };
   userAnswer: string;
-  options?: string[];
   context?: {
     questionSetName?: string;
     folderName?: string;
