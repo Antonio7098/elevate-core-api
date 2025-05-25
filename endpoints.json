@@ -44,5 +44,59 @@
       "path": "/api/folders/:id",
       "description": "Delete a specific folder. Requires JWT."
     }
+  ],
+  "questionSets": [
+    {
+      "method": "POST",
+      "path": "/api/folders/:folderId/questionsets",
+      "description": "Create a new question set within a folder. Requires JWT."
+    },
+    {
+      "method": "GET",
+      "path": "/api/folders/:folderId/questionsets",
+      "description": "Retrieve all question sets within a specific folder. Requires JWT."
+    },
+    {
+      "method": "GET",
+      "path": "/api/folders/:folderId/questionsets/:id",
+      "description": "Retrieve a specific question set by its ID. Requires JWT."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/folders/:folderId/questionsets/:id",
+      "description": "Update a specific question set's name. Requires JWT."
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/folders/:folderId/questionsets/:id",
+      "description": "Delete a specific question set. Requires JWT."
+    }
+  ],
+  "questions": [
+    {
+      "method": "POST",
+      "path": "/api/folders/:folderId/questionsets/:setId/questions",
+      "description": "Create a new question within a question set. Requires JWT."
+    },
+    {
+      "method": "GET",
+      "path": "/api/folders/:folderId/questionsets/:setId/questions",
+      "description": "Retrieve all questions within a specific question set. Requires JWT."
+    },
+    {
+      "method": "GET",
+      "path": "/api/folders/:folderId/questionsets/:setId/questions/:id",
+      "description": "Retrieve a specific question by its ID. Requires JWT."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/folders/:folderId/questionsets/:setId/questions/:id",
+      "description": "Update a specific question. Requires JWT."
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/folders/:folderId/questionsets/:setId/questions/:id",
+      "description": "Delete a specific question. Requires JWT."
+    }
   ]
 }

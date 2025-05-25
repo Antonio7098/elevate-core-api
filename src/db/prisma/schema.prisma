@@ -49,14 +49,18 @@ model QuestionSet {
 
 // Define the Question model
 model Question {
-  id          Int      @id @default(autoincrement())
-  question    String
-  answer      String
+  id            Int         @id @default(autoincrement())
+  text          String      // Renamed from 'question'
+  answer        String?     // Make answer nullable
+  options       String[]    // For multiple-choice, etc. Now a required list (can be empty)
+  questionType  String      // e.g., 'multiple-choice', 'short-answer', 'flashcard'
+  masteryScore  Int         @default(0)
+  nextReviewAt  DateTime?   // For spaced repetition scheduling
   questionSetId Int
-  questionSet QuestionSet @relation(fields: [questionSetId], references: [id])
+  questionSet   QuestionSet @relation(fields: [questionSetId], references: [id])
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   @@index([questionSetId])
 }
