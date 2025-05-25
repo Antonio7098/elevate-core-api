@@ -1,6 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { aiService } from '../services/aiService';
+import { 
+  GenerateQuestionsRequest, 
+  ChatRequest,
+  ChatContext as AIChatContext,
+  isErrorResponse 
+} from '../types/ai-service.types';
 
 const prisma = new PrismaClient();
 
@@ -23,10 +30,24 @@ interface ChatMessage {
   content: string;
 }
 
-interface ChatContext {
+// Define the structure for the chat context
+type ChatContext = {
   questionSetId?: number;
   folderId?: number;
-}
+};
+
+// Define the structure for a question in the context
+type ContextQuestion = {
+  text: string;
+  answer: string;
+};
+
+// Define the structure for a question set in the context
+type ContextQuestionSet = {
+  id: number;
+  name: string;
+  questions: ContextQuestion[];
+};
 
 interface ChatResponse {
   message: string;
@@ -160,7 +181,7 @@ const simulateAIChatResponse = async (message: string, context?: ChatContext): P
  */
 export const generateQuestionsFromSource = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { sourceText, folderId, questionCount = 5 } = req.body;
+    const { sourceText, folderId, questionCount = 5, questionTypes, difficulty } = req.body;
     const userId = req.user?.userId;
     
     if (!userId) {
@@ -181,26 +202,63 @@ export const generateQuestionsFromSource = async (req: AuthRequest, res: Respons
       return;
     }
     
-    // Simulate AI question generation
-    const aiResult = simulateAIQuestionGeneration(sourceText, questionCount);
+    // Check if AI service is available
+    const isAIServiceAvailable = await aiService.isAvailable();
+    
+    let generatedQuestions;
+    let title = `Questions about ${sourceText.substring(0, 30)}${sourceText.length > 30 ? '...' : ''}`;
+    
+    if (isAIServiceAvailable) {
+      // Prepare request for AI service
+      const generateRequest: GenerateQuestionsRequest = {
+        sourceText,
+        questionCount,
+        questionTypes,
+        difficulty
+      };
+      
+      try {
+        // Call AI service to generate questions
+        const aiResult = await aiService.generateQuestions(generateRequest);
+        
+        // Extract generated questions
+        generatedQuestions = aiResult.questions;
+        
+        // Use metadata if available
+        if (aiResult.metadata) {
+          console.log(`AI Service processing time: ${aiResult.metadata.processingTime}`);
+          console.log(`AI Model used: ${aiResult.metadata.model}`);
+        }
+      } catch (aiError) {
+        console.error('Error from AI service:', aiError);
+        // Fall back to simulation if AI service fails
+        generatedQuestions = simulateAIQuestionGeneration(sourceText, questionCount).questions;
+      }
+    } else {
+      // Fall back to simulation if AI service is not available
+      console.log('AI service not available, using simulation');
+      const simulatedResult = simulateAIQuestionGeneration(sourceText, questionCount);
+      generatedQuestions = simulatedResult.questions;
+      title = simulatedResult.title;
+    }
     
     // Create a new question set
     const questionSet = await prisma.questionSet.create({
       data: {
-        name: aiResult.title,
+        name: title,
         folderId: folder.id
       }
     });
     
     // Create questions in the question set
     const questions = await Promise.all(
-      aiResult.questions.map(question => 
+      generatedQuestions.map(question => 
         prisma.question.create({
           data: {
-            text: question.text,
-            answer: question.answer || null,
+            text: question.text, // Using text field as per schema
+            answer: question.answer || '',
             questionType: question.questionType,
-            options: question.options,
+            options: question.options || [],
             questionSetId: questionSet.id,
             masteryScore: 0 // Default value as defined in the schema
           }
@@ -228,7 +286,7 @@ export const generateQuestionsFromSource = async (req: AuthRequest, res: Respons
  */
 export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { message, questionSetId, folderId } = req.body;
+    const { message, questionSetId, folderId, conversation } = req.body;
     const userId = req.user?.userId;
     
     if (!userId) {
@@ -236,7 +294,11 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
       return;
     }
     
-    // Verify ownership if context is provided
+    // Build context with question sets and/or folders
+    let aiContext: AIChatContext = {};
+    let questionSets = [];
+    
+    // Verify ownership and fetch data if context is provided
     if (questionSetId) {
       const questionSet = await prisma.questionSet.findFirst({
         where: {
@@ -244,6 +306,9 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
           folder: {
             userId: userId
           }
+        },
+        include: {
+          questions: true
         }
       });
       
@@ -251,11 +316,27 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
         res.status(404).json({ message: 'Question set not found or access denied' });
         return;
       }
+      
+      questionSets.push({
+        id: questionSet.id,
+        name: questionSet.name,
+        questions: questionSet.questions.map((q: any) => ({
+          text: q.text,
+          answer: q.answer || ''
+        }))
+      });
     } else if (folderId) {
       const folder = await prisma.folder.findFirst({
         where: {
           id: folderId,
           userId: userId
+        },
+        include: {
+          questionSets: {
+            include: {
+              questions: true
+            }
+          }
         }
       });
       
@@ -263,17 +344,69 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
         res.status(404).json({ message: 'Folder not found or access denied' });
         return;
       }
+      
+      // Type assertion to handle the questionSets property
+      const folderWithQuestionSets = folder as any;
+      
+      questionSets = folderWithQuestionSets.questionSets.map((qs: any) => ({
+        id: qs.id,
+        name: qs.name,
+        questions: qs.questions.map((q: any) => ({
+          text: q.text,
+          answer: q.answer || ''
+        }))
+      }));
     }
     
-    // Prepare context for the AI
-    const context: ChatContext = {};
-    if (questionSetId) context.questionSetId = questionSetId;
-    if (folderId) context.folderId = folderId;
+    if (questionSets.length > 0) {
+      aiContext.questionSets = questionSets;
+    }
     
-    // Get AI response
-    const aiResponse = await simulateAIChatResponse(message, context);
+    // Check if AI service is available
+    const isAIServiceAvailable = await aiService.isAvailable();
     
-    // Return the AI response
+    let aiResponse;
+    
+    if (isAIServiceAvailable) {
+      try {
+        // Prepare request for AI service
+        const chatRequest: ChatRequest = {
+          message,
+          conversation,
+          context: aiContext
+        };
+        
+        // Call AI service for chat response
+        const result = await aiService.chat(chatRequest);
+        
+        // Send the AI response with additional data
+        res.status(200).json({
+          response: result.response.message,
+          references: result.response.references,
+          suggestedQuestions: result.response.suggestedQuestions,
+          metadata: result.metadata
+        });
+        return;
+      } catch (aiError) {
+        console.error('Error from AI service:', aiError);
+        // Fall back to simulation if AI service fails
+        const context: ChatContext = {};
+        if (questionSetId) context.questionSetId = questionSetId;
+        if (folderId) context.folderId = folderId;
+        
+        aiResponse = await simulateAIChatResponse(message, context);
+      }
+    } else {
+      // Fall back to simulation if AI service is not available
+      console.log('AI service not available, using simulation');
+      const context: ChatContext = {};
+      if (questionSetId) context.questionSetId = questionSetId;
+      if (folderId) context.folderId = folderId;
+      
+      aiResponse = await simulateAIChatResponse(message, context);
+    }
+    
+    // Return the simulated AI response (fallback)
     res.status(200).json({
       response: aiResponse.message,
       context: aiResponse.contextInfo
