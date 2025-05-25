@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { generateQuestionsFromSource } from '../controllers/ai.controller';
+import { generateQuestionsFromSource, chatWithAI } from '../controllers/ai.controller';
 import { protect } from '../middleware/auth.middleware';
-import { validateGenerateFromSource } from '../middleware/validation';
+import { validateGenerateFromSource, validateChatWithAI } from '../middleware/validation';
 
 const router = Router();
 
@@ -10,5 +10,8 @@ router.use(protect);
 
 // POST /api/ai/generate-from-source - Generate questions from source text
 router.post('/generate-from-source', validateGenerateFromSource, generateQuestionsFromSource);
+
+// POST /api/ai/chat - Chat with AI about study materials
+router.post('/chat', validateChatWithAI, chatWithAI);
 
 export default router;

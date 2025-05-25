@@ -217,6 +217,31 @@ All AI routes are protected and require authentication.
     4. The generated questions are saved to the database and linked to the question set
     5. The complete question set with all questions is returned in the response
 
+-   **`POST /chat`**: Chat with AI about study materials.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Body:** 
+    ```json
+    { 
+      "message": "Your question or message to the AI",
+      "questionSetId": 123, // Optional: Provide context from a specific question set
+      "folderId": 1 // Optional: Provide context from a specific folder
+    }
+    ```
+    -   **Response:** The AI's response to your message.
+    ```json
+    {
+      "response": "Here's an explanation of the concept you asked about...",
+      "context": "Based on your question set 'Biology 101' with 15 questions."
+    }
+    ```
+
+    **How it works:**
+    1. The API receives your message and optional context (question set or folder)
+    2. It verifies that you have access to the provided context (if any)
+    3. The message is processed by the AI, which generates a contextually relevant response
+    4. If context was provided, the AI incorporates information from your question sets or folders
+    5. The AI response is returned, along with any context information that was used
+
 ### (Planned) Reviews & Spaced Repetition (`/api/reviews`)
 
 ---

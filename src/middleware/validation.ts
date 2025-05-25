@@ -162,3 +162,23 @@ export const validateGenerateFromSource = [
     .toInt(),
   handleValidationErrors,
 ];
+
+export const validateChatWithAI = [
+  check('message')
+    .notEmpty()
+    .withMessage('Message cannot be empty')
+    .isString()
+    .withMessage('Message must be a string')
+    .trim(),
+  check('questionSetId')
+    .optional()
+    .isInt({ gt: 0 })
+    .withMessage('Question set ID must be a positive integer')
+    .toInt(),
+  check('folderId')
+    .optional()
+    .isInt({ gt: 0 })
+    .withMessage('Folder ID must be a positive integer')
+    .toInt(),
+  handleValidationErrors,
+];

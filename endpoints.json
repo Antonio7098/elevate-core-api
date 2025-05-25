@@ -104,6 +104,11 @@
       "method": "POST",
       "path": "/api/ai/generate-from-source",
       "description": "Generate questions from source text and create a question set. Requires JWT."
+    },
+    {
+      "method": "POST",
+      "path": "/api/ai/chat",
+      "description": "Chat with AI about study materials with optional context from question sets or folders. Requires JWT."
     }
   ]
 }

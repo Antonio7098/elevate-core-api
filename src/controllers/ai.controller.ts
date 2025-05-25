@@ -17,6 +17,22 @@ interface AIGenerationResult {
   questions: GeneratedQuestion[];
 }
 
+// Define the structure for chat messages
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+interface ChatContext {
+  questionSetId?: number;
+  folderId?: number;
+}
+
+interface ChatResponse {
+  message: string;
+  contextInfo?: string;
+}
+
 // Simulated AI service that generates questions from source text
 const simulateAIQuestionGeneration = (sourceText: string, count: number = 5): AIGenerationResult => {
   // This is a placeholder function that simulates an AI service
@@ -66,6 +82,75 @@ const simulateAIQuestionGeneration = (sourceText: string, count: number = 5): AI
   return {
     title: `AI Generated Quiz for "${sourceSnippet}"`,
     questions
+  };
+};
+
+/**
+ * Simulate AI chat response
+ * This is a placeholder function that simulates an AI chat service
+ * In a real implementation, this would make an HTTP call to a Python AI service
+ */
+const simulateAIChatResponse = async (message: string, context?: ChatContext): Promise<ChatResponse> => {
+  // This is a placeholder function that simulates an AI service
+  // In a real implementation, this would make an HTTP call to a Python AI service
+  
+  // If we have context, we can use it to generate a more relevant response
+  let contextInfo = '';
+  
+  if (context?.questionSetId) {
+    try {
+      const questionSet = await prisma.questionSet.findUnique({
+        where: { id: context.questionSetId },
+        include: { questions: { take: 2 } } // Get a sample of questions for context
+      });
+      
+      if (questionSet) {
+        contextInfo = `Based on your question set "${questionSet.name}" with ${questionSet.questions.length} questions.`;
+      }
+    } catch (error) {
+      console.error('Error fetching question set context:', error);
+    }
+  } else if (context?.folderId) {
+    try {
+      const folder = await prisma.folder.findUnique({
+        where: { id: context.folderId },
+        include: { questionSets: { take: 3 } } // Get a sample of question sets for context
+      });
+      
+      if (folder) {
+        contextInfo = `Based on your folder "${folder.name}" with ${folder.questionSets.length} question sets.`;
+      }
+    } catch (error) {
+      console.error('Error fetching folder context:', error);
+    }
+  }
+  
+  // Generate a response based on the user's message
+  let response = '';
+  
+  // Simple keyword-based responses
+  if (message.toLowerCase().includes('help')) {
+    response = "I'm here to help you with your study materials. You can ask me questions about your content, and I'll try to provide helpful answers.";
+  } else if (message.toLowerCase().includes('explain') || message.toLowerCase().includes('what is')) {
+    response = `I'll explain that for you. ${message.replace(/explain|what is/i, '')} refers to an important concept in your study materials.`;
+  } else if (message.toLowerCase().includes('example')) {
+    response = "Here's an example to illustrate the concept: imagine you're studying the water cycle. Water evaporates from oceans, forms clouds, and then returns as precipitation.";
+  } else if (message.toLowerCase().includes('difference between')) {
+    response = "The key difference lies in their fundamental properties and applications. One is typically used in certain contexts, while the other serves different purposes.";
+  } else if (message.toLowerCase().includes('how to')) {
+    response = "To accomplish that, you would follow these steps: 1) Understand the basic principles, 2) Apply the methodology correctly, 3) Practice with various examples.";
+  } else {
+    response = "That's an interesting question about your study materials. Could you provide more details or specify what aspect you'd like me to elaborate on?";
+  }
+  
+  // Add the context info if available
+  if (contextInfo) {
+    response += ` ${contextInfo}`;
+  }
+  
+  return {
+    message: response,
+    contextInfo
   };
 };
 
@@ -133,6 +218,69 @@ export const generateQuestionsFromSource = async (req: AuthRequest, res: Respons
     
   } catch (error) {
     console.error('Error generating questions from source:', error);
+    next(error);
+  }
+};
+
+/**
+ * Chat with AI about study materials
+ * POST /api/ai/chat
+ */
+export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { message, questionSetId, folderId } = req.body;
+    const userId = req.user?.userId;
+    
+    if (!userId) {
+      res.status(401).json({ message: 'User not authenticated' });
+      return;
+    }
+    
+    // Verify ownership if context is provided
+    if (questionSetId) {
+      const questionSet = await prisma.questionSet.findFirst({
+        where: {
+          id: questionSetId,
+          folder: {
+            userId: userId
+          }
+        }
+      });
+      
+      if (!questionSet) {
+        res.status(404).json({ message: 'Question set not found or access denied' });
+        return;
+      }
+    } else if (folderId) {
+      const folder = await prisma.folder.findFirst({
+        where: {
+          id: folderId,
+          userId: userId
+        }
+      });
+      
+      if (!folder) {
+        res.status(404).json({ message: 'Folder not found or access denied' });
+        return;
+      }
+    }
+    
+    // Prepare context for the AI
+    const context: ChatContext = {};
+    if (questionSetId) context.questionSetId = questionSetId;
+    if (folderId) context.folderId = folderId;
+    
+    // Get AI response
+    const aiResponse = await simulateAIChatResponse(message, context);
+    
+    // Return the AI response
+    res.status(200).json({
+      response: aiResponse.message,
+      context: aiResponse.contextInfo
+    });
+    
+  } catch (error) {
+    console.error('Error in AI chat:', error);
     next(error);
   }
 };
