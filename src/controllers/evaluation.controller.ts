@@ -102,12 +102,14 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
     
     // Prepare request for AI service
     const evaluateRequest: EvaluateAnswerRequest = {
-      questionId: question.id,
-      questionText: question.text,
-      expectedAnswer: question.answer || undefined,
-      questionType: question.questionType,
+      questionContext: {
+        questionId: question.id,
+        questionText: question.text,
+        expectedAnswer: question.answer || undefined,
+        questionType: question.questionType,
+        options: question.options
+      },
       userAnswer,
-      options: question.options,
       context: {
         questionSetName: question.questionSet.name,
         folderName: question.questionSet.folder?.name
