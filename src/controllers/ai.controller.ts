@@ -460,7 +460,34 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
     
     if (isAIServiceAvailable) {
       try {
-        console.log('[AI Controller] Enriched context for AI service:', JSON.stringify(aiContext, null, 2));
+        // Add detailed logging for the context object
+        console.log('\n==== AI CONTROLLER: CONTEXT LOGGING START ====');
+        console.log(`Request for folder ID: ${folderId || 'none'}, question set ID: ${questionSetId || 'none'}`);
+        console.log(`User ID: ${userId}, Message: "${message?.substring(0, 50)}${message?.length > 50 ? '...' : ''}"`); 
+        
+        if (folderInfo) {
+          console.log('\nFolder Information:');
+          console.log(JSON.stringify(folderInfo, null, 2));
+        }
+        
+        if (questionSets.length > 0) {
+          console.log('\nQuestion Sets Summary:');
+          console.log(`Total Sets: ${questionSets.length}`);
+          questionSets.forEach((qs, index) => {
+            console.log(`\n  Set ${index + 1}: ${qs.name} (ID: ${qs.id})`);
+            console.log(`  Questions: ${qs.questions.length}`);
+            console.log(`  First few questions: ${qs.questions.slice(0, 2).map(q => `"${q.text.substring(0, 30)}..."`).join(', ')}${qs.questions.length > 2 ? ', ...' : ''}`);
+          });
+        }
+        
+        if (aiContext.summary) {
+          console.log('\nContext Summary:');
+          console.log(JSON.stringify(aiContext.summary, null, 2));
+        }
+        
+        console.log('\nFull Context Object:');
+        console.log(JSON.stringify(aiContext, null, 2));
+        console.log('==== AI CONTROLLER: CONTEXT LOGGING END ====\n');
         
         // Prepare request for AI service
         const chatRequest: ChatRequest = {

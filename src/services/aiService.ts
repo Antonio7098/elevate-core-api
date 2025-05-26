@@ -100,7 +100,83 @@ export class AIService {
    */
   async chat(request: ChatRequest): Promise<ChatResponse> {
     try {
-      console.log('[AIService] Chatting with AI with request:', JSON.stringify(request));
+      // Add detailed logging for the chat request
+      console.log('\n==== AI SERVICE: REQUEST LOGGING START ====');
+      console.log(`Message: "${request.message?.substring(0, 50)}${request.message?.length > 50 ? '...' : ''}"`); 
+      
+      // Log conversation history if present
+      if (request.conversation && request.conversation.length > 0) {
+        console.log('\nConversation History:');
+        request.conversation.forEach((msg, i) => {
+          console.log(`  ${msg.role}: "${msg.content?.substring(0, 30)}${msg.content?.length > 30 ? '...' : ''}"`); 
+        });
+      }
+      
+      // Log context information
+      if (request.context) {
+        console.log('\nContext Information:');
+        
+        // Log folder info
+        if (request.context.folderInfo) {
+          console.log('\nFolder:');
+          console.log(`  Name: ${request.context.folderInfo.name}`);
+          console.log(`  ID: ${request.context.folderInfo.id}`);
+          if (request.context.folderInfo.description) {
+            console.log(`  Description: ${request.context.folderInfo.description}`);
+          }
+        }
+        
+        // Log question sets
+        if (request.context.questionSets && request.context.questionSets.length > 0) {
+          console.log('\nQuestion Sets:');
+          console.log(`  Count: ${request.context.questionSets.length}`);
+          
+          // Log first question set as example
+          const firstSet = request.context.questionSets[0];
+          console.log(`  First Set: "${firstSet.name}" (ID: ${firstSet.id})`);
+          console.log(`  Questions in first set: ${firstSet.questions.length}`);
+          
+          if (firstSet.questions.length > 0) {
+            console.log('  Sample questions:');
+            firstSet.questions.slice(0, 2).forEach((q, i) => {
+              console.log(`    Q${i+1}: "${q.text.substring(0, 40)}${q.text.length > 40 ? '...' : ''}"`);
+            });
+          }
+        }
+        
+        // Log summary if available
+        if (request.context.summary) {
+          console.log('\nSummary:');
+          console.log(`  Total Question Sets: ${request.context.summary.totalQuestionSets}`);
+          console.log(`  Total Questions: ${request.context.summary.totalQuestions}`);
+          console.log(`  Question Types: ${request.context.summary.questionTypes.join(', ')}`);
+        }
+      }
+      
+      // Log the full request object (but truncate large arrays)
+      const logRequest = { ...request };
+      if (logRequest.context?.questionSets && logRequest.context.questionSets.length > 0) {
+        // For each question set, limit the number of questions logged
+        logRequest.context.questionSets = logRequest.context.questionSets.map(qs => {
+          if (qs.questions.length > 3) {
+            return {
+              ...qs,
+              questions: [
+                ...qs.questions.slice(0, 3),
+                { text: `... ${qs.questions.length - 3} more questions ...`, answer: '...' }
+              ]
+            };
+          }
+          return qs;
+        });
+      }
+      
+      console.log('\nFull Request Object (truncated):');
+      console.log(JSON.stringify(logRequest, null, 2));
+      console.log('\nSending request to Python AI Service endpoint:', `${this.baseUrl}/chat`);
+      console.log('==== AI SERVICE: REQUEST LOGGING END ====\n');
+      
+      // Make the actual request to the Python service
       const response = await this.client.post<ChatResponse | AIServiceErrorResponse>(
         '/chat',
         request
