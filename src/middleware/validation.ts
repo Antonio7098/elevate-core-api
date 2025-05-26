@@ -203,3 +203,23 @@ export const validateSubmitReview = [
     .trim(),
   handleValidationErrors,
 ];
+
+export const validateQuestionSetCreate = [
+  check('name')
+    .notEmpty()
+    .withMessage('Question set name is required')
+    .isString()
+    .withMessage('Question set name must be a string')
+    .trim(),
+  handleValidationErrors,
+];
+
+export const validateQuestionSetUpdate = [
+  check('name')
+    .notEmpty()
+    .withMessage('Question set name is required')
+    .isString()
+    .withMessage('Question set name must be a string')
+    .trim(),
+  handleValidationErrors,
+];

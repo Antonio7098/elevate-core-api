@@ -9,6 +9,8 @@ import folderRouter from './routes/folder.routes.ts';
 import aiRouter from './routes/ai.routes.ts';
 import reviewRouter from './routes/review.routes.ts';
 import evaluationRouter from './routes/evaluation.routes.ts';
+import standaloneQuestionSetRouter from './routes/standalone-questionset.routes.ts';
+import standaloneQuestionRouter from './routes/standalone-question.routes.ts';
 
 // Load environment variables
 dotenv.config();
@@ -27,6 +29,10 @@ app.use('/api/folders', folderRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/reviews', reviewRouter);
 app.use('/api/ai', evaluationRouter);
+
+// Additional standalone routes for direct access
+app.use('/api/questionsets', standaloneQuestionSetRouter);
+app.use('/api/questions', standaloneQuestionRouter);
 
 // Error handling middleware
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {

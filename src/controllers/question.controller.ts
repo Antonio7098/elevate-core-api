@@ -4,6 +4,65 @@ import { AuthRequest } from '../middleware/auth.middleware';
 
 const prisma = new PrismaClient();
 
+/**
+ * Get questions by set ID using query parameter
+ * GET /api/questions?questionSetId=:id
+ */
+export const getQuestionsBySetId = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  const questionSetId = req.query.questionSetId as string;
+  const userId = req.user?.userId;
+
+  if (!userId) {
+    res.status(401).json({ message: 'User not authenticated' });
+    return;
+  }
+
+  if (!questionSetId || isNaN(parseInt(questionSetId))) {
+    res.status(400).json({ message: 'Invalid question set ID provided' });
+    return;
+  }
+
+  try {
+    // Verify the question set exists and belongs to the user
+    const questionSet = await prisma.questionSet.findFirst({
+      where: {
+        id: parseInt(questionSetId),
+        folder: {
+          userId: userId,
+        },
+      },
+    });
+
+    if (!questionSet) {
+      res.status(404).json({ message: 'Question set not found or access denied' });
+      return;
+    }
+
+    // Get all questions for this question set
+    const questions = await prisma.question.findMany({
+      where: {
+        questionSetId: parseInt(questionSetId),
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+
+    res.status(200).json(questions);
+  } catch (error) {
+    console.error('--- Get Questions By Set ID Error ---');
+    if (error instanceof Error) {
+      console.error('Message:', error.message);
+      console.error('Stack:', error.stack);
+    } else {
+      console.error('Error object (raw):', error);
+    }
+    console.error('Error object (stringified):', JSON.stringify(error, null, 2));
+    console.error('--- End Get Questions By Set ID Error ---');
+    next(error);
+  }
+};
+
 export const getQuestionsBySet = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   const { folderId, setId } = req.params;
   const userId = req.user!.userId;
