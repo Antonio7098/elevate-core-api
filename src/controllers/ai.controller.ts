@@ -296,10 +296,25 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
     
     // Build context with question sets and/or folders
     let aiContext: AIChatContext = {};
-    let questionSets = [];
+    let questionSets: Array<{
+      id: number;
+      name: string;
+      folderName: string;
+      totalQuestions: number;
+      createdAt: string;
+      questions: Array<{
+        id: number;
+        text: string;
+        answer: string;
+        questionType: string;
+        masteryScore: number;
+      }>;
+    }> = [];
+    let folderInfo = null;
     
     // Verify ownership and fetch data if context is provided
     if (questionSetId) {
+      // Find the question set and verify ownership
       const questionSet = await prisma.questionSet.findFirst({
         where: {
           id: questionSetId,
@@ -308,7 +323,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
           }
         },
         include: {
-          questions: true
+          questions: true,
+          folder: true // Include the parent folder for additional context
         }
       });
       
@@ -317,15 +333,30 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
         return;
       }
       
+      // Add folder information for context
+      folderInfo = {
+        id: questionSet.folder.id,
+        name: questionSet.folder.name,
+        description: questionSet.folder.description || ''
+      };
+      
+      // Add question set with detailed information
       questionSets.push({
         id: questionSet.id,
         name: questionSet.name,
+        folderName: questionSet.folder.name,
+        totalQuestions: questionSet.questions.length,
+        createdAt: questionSet.createdAt.toISOString(),
         questions: questionSet.questions.map((q: any) => ({
+          id: q.id,
           text: q.text,
-          answer: q.answer || ''
+          answer: q.answer || '',
+          questionType: q.questionType,
+          masteryScore: q.masteryScore || 0
         }))
       });
     } else if (folderId) {
+      // Find the folder and verify ownership
       const folder = await prisma.folder.findFirst({
         where: {
           id: folderId,
@@ -345,21 +376,81 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
         return;
       }
       
-      // Type assertion to handle the questionSets property
-      const folderWithQuestionSets = folder as any;
+      // Add folder information for context
+      folderInfo = {
+        id: folder.id,
+        name: folder.name,
+        description: folder.description || '',
+        totalQuestionSets: folder.questionSets.length,
+        createdAt: folder.createdAt.toISOString()
+      };
       
-      questionSets = folderWithQuestionSets.questionSets.map((qs: any) => ({
+      // Add all question sets in the folder with detailed information
+      questionSets = folder.questionSets.map((qs: any) => ({
         id: qs.id,
         name: qs.name,
+        folderName: folder.name,
+        totalQuestions: qs.questions.length,
+        createdAt: qs.createdAt.toISOString(),
         questions: qs.questions.map((q: any) => ({
+          id: q.id,
           text: q.text,
-          answer: q.answer || ''
+          answer: q.answer || '',
+          questionType: q.questionType,
+          masteryScore: q.masteryScore || 0
         }))
       }));
     }
     
+    // Add folder and question set information to the AI context
+    if (folderInfo) {
+      aiContext.folderInfo = folderInfo;
+    }
+    
     if (questionSets.length > 0) {
       aiContext.questionSets = questionSets;
+      
+      // Add summary statistics
+      const totalQuestions = questionSets.reduce((sum, qs) => sum + qs.questions.length, 0);
+      const questionTypes = new Set<string>();
+      const topics = new Set<string>();
+      
+      // Extract unique question types and potential topics from question texts
+      questionSets.forEach(qs => {
+        qs.questions.forEach((q: { questionType: string; text: string }) => {
+          if (q.questionType) questionTypes.add(q.questionType);
+          
+          // Extract potential topics from question text (simple approach)
+          const words = q.text.split(' ');
+          words.forEach((word: string) => {
+            if (word.length > 5 && !word.match(/^[0-9]+$/)) {
+              topics.add(word.toLowerCase());
+            }
+          });
+        });
+      });
+      
+      // Add summary to context
+      aiContext.summary = {
+        totalQuestionSets: questionSets.length,
+        totalQuestions,
+        questionTypes: Array.from(questionTypes),
+        potentialTopics: Array.from(topics).slice(0, 10) // Limit to top 10 potential topics
+      };
+    }
+    
+    // Add user information
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, createdAt: true }
+    });
+    
+    if (user) {
+      aiContext.userInfo = {
+        id: user.id,
+        email: user.email,
+        memberSince: user.createdAt.toISOString()
+      };
     }
     
     // Check if AI service is available
@@ -369,6 +460,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
     
     if (isAIServiceAvailable) {
       try {
+        console.log('[AI Controller] Enriched context for AI service:', JSON.stringify(aiContext, null, 2));
+        
         // Prepare request for AI service
         const chatRequest: ChatRequest = {
           message,

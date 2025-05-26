@@ -83,14 +83,47 @@ export interface ConversationMessage {
  * Context for the chat request
  */
 export interface ChatContext {
+  // Question sets information
   questionSets?: Array<{
     id: number;
     name: string;
+    folderName?: string;
+    totalQuestions?: number;
+    createdAt?: string;
     questions: Array<{
+      id?: number;
       text: string;
       answer: string;
+      questionType?: string;
+      masteryScore?: number;
     }>;
   }>;
+  
+  // Folder information
+  folderInfo?: {
+    id: number;
+    name: string;
+    description?: string;
+    totalQuestionSets?: number;
+    createdAt?: string;
+  };
+  
+  // Summary statistics
+  summary?: {
+    totalQuestionSets: number;
+    totalQuestions: number;
+    questionTypes: string[];
+    potentialTopics: string[];
+  };
+  
+  // User information
+  userInfo?: {
+    id: number;
+    email: string;
+    memberSince: string;
+  };
+  
+  // Learning preferences
   userLevel?: 'beginner' | 'intermediate' | 'advanced';
   preferredLearningStyle?: 'visual' | 'auditory' | 'reading' | 'kinesthetic';
 }
