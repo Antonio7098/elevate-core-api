@@ -3,6 +3,9 @@ import { PrismaClient } from '@prisma/client';
 import { generateQuestionsFromSource, chatWithAI } from '../ai.controller';
 import { aiService } from '../../services/aiService';
 
+// Define custom type for request with user property
+type RequestWithUser = Request & { user: { userId: number } };
+
 // Mock the AI service
 jest.mock('../../services/aiService', () => ({
   aiService: {
@@ -46,7 +49,7 @@ describe('AI Controller', () => {
     mockReq = {
       user: { userId: 1 },
       body: {}
-    };
+    } as Partial<RequestWithUser>;
     mockRes = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn()
@@ -59,11 +62,16 @@ describe('AI Controller', () => {
 
   describe('generateQuestionsFromSource', () => {
     beforeEach(() => {
-      mockReq.body = {
-        sourceText: 'Test source text for generating questions',
-        folderId: 1,
-        questionCount: 3
-      };
+      mockReq = {
+        body: {
+          sourceText: 'Test source text for generating questions',
+          folderId: 1,
+          questionCount: 3
+        },
+        user: {
+          userId: 1
+        }
+      } as Request & { user: { userId: number } };
 
       // Mock folder exists and belongs to user
       prisma.folder.findFirst.mockResolvedValue({
@@ -80,7 +88,7 @@ describe('AI Controller', () => {
       });
 
       // Mock question creation
-      prisma.question.create.mockImplementation((data) => ({
+      prisma.question.create.mockImplementation((data: any) => ({
         id: Math.floor(Math.random() * 1000),
         ...data.data
       }));
@@ -98,13 +106,19 @@ describe('AI Controller', () => {
             text: 'What is test question 1?',
             answer: 'Test answer 1',
             questionType: 'multiple-choice',
-            options: ['Option A', 'Option B', 'Option C']
+            options: ['Option A', 'Option B', 'Option C'],
+            uueFocus: 'Understand',
+            conceptTags: ['concept1', 'concept2'],
+            difficultyScore: 0.5
           },
           {
             text: 'What is test question 2?',
             answer: 'Test answer 2',
             questionType: 'short-answer',
-            options: []
+            options: [],
+            uueFocus: 'Use',
+            conceptTags: ['concept2', 'concept3'],
+            difficultyScore: 0.7
           }
         ],
         metadata: {

@@ -1,35 +1,33 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient, Question, Prisma } from '@prisma/client';
+import { PrismaClient, Question, Prisma, QuestionSet } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth.middleware';
-import { calculateNextReview, getDueQuestions, prioritizeQuestions } from '../services/spacedRepetition.service';
+import {
+  getDueQuestionSets,
+  getPrioritizedQuestions,
+  calculateQuestionSetNextReview,
+  getUserProgressSummary
+} from '../services/spacedRepetition.service';
 
 const prisma = new PrismaClient();
 
-// Type for Question with related data
-type QuestionWithRelations = {
-  id: number;
-  text: string;
-  answer: string | null;
-  options: string[];
-  questionType: string;
-  masteryScore: number;
-  nextReviewAt: Date | null;
-  questionSetId: number;
-  createdAt: Date;
-  updatedAt: Date;
-  questionSet: {
+// Type for Question Set with related data
+type QuestionSetWithRelations = QuestionSet & {
+  questions: Question[];
+  folder: {
     id: number;
     name: string;
-    folderId: number;
-    folder: {
-      id: number;
-      name: string;
-    };
+    description?: string | null;
   };
 };
 
+// Type for prioritized question with uueFocus field
+type PrioritizedQuestion = Omit<Question, 'learningStage'> & {
+  priorityScore: number;
+  uueFocus: string;
+};
+
 /**
- * Get questions due for review today
+ * Get question sets due for review today
  * GET /api/reviews/today
  */
 export const getTodayReviews = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
@@ -41,52 +39,33 @@ export const getTodayReviews = async (req: AuthRequest, res: Response, next: Nex
       return;
     }
     
-    // Get all questions from the user's question sets
-    const questions = await prisma.question.findMany({
-      where: {
-        questionSet: {
-          folder: {
-            userId: userId
-          }
-        }
-      },
-      include: {
-        questionSet: {
-          select: {
-            id: true,
-            name: true,
-            folderId: true,
-            folder: {
-              select: {
-                id: true,
-                name: true
-              }
-            }
-          }
-        }
-      }
-    });
+    // Get question sets that are due for review today
+    const dueQuestionSets = await getDueQuestionSets(userId);
     
-    // Filter questions that are due for review today
-    const dueQuestions = getDueQuestions<QuestionWithRelations>(questions);
-    
-    // Prioritize questions based on mastery score and due date
-    const prioritizedQuestions = prioritizeQuestions<QuestionWithRelations>(dueQuestions);
-    
-    // Return the questions due for review
+    // Return the question sets due for review
     res.status(200).json({
-      count: prioritizedQuestions.length,
-      questions: prioritizedQuestions.map(question => ({
-        id: question.id,
-        text: question.text,
-        questionType: question.questionType,
-        options: question.options,
-        masteryScore: question.masteryScore,
-        nextReviewAt: question.nextReviewAt,
-        questionSetId: question.questionSetId,
-        questionSetName: question.questionSet.name,
-        folderId: question.questionSet.folderId,
-        folderName: question.questionSet.folder.name
+      count: dueQuestionSets.length,
+      questionSets: dueQuestionSets.map(set => ({
+        id: set.id,
+        name: set.name,
+        folderId: set.folderId,
+        folderName: set.folder.name,
+        totalQuestions: set.questions.length,
+        // U-U-E scores
+        understandScore: set.understandScore,
+        useScore: set.useScore,
+        exploreScore: set.exploreScore,
+        overallMasteryScore: set.overallMasteryScore,
+        // Review info
+        lastReviewedAt: set.lastReviewedAt,
+        reviewCount: set.reviewCount,
+        // First few questions as preview
+        previewQuestions: set.questions.slice(0, 3).map(q => ({
+          id: q.id,
+          text: q.text,
+          questionType: q.questionType,
+          uueFocus: q.uueFocus
+        }))
       }))
     });
     
@@ -97,74 +76,157 @@ export const getTodayReviews = async (req: AuthRequest, res: Response, next: Nex
 };
 
 /**
- * Interface for the review submission request body
+ * Get questions for a specific review session
+ * GET /api/questionsets/:id/review-questions
  */
-interface ReviewSubmission {
-  questionId: number;
-  answeredCorrectly: boolean;
-  userAnswer?: string;
-}
-
-/**
- * Submit a review for a question
- * POST /api/reviews
- */
-export const submitReview = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+export const getReviewQuestions = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    const { questionId, answeredCorrectly, userAnswer } = req.body as ReviewSubmission;
+    const questionSetId = parseInt(req.params.id);
+    const count = req.query.count ? parseInt(req.query.count as string) : 10;
     
     if (!userId) {
       res.status(401).json({ message: 'User not authenticated' });
       return;
     }
     
-    // Verify that the question belongs to the user
-    const question = await prisma.question.findFirst({
+    // Verify that the question set belongs to the user
+    const questionSet = await prisma.questionSet.findFirst({
       where: {
-        id: questionId,
-        questionSet: {
-          folder: {
-            userId: userId
-          }
+        id: questionSetId,
+        folder: {
+          userId: userId
         }
       }
     });
     
-    if (!question) {
-      res.status(404).json({ message: 'Question not found or access denied' });
+    if (!questionSet) {
+      res.status(404).json({ message: 'Question set not found or access denied' });
       return;
     }
     
-    // Calculate the next review date and mastery score
-    const currentInterval = question.nextReviewAt 
-      ? Math.ceil((new Date().getTime() - question.nextReviewAt.getTime()) / (1000 * 60 * 60 * 24))
-      : 1;
+    // Get prioritized questions for the review session
+    const questions = await getPrioritizedQuestions(questionSetId, userId, count);
     
-    const { newMastery, nextReviewDate } = calculateNextReview(
-      question.masteryScore,
-      answeredCorrectly,
-      currentInterval
-    );
+    // Return the questions for the review session
+    res.status(200).json({
+      questionSetId,
+      questionSetName: questionSet.name,
+      count: questions.length,
+      questions: questions.map(q => ({
+        id: q.id,
+        text: q.text,
+        questionType: q.questionType,
+        options: q.options,
+        uueFocus: q.uueFocus,
+        conceptTags: q.conceptTags,
+        difficultyScore: q.difficultyScore,
+        priorityScore: q.priorityScore
+      }))
+    });
     
-    // Update the question with the new mastery score and next review date
-    const updatedQuestion = await prisma.question.update({
-      where: { id: questionId },
-      data: {
-        masteryScore: newMastery,
-        nextReviewAt: nextReviewDate
+  } catch (error) {
+    console.error('Error getting review questions:', error);
+    next(error);
+  }
+};
+
+/**
+ * Interface for the question set review submission request body
+ */
+interface QuestionSetReviewSubmission {
+  questionSetId: number;
+  understandScore: number;
+  useScore: number;
+  exploreScore: number;
+  overallScore: number;
+  timeSpent: number;
+  questionAnswers: Array<{
+    questionId: number;
+    isCorrect: boolean;
+    userAnswer: string;
+    timeSpent: number;
+    scoreAchieved: number;
+    confidence?: number;
+  }>;
+}
+
+/**
+ * Submit a review for a question set
+ * POST /api/reviews
+ */
+export const submitReview = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    const reviewData = req.body as QuestionSetReviewSubmission;
+    
+    if (!userId) {
+      res.status(401).json({ message: 'User not authenticated' });
+      return;
+    }
+    
+    // Verify that the question set belongs to the user
+    const questionSet = await prisma.questionSet.findFirst({
+      where: {
+        id: reviewData.questionSetId,
+        folder: {
+          userId: userId
+        }
       }
     });
     
-    // Return the updated question
-    res.status(200).json({
-      question: updatedQuestion,
-      reviewResult: {
-        answeredCorrectly,
-        oldMasteryScore: question.masteryScore,
-        newMasteryScore: newMastery,
-        nextReviewAt: nextReviewDate
+    if (!questionSet) {
+      res.status(404).json({ message: 'Question set not found or access denied' });
+      return;
+    }
+    
+    // Verify that all questions belong to the question set
+    const questionIds = reviewData.questionAnswers.map(a => a.questionId);
+    const questions = await prisma.question.findMany({
+      where: {
+        id: { in: questionIds },
+        questionSetId: reviewData.questionSetId
       }
+    });
+    
+    if (questions.length !== questionIds.length) {
+      res.status(400).json({ message: 'Some questions do not belong to the specified question set' });
+      return;
+    }
+    
+    // Calculate the next review date and update mastery scores
+    const updatedQuestionSet = await calculateQuestionSetNextReview(
+      reviewData.questionSetId,
+      {
+        userId,
+        understandScore: reviewData.understandScore,
+        useScore: reviewData.useScore,
+        exploreScore: reviewData.exploreScore,
+        overallScore: reviewData.overallScore,
+        timeSpent: reviewData.timeSpent,
+        questionAnswers: reviewData.questionAnswers.map(a => ({
+          questionId: a.questionId,
+          isCorrect: a.isCorrect,
+          timeSpent: a.timeSpent,
+          scoreAchieved: a.scoreAchieved,
+          confidence: a.confidence
+        }))
+      }
+    );
+    
+    // Return the updated question set
+    res.status(200).json({
+      questionSet: {
+        id: updatedQuestionSet.id,
+        name: updatedQuestionSet.name,
+        understandScore: updatedQuestionSet.understandScore,
+        useScore: updatedQuestionSet.useScore,
+        exploreScore: updatedQuestionSet.exploreScore,
+        overallMasteryScore: updatedQuestionSet.overallMasteryScore,
+        nextReviewAt: updatedQuestionSet.nextReviewAt,
+        reviewCount: updatedQuestionSet.reviewCount
+      },
+      message: 'Review submitted successfully'
     });
     
   } catch (error) {
@@ -186,39 +248,11 @@ export const getReviewStats = async (req: AuthRequest, res: Response, next: Next
       return;
     }
     
-    // Get all questions from the user's question sets
-    const questions = await prisma.question.findMany({
-      where: {
-        questionSet: {
-          folder: {
-            userId: userId
-          }
-        }
-      }
-    });
-    
-    // Calculate statistics
-    const totalQuestions = questions.length;
-    const reviewedQuestions = questions.filter(q => q.nextReviewAt !== null).length;
-    const masteredQuestions = questions.filter(q => q.masteryScore >= 4).length;
-    const dueQuestions = getDueQuestions<Question>(questions).length;
-    
-    // Group questions by mastery level
-    const masteryLevels = [0, 1, 2, 3, 4, 5];
-    const questionsByMastery = masteryLevels.map(level => ({
-      level,
-      count: questions.filter(q => q.masteryScore === level).length
-    }));
+    // Get user progress summary
+    const progressSummary = await getUserProgressSummary(userId);
     
     // Return the statistics
-    res.status(200).json({
-      totalQuestions,
-      reviewedQuestions,
-      masteredQuestions,
-      dueQuestions,
-      questionsByMastery,
-      completionRate: totalQuestions > 0 ? (masteredQuestions / totalQuestions) * 100 : 0
-    });
+    res.status(200).json(progressSummary);
     
   } catch (error) {
     console.error('Error getting review stats:', error);

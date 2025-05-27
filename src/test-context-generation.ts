@@ -125,7 +125,7 @@ async function testContextGeneration() {
         text: q.text,
         answer: q.answer,
         questionType: q.questionType,
-        masteryScore: q.masteryScore
+        uueFocus: q.uueFocus || 'Understand'
       }))
     }));
     

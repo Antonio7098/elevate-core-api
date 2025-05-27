@@ -43,25 +43,25 @@ export const getQuestionsBySetId = async (req: AuthRequest, res: Response, next:
       where: {
         questionSetId: parseInt(questionSetId),
       },
-      // Temporarily remove include until Prisma types are updated
-      // include: {
-      //   userAnswers: {
-      //     where: {
-      //       userId: userId
-      //     },
-      //     orderBy: [
-      //       { createdAt: 'desc' }
-      //     ],
-      //     take: 5 // Include the 5 most recent answers for context
-      //   }
-      // },
-      orderBy: {
-        // Temporarily using only createdAt until Prisma types are updated
-        createdAt: 'asc'
-        // TODO: Add these back after Prisma types are updated:
-        // learningStage: 'asc',
-        // difficultyScore: 'desc',
+      include: {
+        userAnswers: {
+          where: {
+            userId: userId
+          },
+          orderBy: [
+            { createdAt: 'desc' }
+          ],
+          take: 5 // Include the 5 most recent answers for context
+        }
       },
+      orderBy: [
+        // First prioritize by learning stage (understand -> use -> explore)
+        { learningStage: 'asc' },
+        // Then by difficulty (harder questions first)
+        { difficultyScore: 'desc' },
+        // Then by creation date
+        { createdAt: 'asc' }
+      ],
     });
 
     res.status(200).json(questions);
@@ -109,25 +109,25 @@ export const getQuestionsBySet = async (req: AuthRequest, res: Response, next: N
       where: {
         questionSetId: parseInt(setId, 10),
       },
-      // Temporarily remove include until Prisma types are updated
-      // include: {
-      //   userAnswers: {
-      //     where: {
-      //       userId
-      //     },
-      //     orderBy: [
-      //       { createdAt: 'desc' }
-      //     ],
-      //     take: 5 // Include the 5 most recent answers for context
-      //   }
-      // },
-      orderBy: {
-        // Temporarily using only createdAt until Prisma types are updated
-        createdAt: 'asc'
-        // TODO: Add these back after Prisma types are updated:
-        // learningStage: 'asc',
-        // difficultyScore: 'desc',
+      include: {
+        userAnswers: {
+          where: {
+            userId
+          },
+          orderBy: [
+            { createdAt: 'desc' }
+          ],
+          take: 5 // Include the 5 most recent answers for context
+        }
       },
+      orderBy: [
+        // First prioritize by learning stage (understand -> use -> explore)
+        { learningStage: 'asc' },
+        // Then by difficulty (harder questions first)
+        { difficultyScore: 'desc' },
+        // Then by creation date
+        { createdAt: 'asc' }
+      ],
     });
 
     res.status(200).json(questions);
@@ -163,14 +163,20 @@ export const createQuestion = async (req: AuthRequest, res: Response, next: Next
     }
 
     // 3. Create the new question
-    const newQuestion = await prisma.question.create({
-      data: {
-        text,
-        answer,
-        options: options || [],
-        questionType,
-        questionSetId: parseInt(setId, 10),
+    const questionData: Prisma.QuestionCreateInput = {
+      text,
+      options: options || [],
+      questionType,
+      answer: answer === undefined ? null : answer,
+      questionSet: {
+        connect: {
+          id: questionSet.id,
+        },
       },
+    };
+
+    const newQuestion = await prisma.question.create({
+      data: questionData,
     });
 
     res.status(201).json(newQuestion);

@@ -227,17 +227,28 @@ describe('Review Routes', () => {
       });
       
       expect(updatedQuestion).not.toBeNull();
-      expect(updatedQuestion?.masteryScore).toBe(3);
-      expect(updatedQuestion?.nextReviewAt).not.toBeNull();
+      
+      // Get the question set to check its mastery scores
+      const questionSet = await prisma.questionSet.findUnique({
+        where: { id: updatedQuestion?.questionSetId }
+      });
+      
+      expect(questionSet).not.toBeNull();
+      expect(questionSet?.overallMasteryScore).toBeGreaterThan(0);
+      expect(questionSet?.nextReviewAt).not.toBeNull();
     });
 
     it('should decrease mastery score for incorrect answers', async () => {
-      // First get the current mastery score
+      // First get the question and its question set
       const question = await prisma.question.findUnique({
         where: { id: questionId }
       });
       
-      const currentMastery = question?.masteryScore || 0;
+      const questionSet = await prisma.questionSet.findUnique({
+        where: { id: question?.questionSetId }
+      });
+      
+      const currentMastery = questionSet?.overallMasteryScore || 0;
       
       const reviewData = {
         questionId,

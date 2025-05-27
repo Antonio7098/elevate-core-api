@@ -52,6 +52,13 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
       data: {
         name: 'User1 QS1 in Folder1',
         folderId: user1Folder1.id,
+        understandScore: 0,
+        useScore: 0,
+        exploreScore: 0,
+        overallMasteryScore: 0,
+        currentIntervalDays: 1,
+        nextReviewAt: null,
+        lastReviewedAt: null
       },
     });
   });
@@ -77,8 +84,30 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
       // 1. Create sample questions in user1Qs1
       await prisma.question.createMany({
         data: [
-          { text: 'Q1 Text', answer: 'A1', questionSetId: user1Qs1.id, questionType: 'flashcard' },
-          { text: 'Q2 Text', answer: 'A2', questionSetId: user1Qs1.id, questionType: 'flashcard' },
+          { 
+            text: 'Q1 Text', 
+            answer: 'A1', 
+            questionSetId: user1Qs1.id, 
+            questionType: 'flashcard',
+            uueFocus: 'Understand',
+            conceptTags: ['concept1', 'concept2'],
+            difficultyScore: 0.5,
+            timesAnswered: 0,
+            timesAnsweredWrong: 0,
+            lastAnswerCorrect: null
+          },
+          { 
+            text: 'Q2 Text', 
+            answer: 'A2', 
+            questionSetId: user1Qs1.id, 
+            questionType: 'flashcard',
+            uueFocus: 'Use',
+            conceptTags: ['concept2', 'concept3'],
+            difficultyScore: 0.7,
+            timesAnswered: 0,
+            timesAnsweredWrong: 0,
+            lastAnswerCorrect: null
+          },
         ],
       });
 

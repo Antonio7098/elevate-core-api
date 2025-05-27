@@ -184,23 +184,76 @@ export const validateChatWithAI = [
 ];
 
 export const validateSubmitReview = [
-  check('questionId')
+  check('questionSetId')
     .notEmpty()
-    .withMessage('Question ID is required')
+    .withMessage('Question set ID is required')
+    .isInt({ gt: 0 })
+    .withMessage('Question set ID must be a positive integer')
+    .toInt(),
+  check('understandScore')
+    .notEmpty()
+    .withMessage('Understand score is required')
+    .isFloat({ min: 0, max: 100 })
+    .withMessage('Understand score must be a number between 0 and 100')
+    .toFloat(),
+  check('useScore')
+    .notEmpty()
+    .withMessage('Use score is required')
+    .isFloat({ min: 0, max: 100 })
+    .withMessage('Use score must be a number between 0 and 100')
+    .toFloat(),
+  check('exploreScore')
+    .notEmpty()
+    .withMessage('Explore score is required')
+    .isFloat({ min: 0, max: 100 })
+    .withMessage('Explore score must be a number between 0 and 100')
+    .toFloat(),
+  check('overallScore')
+    .notEmpty()
+    .withMessage('Overall score is required')
+    .isFloat({ min: 0, max: 100 })
+    .withMessage('Overall score must be a number between 0 and 100')
+    .toFloat(),
+  check('timeSpent')
+    .notEmpty()
+    .withMessage('Time spent is required')
+    .isInt({ min: 0 })
+    .withMessage('Time spent must be a positive integer')
+    .toInt(),
+  check('questionAnswers')
+    .notEmpty()
+    .withMessage('Question answers are required')
+    .isArray({ min: 1 })
+    .withMessage('Question answers must be a non-empty array'),
+  check('questionAnswers.*.questionId')
+    .notEmpty()
+    .withMessage('Question ID is required for each answer')
     .isInt({ gt: 0 })
     .withMessage('Question ID must be a positive integer')
     .toInt(),
-  check('answeredCorrectly')
+  check('questionAnswers.*.isCorrect')
     .notEmpty()
-    .withMessage('answeredCorrectly is required')
+    .withMessage('isCorrect is required for each answer')
     .isBoolean()
-    .withMessage('answeredCorrectly must be a boolean')
+    .withMessage('isCorrect must be a boolean')
     .toBoolean(),
-  check('userAnswer')
-    .optional()
+  check('questionAnswers.*.userAnswer')
+    .notEmpty()
+    .withMessage('User answer is required for each answer')
     .isString()
     .withMessage('User answer must be a string')
     .trim(),
+  check('questionAnswers.*.timeSpent')
+    .notEmpty()
+    .withMessage('Time spent is required for each answer')
+    .isInt({ min: 0 })
+    .withMessage('Time spent must be a positive integer')
+    .toInt(),
+  check('questionAnswers.*.confidence')
+    .optional()
+    .isInt({ min: 1, max: 5 })
+    .withMessage('Confidence must be an integer between 1 and 5')
+    .toInt(),
   handleValidationErrors,
 ];
 

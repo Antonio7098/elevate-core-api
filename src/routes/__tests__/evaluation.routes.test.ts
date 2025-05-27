@@ -19,6 +19,10 @@ jest.mock('@prisma/client', () => {
       update: jest.fn(),
       findUnique: jest.fn()
     },
+    questionSet: {
+      findUnique: jest.fn(),
+      update: jest.fn()
+    },
     $disconnect: jest.fn(),
   };
   return {
@@ -28,7 +32,7 @@ jest.mock('@prisma/client', () => {
 
 // Mock auth middleware
 jest.mock('../../middleware/auth.middleware', () => ({
-  protect: (req, res, next) => {
+  protect: (req: any, res: any, next: any) => {
     req.user = { userId: 1 };
     next();
   }
@@ -54,9 +58,16 @@ describe('Evaluation Routes', () => {
         answer: 'Paris',
         questionType: 'multiple-choice',
         options: ['London', 'Paris', 'Berlin', 'Madrid'],
-        masteryScore: 2,
+        uueFocus: 'Understand',
+        difficultyScore: 0.5,
+        questionSetId: 1,
         questionSet: {
+          id: 1,
           name: 'Geography',
+          overallMasteryScore: 70,
+          understandScore: 80,
+          useScore: 60,
+          exploreScore: 50,
           folder: {
             name: 'Study Materials'
           }
@@ -65,7 +76,20 @@ describe('Evaluation Routes', () => {
 
       // Mock updated question
       prisma.question.findUnique.mockResolvedValue({
-        masteryScore: 3,
+        id: 1,
+        text: 'What is the capital of France?',
+        questionSetId: 1,
+        uueFocus: 'Understand'
+      });
+      
+      // Mock updated question set
+      prisma.questionSet.findUnique.mockResolvedValue({
+        id: 1,
+        name: 'Geography',
+        overallMasteryScore: 75,
+        understandScore: 85,
+        useScore: 65,
+        exploreScore: 55,
         nextReviewAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
       });
 
