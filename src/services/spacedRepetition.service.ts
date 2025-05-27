@@ -60,6 +60,7 @@ export const calculateQuestionSetNextReview = async (
       timeSpent: number;
       scoreAchieved?: number;
       confidence?: number;
+      userAnswer: string;
     }>;
   }
 ) => {
@@ -126,7 +127,7 @@ export const calculateQuestionSetNextReview = async (
   });
   
   // Update individual questions based on answers
-  await updateQuestionPerformance(reviewData.questionAnswers);
+  await updateQuestionPerformance(reviewData.questionAnswers, reviewData.userId);
   
   return updatedQuestionSet;
 };
@@ -150,6 +151,7 @@ export const getIntervalForMastery = (overallScore: number): number => {
  * Update individual question performance based on user answers
  * 
  * @param questionAnswers - Array of question answers from the review session
+ * @param userId - The ID of the user who submitted the answers
  */
 export const updateQuestionPerformance = async (
   questionAnswers: Array<{
@@ -158,57 +160,65 @@ export const updateQuestionPerformance = async (
     timeSpent: number;
     scoreAchieved?: number;
     confidence?: number;
-  }>
+    userAnswer: string;
+  }>,
+  userId: number
 ) => {
-  // Process each question answer
-  for (const answer of questionAnswers) {
-    // Fetch the question
-    const question = await prisma.question.findUnique({
-      where: { id: answer.questionId }
+  const updates = questionAnswers.map(async (answer) => {
+    // Create UserQuestionAnswer record first
+    await prisma.userQuestionAnswer.create({
+      data: {
+        userId: userId,
+        questionId: answer.questionId,
+        userAnswer: answer.userAnswer,
+        isCorrect: answer.isCorrect,
+        scoreAchieved: answer.scoreAchieved, // Will be null if not provided
+        timeSpent: answer.timeSpent, // Defaulted to 0 from controller if not sent
+        answeredAt: new Date(),
+        // confidence field from original 'answer' is not in UserQuestionAnswer schema, so not included here
+      },
     });
-    
-    if (!question) continue;
-    
-    // Calculate new difficulty score based on correctness, time spent, and confidence
-    let difficultyAdjustment = 0;
-    
-    // Correct answers decrease difficulty, incorrect answers increase it
-    difficultyAdjustment += answer.isCorrect ? -0.05 : 0.1;
-    
-    // Factor in confidence if provided (lower confidence = higher difficulty)
-    if (answer.confidence !== undefined) {
-      difficultyAdjustment += (3 - answer.confidence) * 0.02; // 1-5 scale, centered at 3
+
+    // Then, find the question to update its aggregate stats
+    const question = await prisma.question.findUnique({
+      where: { id: answer.questionId },
+    });
+
+    if (!question) {
+      console.warn(`Question with ID ${answer.questionId} not found during performance update.`);
+      return; // Skip if question not found
     }
-    
-    // Calculate new difficulty (bounded between 0.1 and 1.0)
-    const newDifficulty = Math.max(0.1, Math.min(1.0, 
-      question.difficultyScore + difficultyAdjustment
-    ));
-    
-    // Update the question with new performance data
+
+    // Calculate difficulty adjustment based on correctness and scoreAchieved
+    let difficultyAdjustment = 0;
+    if (answer.scoreAchieved !== undefined && answer.scoreAchieved !== null) {
+      // Higher score = less difficult, lower score = more difficult
+      // Assuming scoreAchieved is 0-100. Perfect score (100) might decrease difficulty, 0 might increase it significantly.
+      difficultyAdjustment = (50 - answer.scoreAchieved) / 500; // e.g. score 0 -> +0.1, score 50 -> 0, score 100 -> -0.1
+    } else {
+      // Fallback if scoreAchieved is not available, use isCorrect
+      difficultyAdjustment = answer.isCorrect ? -0.05 : 0.1;
+    }
+    // Factor in confidence if provided (lower confidence = higher difficulty)
+    // Note: 'confidence' was part of the original 'answer' type but not directly on 'UserQuestionAnswer' schema.
+    // If we want to use confidence, it should be passed in 'answer' object if available.
+    if (answer.confidence !== undefined) {
+      difficultyAdjustment += (3 - answer.confidence) * 0.02; // Assumes 1-5 scale, centered at 3
+    }
+
+    // Update the question with new performance data using existing fields
     await prisma.question.update({
       where: { id: answer.questionId },
       data: {
         lastAnswerCorrect: answer.isCorrect,
         timesAnswered: { increment: 1 },
         timesAnsweredWrong: answer.isCorrect ? undefined : { increment: 1 },
-        difficultyScore: newDifficulty,
-        userAnswers: {
-          create: {
-            userId: answer.questionId, // This should be the actual user ID
-            userAnswer: '', // This should be the actual answer text
-            isCorrect: answer.isCorrect,
-            confidence: answer.confidence,
-            timeSpent: answer.timeSpent,
-            ...(answer.scoreAchieved !== undefined || answer.isCorrect !== undefined ? {
-              // Use type assertion to bypass TypeScript error
-              scoreAchieved: answer.scoreAchieved || (answer.isCorrect ? 100 : 0)
-            } as any : {})
-          }
-        }
-      }
+        // DO NOT include 'userAnswers: { create: ... } }' here, as UserQuestionAnswer is created above.
+      },
     });
-  }
+  });
+
+  await Promise.all(updates);
 };
 
 // Type for a question set due for review

@@ -176,14 +176,15 @@ All question set routes are protected and require authentication.
     -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
     -   **Response:** 204 No Content on success.
 
-### Questions (`/api/folders/:folderId/questionsets/:setId/questions`)
+### Questions (`/api/questionsets/:setId/questions` and `/api/questions/:id`)
 
 All question routes are protected and require authentication.
--   **`POST /`**: Create a new question within a question set.
+
+-   **`POST /`** (within a question set, e.g., `/api/questionsets/:setId/questions`): Create a new question within a specific question set.
     -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
-    -   **Body:** `{ "text": "What is 2+2?", "answer": "4", "questionType": "flashcard", "options": [] }`
+    -   **Body:** `{ "text": "What is photosynthesis?", "answer": "The process by which green plants use sunlight, water, and carbon dioxide to create glucose and oxygen.", "questionType": "short-answer", "marksAvailable": 1, "uueFocus": "Understand", "conceptTags": ["biology", "plants"] }`
     -   **Response:** The newly created question object.
--   **`GET /`**: Get all questions within a specific question set.
+-   **`GET /`** (within a question set): Get all questions within a specific question set.
     -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
     -   **Response:** An array of question objects.
 -   **`GET /:id`**: Get a specific question by ID.
@@ -191,294 +192,188 @@ All question routes are protected and require authentication.
     -   **Response:** The question object if it belongs to the user.
 -   **`PUT /:id`**: Update a specific question.
     -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
-    -   **Body:** `{ "text": "Updated question text", "answer": "Updated answer" }`
+    -   **Body:** Fields to update (e.g., `text`, `answer`, `marksAvailable`).
     -   **Response:** The updated question object.
 -   **`DELETE /:id`**: Delete a specific question.
     -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
-    -   **Response:** 204 No Content on success.
+    -   **Response:** Success message.
 
-## AI Service Integration
+### AI Service Integration (`/api/ai`)
 
-The AI service is a Python Flask-based microservice that handles natural language processing tasks. The Core API communicates with this service for question generation and answer evaluation.
+These endpoints interact with the Python-based AI service.
 
-### Endpoints
+-   **`POST /generate-questions`**: Generate questions from source text.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Body:**
+        ```json
+        {
+          "sourceText": "Your study text here...",
+          "folderId": 1,
+          "questionCount": 5,
+          "questionTypes": ["multiple-choice", "true-false", "short-answer"],
+          "difficulty": "medium",
+          "questionSetName": "Optional custom name"
+        }
+        ```
+    -   **Response:** A new question set object with the generated questions.
 
-#### `POST /api/ai/generate-questions`
-Generate questions from source text.
-
-**Headers:**
-- `Authorization: Bearer <YOUR_JWT_TOKEN>`
-- `Content-Type: application/json`
-
-**Request Body:**
-```json
-{
-  "sourceText": "Your study text here...",
-  "folderId": 1,
-  "questionCount": 5,
-  "questionTypes": ["multiple-choice", "true-false", "short-answer"],
-  "difficulty": "medium",
-  "questionSetName": "Optional custom name"
-}
-```
-
-**Response:**
-```json
-{
-  "questionSet": {
-    "id": 123,
-    "name": "Questions from Source - May 25, 2025",
-    "folderId": 1,
-    "createdAt": "2025-05-25T07:30:00.000Z",
-    "updatedAt": "2025-05-25T07:30:00.000Z"
-  },
-  "questions": [
-    {
-      "id": 456,
-      "text": "What is the main concept discussed in the text?",
-      "answer": "The main concept is...",
-      "questionType": "multiple-choice",
-      "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
-      "explanation": "The text primarily discusses..."
-    }
-  ]
-}
-```
-
-#### `POST /api/ai/chat`
-Chat with the AI about study materials.
-
-**Headers:**
-- `Authorization: Bearer <YOUR_JWT_TOKEN>`
-- `Content-Type: application/json`
-
-**Request Body:**
-```json
-{
-  "message": "Can you explain this concept further?",
-  "context": {
-    "questionSets": [
-      {
-        "id": 1,
-        "name": "Biology 101",
-        "questions": [
-          {"text": "What is the function of mitochondria?", "answer": "Generate energy in the form of ATP"}
-        ]
-      }
-    ],
-    "userLevel": "beginner"
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "response": {
-    "message": "Mitochondria are known as the 'powerhouse of the cell'...",
-    "references": [
-      {"text": "Biology Textbook, Chapter 5", "source": "Campbell Biology"}
-    ],
-    "suggestedQuestions": [
-      "How does ATP production work?",
-      "What is the structure of mitochondria?"
-    ]
-  },
-  "metadata": {
-    "model": "gemini-1.5-flash-latest",
-    "processingTime": "1.23s",
-    "tokensUsed": 145
-  }
-}
-```
-
-#### `POST /api/ai/evaluate-answer`
-Evaluate a user's answer to a question.
-
-**Headers:**
-- `Authorization: Bearer <YOUR_JWT_TOKEN>`
-- `Content-Type: application/json`
-
-**Request Body:**
-```json
-{
-  "questionContext": {
-    "questionId": "bio1",
-    "questionText": "What is the function of mitochondria?",
-    "expectedAnswer": "Generate energy in the form of ATP",
-    "questionType": "short-answer"
-  },
-  "userAnswer": "They produce energy for the cell",
-  "context": {
-    "questionSetName": "Biology 101",
-    "folderName": "Science"
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "evaluation": {
-    "isCorrect": true,
-    "isPartiallyCorrect": true,
-    "score": 0.9,
-    "feedback": "Your answer is correct but could be more specific. Mitochondria generate energy in the form of ATP.",
-    "suggestedCorrectAnswer": "Mitochondria generate energy in the form of ATP (adenosine triphosphate)."
-  },
-  "metadata": {
-    "model": "gemini-1.5-flash-latest",
-    "processingTime": "1.45s",
-    "confidenceScore": 0.95
-  }
-}
-```
-          "questionType": "flashcard",
-          "options": [],
-          "questionSetId": 123,
-          "createdAt": "2025-05-25T07:30:00.000Z",
-          "updatedAt": "2025-05-25T07:30:00.000Z"
-        },
-        // Additional questions...
-      ]
-    }
-    ```
-
-    **How it works:**
-    1. The API receives source text from which questions should be generated
-    2. It processes the text using AI algorithms to identify key concepts and create relevant questions
-    3. A new question set is created in the specified folder
-    4. The generated questions are saved to the database and linked to the question set
-    5. The complete question set with all questions is returned in the response
+-   **`POST /evaluate-answer`**: Evaluate a user's answer to a question, potentially using AI.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Body:**
+        ```json
+        {
+          "questionId": 123,
+          "userAnswer": "The user's submitted answer.",
+          "updateMastery": false // Optional, defaults true, but mastery updates for single eval are de-emphasized here
+        }
+        ```
+    -   **Logic:** 
+        - Fetches the question, including its `marksAvailable` (defaults to 1 if not set).
+        - If AI service is available, it constructs a detailed request for the AI (including `questionText`, `userAnswer`, `marksAvailable`, `questionType`, etc.).
+        - The AI returns feedback, a raw score, and a suggested answer.
+        - `scoreAchieved` is calculated based on the AI's raw score and the question's `marksAvailable`.
+        - If AI is not available or for simpler types, basic local evaluation is performed.
+        - Records the `UserQuestionAnswer` with `scoreAchieved`.
+        - Updates basic question statistics (e.g., `lastAnswerCorrect`).
+    -   **Response:**
+        ```json
+        {
+          "evaluation": {
+            "isCorrect": true,
+            "score": 0.9, // Raw score from AI or 1/0 from basic eval
+            "feedback": "Your answer is mostly correct...",
+            "explanation": "A more complete answer would be...", // Suggested correct answer from AI
+            "marksAvailable": 1, // The total marks for this question
+            "scoreAchieved": 1, // The actual marks awarded to the user for this question
+            "pendingEvaluation": false
+          }
+        }
+        ```
 
 -   **`POST /chat`**: Chat with AI about study materials.
     -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
-    -   **Body:** 
-    ```json
-    { 
-      "message": "Your question or message to the AI",
-      "questionSetId": 123, // Optional: Provide context from a specific question set
-      "folderId": 1 // Optional: Provide context from a specific folder
-    }
-    ```
-    -   **Response:** The AI's response to your message.
-    ```json
-    {
-      "response": "Here's an explanation of the concept you asked about...",
-      "context": "Based on your question set 'Biology 101' with 15 questions."
-    }
-    ```
-
-    **How it works:**
-    1. The API receives your message and optional context (question set or folder)
-    2. It verifies that you have access to the provided context (if any)
-    3. The message is processed by the AI, which generates a contextually relevant response
-    4. If context was provided, the AI incorporates information from your question sets or folders
-    5. The AI response is returned, along with any context information that was used
+    -   **Body:**
+        ```json
+        { 
+          "message": "Your question or message to the AI",
+          "context": { 
+            "folderName": "Optional folder name", 
+            "questionSetName": "Optional question set name",
+            "questionText": "Optional specific question text"
+          }
+        }
+        ```
+    -   **Response:** AI-generated chat response.
 
 ### Reviews & Spaced Repetition (`/api/reviews`)
 
 All review routes are protected and require authentication.
 
--   **`GET /today`**: Get questions due for review today.
+-   **`GET /today`**: Get question sets due for review today based on the spaced repetition schedule.
     -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
-    -   **Response:** An array of questions that are due for review today.
-    ```json
-    {
-      "count": 5,
-      "questions": [
+    -   **Response:** An array of question set objects due for review.
+
+-   **`POST /`**: Submit the outcomes of a completed review session.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Body (`FrontendReviewSubmission`):
+        ```json
         {
-          "id": 1,
-          "text": "What is spaced repetition?",
-          "questionType": "multiple-choice",
-          "options": ["A learning technique", "A memorization method", "A scheduling system"],
-          "masteryScore": 2,
-          "nextReviewAt": "2023-06-01T12:00:00Z",
-          "questionSetId": 1,
-          "questionSetName": "Learning Techniques",
-          "folderId": 1,
-          "folderName": "Study Methods"
-        },
-        // More questions...
-      ]
-    }
-    ```
+          "questionSetId": "1",
+          "outcomes": [
+            {
+              "questionId": "101",
+              "userAnswer": "User's answer for question 101",
+              "scoreAchieved": 1, // Raw marks achieved for this question
+              "uueFocus": "Understand" // Frontend determined UUE focus for this answer
+            },
+            {
+              "questionId": "102",
+              "userAnswer": "User's answer for question 102",
+              "scoreAchieved": 0,
+              "uueFocus": "Use"
+            }
+            // ... more outcomes
+          ],
+          "timeSpent": 1200 // Total time in seconds for the session
+        }
+        ```
+    -   **Logic:**
+        - For each outcome, fetches the question's `marksAvailable` from the database.
+        - Calculates UUE category scores (Understand, Use, Explore) based on `scoreAchieved` vs `marksAvailable`.
+        - Calculates an overall weighted score for the session.
+        - Creates a `UserQuestionSetReview` record.
+        - Calls `calculateQuestionSetNextReview` service, which updates `QuestionSet` mastery scores and `nextReviewAt`, and also records each `UserQuestionAnswer` (including the `scoreAchieved` raw marks).
+    -   **Response:** The updated `QuestionSet` object with new mastery scores and next review date.
 
--   **`POST /`**: Submit a review for a question.
+-   **`GET /stats`**: Get review statistics for the user (e.g., overall progress, mastery levels).
     -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
-    -   **Body:** 
-    ```json
-    { 
-      "questionId": 1,
-      "answeredCorrectly": true,
-      "userAnswer": "Optional user's answer text"
-    }
-    ```
-    -   **Response:** The updated question with review results.
-    ```json
-    {
-      "question": {
-        "id": 1,
-        "text": "What is spaced repetition?",
-        "masteryScore": 3,
-        "nextReviewAt": "2023-06-08T12:00:00Z",
-        // Other question properties...
-      },
-      "reviewResult": {
-        "answeredCorrectly": true,
-        "oldMasteryScore": 2,
-        "newMasteryScore": 3,
-        "nextReviewAt": "2023-06-08T12:00:00Z"
-      }
-    }
-    ```
-
--   **`GET /stats`**: Get review statistics for the authenticated user.
-    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
-    -   **Response:** Statistics about the user's review progress.
-    ```json
-    {
-      "totalQuestions": 50,
-      "reviewedQuestions": 30,
-      "masteredQuestions": 15,
-      "dueQuestions": 8,
-      "questionsByMastery": [
-        { "level": 0, "count": 20 },
-        { "level": 1, "count": 5 },
-        { "level": 2, "count": 10 },
-        { "level": 3, "count": 5 },
-        { "level": 4, "count": 7 },
-        { "level": 5, "count": 3 }
-      ],
-      "completionRate": 30
-    }
-    ```
-
-    **How it works:**
-    1. The spaced repetition system uses a simplified version of the SM-2 algorithm
-    2. Questions are assigned a mastery score (0-5) that increases when answered correctly and decreases when answered incorrectly
-    3. The next review date is calculated based on the mastery score - higher mastery means longer intervals between reviews
-    4. Questions are prioritized for review based on their mastery score and how overdue they are
+    -   **Response:** User's progress summary.
 
 ---
 
-## Scripts
+## Database Schema Notes
 
--   `npm run dev`: Starts the server in development mode using `nodemon` and `ts-node`.
--   `npm start`: Starts the server in production mode (after building).
--   `npm run build`: Compiles TypeScript to JavaScript (output to `dist/` folder).
--   `npm run lint`: Lints the codebase using ESLint.
--   `npm run format`: Formats the codebase using Prettier.
--   `npx prisma migrate dev`: Runs database migrations.
--   `npx prisma generate`: Generates/updates the Prisma Client.
--   `npx prisma studio`: Opens the Prisma Studio GUI to view/edit database data.
+The database schema is managed by Prisma and defined in `src/db/prisma/schema.prisma`.
+
+Key models include:
+- `User`
+- `Folder`
+- `QuestionSet`
+- `Question`
+- `UserQuestionAnswer`
+- `UserQuestionSetReview`
+
+### `Question.marksAvailable`
+
+The `Question` model has an important optional field:
+-   `marksAvailable: Int?`
+
+This field stores the total possible marks a question is worth (e.g., 1, 2, 5). It is crucial for:
+-   The AI evaluation service, which takes `marksAvailable` into account when determining a score.
+-   Calculating the user's percentage score for a question (`scoreAchieved / marksAvailable`).
+-   Calculating overall session scores and mastery levels accurately.
+
+If not explicitly set, the system often defaults to `1` mark for a question during evaluations.
 
 ---
 
-## Project Structure (Overview)
+## Development & Database Management
 
+### Running the Server
+
+-   **Development Mode (with auto-restart on file changes):**
+    ```bash
+    npm run dev
+    ```
+    The server will typically start on `http://localhost:3000` (or the `PORT` specified in your `.env`).
+
+-   **Production Mode:**
+    ```bash
+    npm run build
+    npm start
+    ```
+
+### Database Migrations
+
+Run database migrations using Prisma:
+```bash
+npx prisma migrate dev --schema=./src/db/prisma/schema.prisma
+```
+
+### Updating `marksAvailable` for Existing Questions
+
+To ensure all existing questions have a default value for the `marksAvailable` field (e.g., if they were created before this field was emphasized), a script is provided:
+
+-   **Script location:** `scripts/updateMarksAvailable.ts`
+-   **Purpose:** Finds all questions where `marksAvailable` is `null` and updates it to `1`.
+-   **To run:**
+    ```bash
+    npm run db:update-marks
+    ```
+
+---
+
+## Project Structure (Simplified)
 
 elevate-core-api/
 ├── .env                  # Environment variables (ignored by Git)

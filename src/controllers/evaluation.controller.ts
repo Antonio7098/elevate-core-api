@@ -13,7 +13,7 @@ import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { aiService } from '../services/aiService';
 import { EvaluateAnswerRequest } from '../types/ai-service.types';
-import { calculateQuestionSetNextReview } from '../services/spacedRepetition.service';
+import { calculateQuestionSetNextReview, updateQuestionPerformance } from '../services/spacedRepetition.service';
 
 const prisma = new PrismaClient();
 
@@ -61,12 +61,34 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
     
     // Check if AI service is available
     const isAIServiceAvailable = await aiService.isAvailable();
+
+    // Define a variable to hold the data for UserQuestionAnswer
+    let questionAnswerDataForDb: {
+      questionId: number;
+      isCorrect: boolean;
+      userAnswer: string;
+      timeSpent: number;
+      confidence?: number;
+      scoreAchieved?: number;
+    };
     
+    let clientResponsePayload: any;
+
     if (!isAIServiceAvailable) {
-      // Fallback to simple evaluation for multiple-choice questions
+      // Fallback to simple evaluation for multiple-choice or true-false questions
       if (question.questionType === 'multiple-choice' || question.questionType === 'true-false') {
         const isCorrect = userAnswer.trim().toLowerCase() === (question.answer || '').trim().toLowerCase();
+        const currentMarksAvailable = question.marksAvailable || 1; // Default to 1
         
+        questionAnswerDataForDb = {
+          questionId: question.id,
+          isCorrect: isCorrect,
+          userAnswer: userAnswer,
+          timeSpent: 0, // Placeholder, consider passing actual time from frontend
+          confidence: 3, // Default confidence
+          scoreAchieved: isCorrect ? currentMarksAvailable : 0 // Raw score
+        };
+
         // Update question stats
         await prisma.question.update({
           where: { id: questionId },
@@ -74,221 +96,262 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
             lastAnswerCorrect: isCorrect,
             timesAnswered: { increment: 1 },
             timesAnsweredWrong: isCorrect ? undefined : { increment: 1 },
-            // Update difficulty score based on answer correctness
-            difficultyScore: {
-              set: isCorrect 
-                ? Math.max(0.1, (question.difficultyScore || 0.5) - 0.05) // Decrease difficulty slightly if correct
-                : Math.min(1.0, (question.difficultyScore || 0.5) + 0.1)  // Increase difficulty more if wrong
-            }
           }
         });
         
-        // Update question set mastery if requested
-        if (updateMastery) {
-          // Determine which score to update based on UUE focus
-          let scoreUpdate = {};
-          // Use type assertion to access the uueFocus field
-          const uueFocus = (question as any).uueFocus || 'Understand';
-          
-          if (uueFocus === 'Understand') {
-            scoreUpdate = {
-              understandScore: isCorrect 
-                ? Math.min(100, (question.questionSet.understandScore || 0) + 5)
-                : Math.max(0, (question.questionSet.understandScore || 0) - 3)
-            };
-          } else if (uueFocus === 'Use') {
-            scoreUpdate = {
-              useScore: isCorrect 
-                ? Math.min(100, (question.questionSet.useScore || 0) + 5)
-                : Math.max(0, (question.questionSet.useScore || 0) - 3)
-            };
-          } else if (uueFocus === 'Explore') {
-            scoreUpdate = {
-              exploreScore: isCorrect 
-                ? Math.min(100, (question.questionSet.exploreScore || 0) + 5)
-                : Math.max(0, (question.questionSet.exploreScore || 0) - 3)
-            };
-          }
-          
-          // Calculate new overall mastery score
-          const reviewData = {
-            userId,
-            questionSetId: question.questionSet.id,
-            understandScore: question.questionSet.understandScore || 0,
-            useScore: question.questionSet.useScore || 0,
-            exploreScore: question.questionSet.exploreScore || 0,
-            // Calculate overall score as average of the three scores
-            overallScore: Math.round((
-              (question.questionSet.understandScore || 0) + 
-              (question.questionSet.useScore || 0) + 
-              (question.questionSet.exploreScore || 0)
-            ) / 3),
-            timeSpent: 0, // Not tracking time in this context
-            // Add a single question answer for this evaluation
-            questionAnswers: [{
-              questionId: question.id,
-              isCorrect: isCorrect,
-              timeSpent: 0,
-              confidence: 3 // Default middle confidence
-            }],
-            ...scoreUpdate
-          };
-          
-          // Update the question set with new mastery scores
-          await calculateQuestionSetNextReview(question.questionSet.id, reviewData);
-        }
+        // if (updateMastery) { // Temporarily comment out this block
+        //   let scoreUpdate = {};
+        //   const uueFocus = (question as any).uueFocus || 'Understand';
+        //   
+        //   if (uueFocus === 'Understand') {
+        //     scoreUpdate = {
+        //       understandScore: isCorrect 
+        //         ? Math.min(100, (question.questionSet.understandScore || 0) + 5)
+        //         : Math.max(0, (question.questionSet.understandScore || 0) - 3)
+        //     };
+        //   } else if (uueFocus === 'Use') {
+        //     scoreUpdate = {
+        //       useScore: isCorrect 
+        //         ? Math.min(100, (question.questionSet.useScore || 0) + 5)
+        //         : Math.max(0, (question.questionSet.useScore || 0) - 3)
+        //     };
+        //   } else if (uueFocus === 'Explore') {
+        //     scoreUpdate = {
+        //       exploreScore: isCorrect 
+        //         ? Math.min(100, (question.questionSet.exploreScore || 0) + 5)
+        //         : Math.max(0, (question.questionSet.exploreScore || 0) - 3)
+        //     };
+        //   }
+        //   
+        //   const reviewData = {
+        //     userId,
+        //     questionSetId: question.questionSet.id,
+        //     understandScore: question.questionSet.understandScore || 0,
+        //     useScore: question.questionSet.useScore || 0,
+        //     exploreScore: question.questionSet.exploreScore || 0,
+        //     overallScore: Math.round(((
+        //       (question.questionSet.understandScore || 0) + 
+        //       (question.questionSet.useScore || 0) + 
+        //       (question.questionSet.exploreScore || 0)
+        //     )) / 3),
+        //     timeSpent: 0, 
+        //     questionAnswers: [questionAnswerDataForDb], // Use the structured data
+        //     ...scoreUpdate
+        //   };
+        //   
+        //   await calculateQuestionSetNextReview(question.questionSet.id, reviewData);
+        // }
         
-        res.status(200).json({
+        // Log the answer attempt
+        await updateQuestionPerformance([questionAnswerDataForDb], userId);
+
+        clientResponsePayload = {
           evaluation: {
             isCorrect,
-            score: isCorrect ? 1.0 : 0.0,
+            score: (questionAnswerDataForDb.scoreAchieved ?? 0) / currentMarksAvailable, // Normalized score 0-1 for client
             feedback: isCorrect 
               ? 'Correct! Well done.' 
               : `Incorrect. The correct answer is: ${question.answer}`,
-            correctedAnswer: question.answer
+            correctedAnswer: question.answer,
+            marksAvailable: currentMarksAvailable,
+            scoreAchieved: questionAnswerDataForDb.scoreAchieved // Raw score for client
           }
-        });
+        };
+        res.status(200).json(clientResponsePayload);
         return;
       }
       
-      // For other question types, we need AI evaluation
-      res.status(503).json({ 
-        message: 'AI evaluation service is currently unavailable for this question type',
-        fallback: false
-      });
+      // For other question types without AI, mark as pending evaluation or simple feedback
+      questionAnswerDataForDb = {
+        questionId: question.id,
+        isCorrect: false, // Cannot determine
+        userAnswer: userAnswer,
+        timeSpent: 0,
+        scoreAchieved: 0 // No score awarded
+      };
+      await updateQuestionPerformance([questionAnswerDataForDb], userId);
+      
+      clientResponsePayload = {
+        evaluation: {
+          isCorrect: null, // Undetermined
+          score: null,     // Undetermined
+          feedback: 'This question type requires AI evaluation, which is currently unavailable. Your answer has been recorded.',
+          pendingEvaluation: true,
+          marksAvailable: question.marksAvailable || 1,
+          scoreAchieved: 0
+        }
+      };
+      res.status(200).json(clientResponsePayload);
       return;
     }
-    
-    // Prepare request for AI service
-    const evaluateRequest: EvaluateAnswerRequest = {
-      questionContext: {
-        questionId: question.id,
-        questionText: question.text,
-        expectedAnswer: question.answer || undefined,
-        questionType: question.questionType,
-        options: question.options
-      },
-      userAnswer,
-      context: {
-        questionSetName: question.questionSet.name,
-        folderName: question.questionSet.folder?.name
-      }
-    };
-    
-    // Call AI service to evaluate the answer
-    const evaluationResult = await aiService.evaluateAnswer(evaluateRequest);
-    
-    // Convert the AI evaluation to a boolean for the spaced repetition algorithm
-    // For partially correct answers, we use a threshold of 0.6
-    const isCorrectForMastery = 
-      evaluationResult.evaluation.isCorrect === true || 
-      (evaluationResult.evaluation.isCorrect === 'partially_correct' && 
-       evaluationResult.evaluation.score >= 0.6);
-    
-    // Update question stats
-    await prisma.question.update({
-      where: { id: questionId },
-      data: {
-        lastAnswerCorrect: isCorrectForMastery,
-        timesAnswered: { increment: 1 },
-        timesAnsweredWrong: isCorrectForMastery ? undefined : { increment: 1 },
-        // Update difficulty score based on answer correctness
-        difficultyScore: {
-          set: isCorrectForMastery 
-            ? Math.max(0.1, (question.difficultyScore || 0.5) - 0.05) // Decrease difficulty slightly if correct
-            : Math.min(1.0, (question.difficultyScore || 0.5) + 0.1)  // Increase difficulty more if wrong
-        }
-      }
-    });
-    
-    // Update question set mastery if requested
-    if (updateMastery) {
-      // Determine which score to update based on learning stage
-      let scoreUpdate = {};
-      // Use type assertion to access the uueFocus field
-      const uueFocus = (question as any).uueFocus || 'Understand';
-      
-      if (uueFocus === 'Understand') {
-        scoreUpdate = {
-          understandScore: isCorrectForMastery 
-            ? Math.min(100, (question.questionSet.understandScore || 0) + 5)
-            : Math.max(0, (question.questionSet.understandScore || 0) - 3)
-        };
-      } else if (uueFocus === 'Use') {
-        scoreUpdate = {
-          useScore: isCorrectForMastery 
-            ? Math.min(100, (question.questionSet.useScore || 0) + 5)
-            : Math.max(0, (question.questionSet.useScore || 0) - 3)
-        };
-      } else if (uueFocus === 'Explore') {
-        scoreUpdate = {
-          exploreScore: isCorrectForMastery 
-            ? Math.min(100, (question.questionSet.exploreScore || 0) + 5)
-            : Math.max(0, (question.questionSet.exploreScore || 0) - 3)
-        };
-      }
-      
-      // Calculate new overall mastery score
-      const reviewData = {
-        userId,
-        questionSetId: question.questionSet.id,
-        understandScore: question.questionSet.understandScore || 0,
-        useScore: question.questionSet.useScore || 0,
-        exploreScore: question.questionSet.exploreScore || 0,
-        // Calculate overall score as average of the three scores
-        overallScore: Math.round((
-          (question.questionSet.understandScore || 0) + 
-          (question.questionSet.useScore || 0) + 
-          (question.questionSet.exploreScore || 0)
-        ) / 3),
-        timeSpent: 0, // Not tracking time in this context
-        // Add a single question answer for this evaluation
-        questionAnswers: [{
+
+    // AI Path
+    try {
+      const currentMarksAvailableForAI = question.marksAvailable || 1;
+      const aiRequest: EvaluateAnswerRequest = {
+        questionContext: {
           questionId: question.id,
-          isCorrect: isCorrectForMastery,
-          timeSpent: 0,
-          confidence: 3 // Default middle confidence
-        }],
-        ...scoreUpdate
+          questionText: question.text,
+          expectedAnswer: question.answer || undefined,
+          questionType: question.questionType,
+          options: (question as any).options || [], // Assuming options might be on the question object
+          marksAvailable: currentMarksAvailableForAI
+        },
+        userAnswer: userAnswer,
+        context: {
+          questionSetName: question.questionSet.name,
+          folderName: question.questionSet.folder?.name
+        }
       };
-      
-      // Update the question set with new mastery scores
-      await calculateQuestionSetNextReview(question.questionSet.id, reviewData);
-    }
-    
-    // Get updated question set data
-    const updatedQuestionSet = await prisma.questionSet.findUnique({
-      where: { id: question.questionSet.id },
-      select: { 
-        understandScore: true,
-        useScore: true,
-        exploreScore: true,
-        overallMasteryScore: true,
-        nextReviewAt: true 
-      }
-    });
-    
-    // Return the evaluation result
-    res.status(200).json({
-      evaluation: evaluationResult.evaluation,
-      metadata: evaluationResult.metadata,
-      mastery: updateMastery ? {
-        // Include the updated mastery scores
-        questionSet: updatedQuestionSet,
-        question: await prisma.question.findUnique({
-          where: { id: questionId },
-          select: { 
-            difficultyScore: true,
-            timesAnswered: true,
-            timesAnsweredWrong: true,
-            lastAnswerCorrect: true
+
+      const aiEvaluationResult = await aiService.evaluateAnswer(aiRequest);
+
+      let rawScoreFromAI: number;
+      let isCorrectFromAI: boolean;
+
+      if (aiEvaluationResult.success && aiEvaluationResult.evaluation) {
+        const evalData = aiEvaluationResult.evaluation;
+        rawScoreFromAI = Math.round(evalData.score * currentMarksAvailableForAI);
+        // Ensure rawScoreFromAI is within 0 and currentMarksAvailableForAI
+        rawScoreFromAI = Math.max(0, Math.min(rawScoreFromAI, currentMarksAvailableForAI));
+
+        if (evalData.isCorrect === true) {
+          isCorrectFromAI = true;
+        } else if (evalData.isCorrect === 'partially_correct') {
+          isCorrectFromAI = true; // Treat partially correct as correct for this flag
+        } else if (evalData.isCorrect === false) {
+          isCorrectFromAI = false;
+        } else {
+          // Fallback if isCorrect is not a recognized boolean or 'partially_correct'
+          isCorrectFromAI = rawScoreFromAI / currentMarksAvailableForAI >= 0.5; 
+        }
+        
+        questionAnswerDataForDb = {
+          questionId: question.id,
+          isCorrect: isCorrectFromAI,
+          userAnswer: userAnswer,
+          timeSpent: 0, // Placeholder
+          scoreAchieved: rawScoreFromAI,
+          confidence: aiEvaluationResult.metadata?.confidenceScore // Store confidence if available
+        };
+
+        clientResponsePayload = {
+          evaluation: {
+            isCorrect: isCorrectFromAI,
+            score: evalData.score, // Normalized 0-1 score from AI
+            feedback: evalData.feedback || (isCorrectFromAI ? 'Correct.' : 'Needs improvement.'),
+            correctedAnswer: evalData.correctedAnswer,
+            marksAvailable: currentMarksAvailableForAI,
+            scoreAchieved: rawScoreFromAI // Raw score
+          },
+          metadata: aiEvaluationResult.metadata 
+        };
+
+      } else {
+        // AI service call was not successful or evaluation block is missing
+        console.error('AI evaluation failed or returned unexpected structure:', aiEvaluationResult);
+        rawScoreFromAI = 0;
+        isCorrectFromAI = false;
+        questionAnswerDataForDb = {
+          questionId: question.id,
+          isCorrect: false,
+          userAnswer: userAnswer,
+          timeSpent: 0,
+          scoreAchieved: 0
+        };
+        clientResponsePayload = {
+          evaluation: {
+            isCorrect: null,
+            score: null,
+            feedback: 'AI evaluation was inconclusive. Answer recorded.',
+            pendingEvaluation: true,
+            marksAvailable: currentMarksAvailableForAI,
+            scoreAchieved: 0
           }
-        })
-      } : undefined
-    });
-    
+        };
+      }
+
+      // Update question stats (remove difficultyScore)
+      await prisma.question.update({
+        where: { id: questionId },
+        data: {
+          lastAnswerCorrect: isCorrectFromAI,
+          timesAnswered: { increment: 1 },
+          timesAnsweredWrong: isCorrectFromAI ? undefined : { increment: 1 },
+        }
+      });
+
+      // if (updateMastery) { // Temporarily comment out this block
+      //   // ... (mastery update logic remains commented out)
+      // }
+
+      // Log the answer attempt
+      // Ensure questionAnswerDataForDb is defined before calling updateQuestionPerformance
+      if (questionAnswerDataForDb) {
+         await updateQuestionPerformance([questionAnswerDataForDb], userId);
+      } else {
+        // This case should ideally not be reached if logic above is correct
+        console.error('questionAnswerDataForDb was not defined before logging answer attempt in AI path');
+        // Log a minimal attempt if necessary
+        await updateQuestionPerformance([{
+            questionId: question.id,
+            isCorrect: false,
+            userAnswer: userAnswer,
+            timeSpent: 0,
+            scoreAchieved: 0
+        }], userId);
+      }
+      
+      res.status(200).json(clientResponsePayload);
+
+    } catch (aiError: any) {
+      console.error('AI evaluation error:', aiError);
+      // Fallback if AI evaluation fails catastrophically
+      questionAnswerDataForDb = {
+        questionId: question.id,
+        isCorrect: false, // Cannot determine
+        userAnswer: userAnswer,
+        timeSpent: 0,
+        scoreAchieved: 0 // No score awarded
+      };
+      await updateQuestionPerformance([questionAnswerDataForDb], userId);
+
+      res.status(500).json({
+        message: 'AI evaluation service failed. Your answer has been recorded.',
+        error: aiError.message || 'Unknown AI error',
+        evaluation: {
+          isCorrect: null,
+          score: null,
+          feedback: 'AI evaluation service failed. Your answer has been recorded but could not be evaluated.',
+          pendingEvaluation: true,
+          marksAvailable: question.marksAvailable || 1,
+          scoreAchieved: 0
+        }
+      });
+    }
+
   } catch (error) {
     console.error('Error evaluating answer:', error);
+    // Ensure a UserQuestionAnswer record is created even in case of an unexpected error after initial checks
+    // This helps in auditing and debugging, but only if userId and questionId are available.
+    const { questionId } = req.body;
+    const userId = req.user?.userId;
+    if (userId && questionId) {
+      try {
+        const errorAnswerData = {
+          questionId: parseInt(questionId as string, 10),
+          isCorrect: false, // Mark as incorrect due to error
+          userAnswer: req.body.userAnswer || "Error during processing",
+          timeSpent: 0,
+          confidence: 0,
+          scoreAchieved: 0,
+          notes: `Error: ${error instanceof Error ? error.message : String(error)}` // Add error note
+        };
+        await updateQuestionPerformance([errorAnswerData], userId);
+      } catch (dbError) {
+        console.error('Failed to log error answer to DB:', dbError);
+      }
+    }
     next(error);
   }
 };

@@ -187,72 +187,43 @@ export const validateSubmitReview = [
   check('questionSetId')
     .notEmpty()
     .withMessage('Question set ID is required')
-    .isInt({ gt: 0 })
-    .withMessage('Question set ID must be a positive integer')
+    .isString()
+    .withMessage('Question set ID must be a string representation of a number') // Will be parsed to int in controller
+    .trim(),
+  check('outcomes')
+    .notEmpty()
+    .withMessage('Outcomes are required')
+    .isArray({ min: 1 })
+    .withMessage('Outcomes must be a non-empty array'),
+  check('outcomes.*.questionId')
+    .notEmpty()
+    .withMessage('Question ID is required for each outcome')
+    .isString()
+    .withMessage('Question ID must be a string for each outcome')
+    .trim(),
+  check('outcomes.*.scoreAchieved')
+    .notEmpty()
+    .withMessage('Score achieved is required for each outcome')
+    .isInt({ min: 0, max: 5 }) 
+    .withMessage('Score achieved must be an integer between 0 and 5 (or max marks for question) for each outcome')
     .toInt(),
-  check('understandScore')
+  check('outcomes.*.uueFocus')
     .notEmpty()
-    .withMessage('Understand score is required')
-    .isFloat({ min: 0, max: 100 })
-    .withMessage('Understand score must be a number between 0 and 100')
-    .toFloat(),
-  check('useScore')
-    .notEmpty()
-    .withMessage('Use score is required')
-    .isFloat({ min: 0, max: 100 })
-    .withMessage('Use score must be a number between 0 and 100')
-    .toFloat(),
-  check('exploreScore')
-    .notEmpty()
-    .withMessage('Explore score is required')
-    .isFloat({ min: 0, max: 100 })
-    .withMessage('Explore score must be a number between 0 and 100')
-    .toFloat(),
-  check('overallScore')
-    .notEmpty()
-    .withMessage('Overall score is required')
-    .isFloat({ min: 0, max: 100 })
-    .withMessage('Overall score must be a number between 0 and 100')
-    .toFloat(),
+    .withMessage('UUE focus is required for each outcome')
+    .isString()
+    .withMessage('UUE focus must be a string for each outcome')
+    .isIn(['Understand', 'Use', 'Explore'])
+    .withMessage('UUE focus must be one of "Understand", "Use", or "Explore" for each outcome'),
+  check('outcomes.*.userAnswer')
+    .exists() // Ensure the field is present, even if an empty string
+    .isString()
+    .withMessage('User answer must be a string for each outcome')
+    .trim(), // Trim, but allow empty string
   check('timeSpent')
     .notEmpty()
     .withMessage('Time spent is required')
     .isInt({ min: 0 })
-    .withMessage('Time spent must be a positive integer')
-    .toInt(),
-  check('questionAnswers')
-    .notEmpty()
-    .withMessage('Question answers are required')
-    .isArray({ min: 1 })
-    .withMessage('Question answers must be a non-empty array'),
-  check('questionAnswers.*.questionId')
-    .notEmpty()
-    .withMessage('Question ID is required for each answer')
-    .isInt({ gt: 0 })
-    .withMessage('Question ID must be a positive integer')
-    .toInt(),
-  check('questionAnswers.*.isCorrect')
-    .notEmpty()
-    .withMessage('isCorrect is required for each answer')
-    .isBoolean()
-    .withMessage('isCorrect must be a boolean')
-    .toBoolean(),
-  check('questionAnswers.*.userAnswer')
-    .notEmpty()
-    .withMessage('User answer is required for each answer')
-    .isString()
-    .withMessage('User answer must be a string')
-    .trim(),
-  check('questionAnswers.*.timeSpent')
-    .notEmpty()
-    .withMessage('Time spent is required for each answer')
-    .isInt({ min: 0 })
-    .withMessage('Time spent must be a positive integer')
-    .toInt(),
-  check('questionAnswers.*.confidence')
-    .optional()
-    .isInt({ min: 1, max: 5 })
-    .withMessage('Confidence must be an integer between 1 and 5')
+    .withMessage('Time spent must be a non-negative integer')
     .toInt(),
   handleValidationErrors,
 ];

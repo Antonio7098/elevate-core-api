@@ -193,6 +193,7 @@ export interface EvaluateAnswerRequest {
     expectedAnswer?: string;
     questionType: string;
     options?: string[];
+    marksAvailable?: number;
   };
   userAnswer: string;
   context?: {

@@ -5,7 +5,11 @@ import {
   getDueQuestionSets,
   getPrioritizedQuestions,
   calculateQuestionSetNextReview,
-  getUserProgressSummary
+  getUserProgressSummary,
+  UNDERSTAND_WEIGHT,
+  USE_WEIGHT,
+  EXPLORE_WEIGHT,
+  updateQuestionPerformance
 } from '../services/spacedRepetition.service';
 
 const prisma = new PrismaClient();
@@ -127,7 +131,7 @@ export const getReviewQuestions = async (req: AuthRequest, res: Response, next: 
         options: q.options,
         uueFocus: q.uueFocus,
         conceptTags: q.conceptTags,
-        difficultyScore: q.difficultyScore,
+        marksAvailable: q.marksAvailable,
         priorityScore: q.priorityScore
       }))
     });
@@ -138,8 +142,24 @@ export const getReviewQuestions = async (req: AuthRequest, res: Response, next: 
   }
 };
 
+// New interface for the incoming payload from the frontend
+interface FrontendReviewOutcome {
+  questionId: string;
+  scoreAchieved: number;
+  uueFocus: 'Understand' | 'Use' | 'Explore';
+  userAnswer: string;
+}
+
+interface FrontendReviewSubmission {
+  questionSetId: string;
+  outcomes: FrontendReviewOutcome[];
+  timeSpent: number; // Added to capture total session time
+}
+
 /**
  * Interface for the question set review submission request body
+ * This is the OLD interface, kept for reference during transition or if other parts still use it.
+ * The submitReview function will now primarily work with FrontendReviewSubmission.
  */
 interface QuestionSetReviewSubmission {
   questionSetId: number;
@@ -165,63 +185,137 @@ interface QuestionSetReviewSubmission {
 export const submitReview = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
-    const reviewData = req.body as QuestionSetReviewSubmission;
-    
+    const frontendReviewData = req.body as FrontendReviewSubmission;
+
     if (!userId) {
       res.status(401).json({ message: 'User not authenticated' });
       return;
     }
-    
-    // Verify that the question set belongs to the user
+
+    const questionSetIdNumber = parseInt(frontendReviewData.questionSetId, 10);
+    if (isNaN(questionSetIdNumber)) {
+      res.status(400).json({ message: 'Invalid Question Set ID format.' });
+      return;
+    }
+
+    // Fetch the question set and its questions to verify ownership and get necessary data
     const questionSet = await prisma.questionSet.findFirst({
       where: {
-        id: reviewData.questionSetId,
+        id: questionSetIdNumber,
         folder: {
           userId: userId
         }
+      },
+      include: {
+        questions: true // Include all questions for this set
       }
     });
-    
+
     if (!questionSet) {
       res.status(404).json({ message: 'Question set not found or access denied' });
       return;
     }
+
+    // Create a map of questions for easy lookup
+    const questionsMap = new Map(questionSet.questions.map(q => [q.id.toString(), q]));
+
+    const parsedQuestionAnswers: Array<{
+      questionId: number;
+      isCorrect: boolean;
+      timeSpent: number; 
+      scoreAchieved: number; // Raw marks
+      confidence?: number; 
+      userAnswer: string;
+    }> = [];
+
+    let understandRawScore = 0;
+    let understandMaxMarks = 0;
+    let useRawScore = 0;
+    let useMaxMarks = 0;
+    let exploreRawScore = 0;
+    let exploreMaxMarks = 0;
+
+    for (const outcome of frontendReviewData.outcomes) {
+      const questionIdNumber = parseInt(outcome.questionId, 10);
+      if (isNaN(questionIdNumber)) {
+        res.status(400).json({ message: `Invalid Question ID format for outcome: ${outcome.questionId}` });
+        return;
+      }
+
+      const question = questionsMap.get(outcome.questionId);
+      if (!question) {
+        res.status(400).json({ message: `Question ID ${outcome.questionId} does not belong to Question Set ID ${questionSetIdNumber} or not found.` });
+        return;
+      }
+
+      const currentQuestionMarksAvailable = question.marksAvailable || 1; // Default to 1 if not set
+      const isCorrectForThisQuestion = outcome.scoreAchieved / currentQuestionMarksAvailable >= 0.5; // 50% or more marks
+
+      parsedQuestionAnswers.push({
+        questionId: questionIdNumber,
+        isCorrect: isCorrectForThisQuestion,
+        scoreAchieved: outcome.scoreAchieved, // Store raw marks
+        timeSpent: 0, // Default as frontend does not send per-question time for now
+        userAnswer: outcome.userAnswer,
+      });
+
+      // Use uueFocus from the DB Question entity as source of truth
+      switch (question.uueFocus) { 
+        case 'Understand':
+          understandRawScore += outcome.scoreAchieved;
+          understandMaxMarks += currentQuestionMarksAvailable;
+          break;
+        case 'Use':
+          useRawScore += outcome.scoreAchieved;
+          useMaxMarks += currentQuestionMarksAvailable;
+          break;
+        case 'Explore':
+          exploreRawScore += outcome.scoreAchieved;
+          exploreMaxMarks += currentQuestionMarksAvailable;
+          break;
+      }
+    }
+
+    const calculatedUnderstandScore = understandMaxMarks > 0 ? (understandRawScore / understandMaxMarks) * 100 : 0;
+    const calculatedUseScore = useMaxMarks > 0 ? (useRawScore / useMaxMarks) * 100 : 0;
+    const calculatedExploreScore = exploreMaxMarks > 0 ? (exploreRawScore / exploreMaxMarks) * 100 : 0;
+
+    const calculatedOverallScore = 
+      (calculatedUnderstandScore * UNDERSTAND_WEIGHT) +
+      (calculatedUseScore * USE_WEIGHT) +
+      (calculatedExploreScore * EXPLORE_WEIGHT);
     
-    // Verify that all questions belong to the question set
-    const questionIds = reviewData.questionAnswers.map(a => a.questionId);
-    const questions = await prisma.question.findMany({
-      where: {
-        id: { in: questionIds },
-        questionSetId: reviewData.questionSetId
+    // updateQuestionPerformance is called within calculateQuestionSetNextReview
+    // No need to call it directly here if calculateQuestionSetNextReview handles it.
+
+    // Create UserQuestionSetReview entry
+    await prisma.userQuestionSetReview.create({
+      data: {
+        userId: userId,
+        questionSetId: questionSetIdNumber,
+        understandScore: calculatedUnderstandScore,
+        useScore: calculatedUseScore,
+        exploreScore: calculatedExploreScore,
+        overallScore: calculatedOverallScore,
+        timeSpent: frontendReviewData.timeSpent,
+        // completedAt is @default(now())
       }
     });
-    
-    if (questions.length !== questionIds.length) {
-      res.status(400).json({ message: 'Some questions do not belong to the specified question set' });
-      return;
-    }
-    
-    // Calculate the next review date and update mastery scores
+
+    // Call the service function to update QuestionSet mastery and next review date
     const updatedQuestionSet = await calculateQuestionSetNextReview(
-      reviewData.questionSetId,
+      questionSetIdNumber,
       {
-        userId,
-        understandScore: reviewData.understandScore,
-        useScore: reviewData.useScore,
-        exploreScore: reviewData.exploreScore,
-        overallScore: reviewData.overallScore,
-        timeSpent: reviewData.timeSpent,
-        questionAnswers: reviewData.questionAnswers.map(a => ({
-          questionId: a.questionId,
-          isCorrect: a.isCorrect,
-          timeSpent: a.timeSpent,
-          scoreAchieved: a.scoreAchieved,
-          confidence: a.confidence
-        }))
+        userId, // userId is needed by calculateQuestionSetNextReview for context or further updates
+        understandScore: calculatedUnderstandScore, // Pass the 0-100 score
+        useScore: calculatedUseScore,             // Pass the 0-100 score
+        exploreScore: calculatedExploreScore,       // Pass the 0-100 score
+        overallScore: calculatedOverallScore,       // Pass the 0-100 score
+        timeSpent: frontendReviewData.timeSpent,
+        questionAnswers: parsedQuestionAnswers // Pass the raw scores here for UserQuestionAnswer creation
       }
     );
-    
-    // Return the updated question set
+
     res.status(200).json({
       questionSet: {
         id: updatedQuestionSet.id,

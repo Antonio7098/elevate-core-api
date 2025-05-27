@@ -262,7 +262,7 @@ export const generateQuestionsFromSource = async (req: AuthRequest, res: Respons
             // Adding required fields from the updated schema
             uueFocus: 'Understand',
             conceptTags: [],
-            difficultyScore: 0.5
+            marksAvailable: 1
           }
         })
       )
