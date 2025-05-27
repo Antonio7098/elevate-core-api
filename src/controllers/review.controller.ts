@@ -31,10 +31,17 @@ type PrioritizedQuestion = Omit<Question, 'learningStage'> & {
  * GET /api/reviews/today
  */
 export const getTodayReviews = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  console.log(`🔍 [Reviews] GET /api/reviews/today called`);
+  console.log(`🔍 [Reviews] Request headers:`, req.headers);
+  console.log(`🔍 [Reviews] Auth header: ${req.headers.authorization || 'None'}`);
+  console.log(`🔍 [Reviews] req.user:`, req.user);
+  
   try {
     const userId = req.user?.userId;
+    console.log(`🔍 [Reviews] Extracted userId from req.user:`, userId);
     
     if (!userId) {
+      console.error(`❌ [Reviews] User not authenticated - userId is missing from req.user`);
       res.status(401).json({ message: 'User not authenticated' });
       return;
     }
