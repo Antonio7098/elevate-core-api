@@ -95,7 +95,7 @@ export interface ChatContext {
       text: string;
       answer: string;
       questionType?: string;
-      masteryScore?: number;
+      currentMasteryScore?: number;
     }>;
   }>;
   

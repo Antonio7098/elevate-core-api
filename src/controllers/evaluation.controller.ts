@@ -66,7 +66,7 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
     let questionAnswerDataForDb: {
       questionId: number;
       isCorrect: boolean;
-      userAnswer: string;
+      userAnswerText: string;
       timeSpent: number;
       confidence?: number;
       scoreAchieved?: number;
@@ -83,21 +83,26 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
         questionAnswerDataForDb = {
           questionId: question.id,
           isCorrect: isCorrect,
-          userAnswer: userAnswer,
+          userAnswerText: userAnswer, // Store original user answer from req.body for UserQuestionAnswer
           timeSpent: 0, // Placeholder, consider passing actual time from frontend
           confidence: 3, // Default confidence
           scoreAchieved: isCorrect ? currentMarksAvailable : 0 // Raw score
         };
 
         // Update question stats
-        await prisma.question.update({
+        if (updateMastery) {
+          await prisma.question.update({
           where: { id: questionId },
           data: {
             lastAnswerCorrect: isCorrect,
-            timesAnswered: { increment: 1 },
-            timesAnsweredWrong: isCorrect ? undefined : { increment: 1 },
+            timesAnsweredCorrectly: isCorrect ? { increment: 1 } : undefined,
+            timesAnsweredIncorrectly: isCorrect ? undefined : { increment: 1 },
           }
         });
+
+        // Log the answer attempt
+        await updateQuestionPerformance([questionAnswerDataForDb], userId);
+       }
         
         // if (updateMastery) { // Temporarily comment out this block
         //   let scoreUpdate = {};
@@ -142,9 +147,6 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
         //   await calculateQuestionSetNextReview(question.questionSet.id, reviewData);
         // }
         
-        // Log the answer attempt
-        await updateQuestionPerformance([questionAnswerDataForDb], userId);
-
         clientResponsePayload = {
           evaluation: {
             isCorrect,
@@ -165,7 +167,7 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
       questionAnswerDataForDb = {
         questionId: question.id,
         isCorrect: false, // Cannot determine
-        userAnswer: userAnswer,
+        userAnswerText: userAnswer, // Store original user answer from req.body for UserQuestionAnswer
         timeSpent: 0,
         scoreAchieved: 0 // No score awarded
       };
@@ -179,9 +181,10 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
           pendingEvaluation: true,
           marksAvailable: question.marksAvailable || 1,
           scoreAchieved: 0
-        }
+        },
+        fallback: false
       };
-      res.status(200).json(clientResponsePayload);
+      res.status(503).json(clientResponsePayload);
       return;
     }
 
@@ -197,7 +200,7 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
           options: (question as any).options || [], // Assuming options might be on the question object
           marksAvailable: currentMarksAvailableForAI
         },
-        userAnswer: userAnswer,
+        userAnswer: userAnswer, // AI Service expects 'userAnswer'
         context: {
           questionSetName: question.questionSet.name,
           folderName: question.questionSet.folder?.name
@@ -229,7 +232,7 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
         questionAnswerDataForDb = {
           questionId: question.id,
           isCorrect: isCorrectFromAI,
-          userAnswer: userAnswer,
+          userAnswerText: userAnswer, // Store original user answer from req.body for UserQuestionAnswer
           timeSpent: 0, // Placeholder
           scoreAchieved: rawScoreFromAI,
           confidence: aiEvaluationResult.metadata?.confidenceScore // Store confidence if available
@@ -237,7 +240,9 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
 
         clientResponsePayload = {
           evaluation: {
-            isCorrect: isCorrectFromAI,
+            isCorrect: (typeof evalData.isCorrect === 'string' && ['correct', 'partially_correct', 'incorrect'].includes(evalData.isCorrect)) 
+                       ? evalData.isCorrect 
+                       : isCorrectFromAI,
             score: evalData.score, // Normalized 0-1 score from AI
             feedback: evalData.feedback || (isCorrectFromAI ? 'Correct.' : 'Needs improvement.'),
             correctedAnswer: evalData.correctedAnswer,
@@ -255,7 +260,7 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
         questionAnswerDataForDb = {
           questionId: question.id,
           isCorrect: false,
-          userAnswer: userAnswer,
+          userAnswerText: userAnswer, // Store original answer
           timeSpent: 0,
           scoreAchieved: 0
         };
@@ -272,34 +277,20 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
       }
 
       // Update question stats (remove difficultyScore)
-      await prisma.question.update({
+      if (updateMastery) {
+        await prisma.question.update({
         where: { id: questionId },
         data: {
           lastAnswerCorrect: isCorrectFromAI,
-          timesAnswered: { increment: 1 },
-          timesAnsweredWrong: isCorrectFromAI ? undefined : { increment: 1 },
+          timesAnsweredCorrectly: isCorrectFromAI ? { increment: 1 } : undefined,
+          timesAnsweredIncorrectly: isCorrectFromAI ? undefined : { increment: 1 },
         }
       });
-
-      // if (updateMastery) { // Temporarily comment out this block
-      //   // ... (mastery update logic remains commented out)
-      // }
+      }
 
       // Log the answer attempt
-      // Ensure questionAnswerDataForDb is defined before calling updateQuestionPerformance
-      if (questionAnswerDataForDb) {
+      if (updateMastery && questionAnswerDataForDb) {
          await updateQuestionPerformance([questionAnswerDataForDb], userId);
-      } else {
-        // This case should ideally not be reached if logic above is correct
-        console.error('questionAnswerDataForDb was not defined before logging answer attempt in AI path');
-        // Log a minimal attempt if necessary
-        await updateQuestionPerformance([{
-            questionId: question.id,
-            isCorrect: false,
-            userAnswer: userAnswer,
-            timeSpent: 0,
-            scoreAchieved: 0
-        }], userId);
       }
       
       res.status(200).json(clientResponsePayload);
@@ -310,7 +301,7 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
       questionAnswerDataForDb = {
         questionId: question.id,
         isCorrect: false, // Cannot determine
-        userAnswer: userAnswer,
+        userAnswerText: userAnswer,
         timeSpent: 0,
         scoreAchieved: 0 // No score awarded
       };
@@ -341,7 +332,7 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
         const errorAnswerData = {
           questionId: parseInt(questionId as string, 10),
           isCorrect: false, // Mark as incorrect due to error
-          userAnswer: req.body.userAnswer || "Error during processing",
+          userAnswerText: req.body.userAnswer || "Error during processing",
           timeSpent: 0,
           confidence: 0,
           scoreAchieved: 0,

@@ -42,9 +42,9 @@ export class AIService {
     this.apiKey = process.env.AI_SERVICE_API_KEY || '';
     this.apiVersion = process.env.AI_SERVICE_API_VERSION || 'v1';
     
-    console.log(`[AIService] Using base URL: ${this.baseUrl}`);
-    console.log(`[AIService] API Key length: ${this.apiKey.length}`);
-    console.log(`[AIService] API Version: ${this.apiVersion}`);
+    // console.log(`[AIService] Using base URL: ${this.baseUrl}`);
+    // console.log(`[AIService] API Key length: ${this.apiKey.length}`);
+    // console.log(`[AIService] API Version: ${this.apiVersion}`);
 
     // Create an axios instance with default configuration
     this.client = axios.create({

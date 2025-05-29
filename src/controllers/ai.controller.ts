@@ -4,6 +4,8 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import { aiService } from '../services/aiService';
 import { 
   GenerateQuestionsRequest, 
+  GenerateQuestionsResponse, 
+  AIServiceErrorResponse, 
   ChatRequest,
   ChatContext as AIChatContext,
   isErrorResponse 
@@ -155,7 +157,11 @@ const simulateAIChatResponse = async (message: string, context?: ChatContext): P
   }
   
   // Add a generic response
-  response += ' How can I help you with your studies today?';
+  if (message.toLowerCase().includes('how to solve') || message.toLowerCase().includes('problem')) {
+    response += ' I can help you by breaking it down into steps.';
+  } else {
+    response += ' How can I help you with your studies today?';
+  }
   
   return {
     message: response,
@@ -169,116 +175,106 @@ const simulateAIChatResponse = async (message: string, context?: ChatContext): P
  */
 export const generateQuestionsFromSource = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { sourceText, folderId, count, title } = req.body;
+    const { sourceText, folderId, questionCount, title: requestedTitle } = req.body;
     const userId = req.user?.userId;
-    
+
     if (!userId) {
       res.status(401).json({ message: 'User not authenticated' });
       return;
     }
-    
+
     if (!sourceText || !folderId) {
       res.status(400).json({ message: 'Source text and folder ID are required' });
       return;
     }
-    
-    // Verify folder ownership
+
     const folder = await prisma.folder.findFirst({
-      where: {
-        id: folderId,
-        userId
-      }
+      where: { id: folderId, userId },
     });
-    
+
     if (!folder) {
       res.status(404).json({ message: 'Folder not found or not owned by user' });
       return;
     }
-    
-    // Check if AI service is available
+
     const isAIServiceAvailable = await aiService.isAvailable();
-    
-    let generationResult;
-    
+    const numQuestionsToGenerate = questionCount || 3;
+
+    let generationResult: AIGenerationResult | GenerateQuestionsResponse;
+
     if (isAIServiceAvailable) {
+      const requestPayload: GenerateQuestionsRequest = {
+        sourceText: sourceText,
+        questionCount: numQuestionsToGenerate,
+      };
       try {
-        // Prepare request for AI service
-        const request: GenerateQuestionsRequest = {
-          sourceText,
-          questionCount: count || 5
-        };
-        
-        // Call AI service to generate questions
-        const result = await aiService.generateQuestions(request);
-        
-        // Check if the response is an error
-        if (!result.success) {
-          console.error('Error from AI service:', 'AI service returned an error');
-          // Fall back to simulation
-          generationResult = simulateAIQuestionGeneration(sourceText, count);
-        } else {
-          generationResult = {
-            title: title || `Generated from source (${new Date().toLocaleDateString()})`,
-            questions: result.questions
-          };
+        generationResult = await aiService.generateQuestions(requestPayload);
+        if (isErrorResponse(generationResult)) {
+          console.error(
+            'AI service returned an error, falling back to simulation. Error:',
+            (generationResult as AIServiceErrorResponse).error
+          );
+          generationResult = simulateAIQuestionGeneration(sourceText, numQuestionsToGenerate);
         }
       } catch (aiError) {
-        console.error('Error from AI service:', aiError);
-        // Fall back to simulation
-        generationResult = simulateAIQuestionGeneration(sourceText, count);
+        if (process.env.NODE_ENV !== 'test') { console.error('Error from AI service:', aiError); }
+        generationResult = simulateAIQuestionGeneration(sourceText, numQuestionsToGenerate);
       }
     } else {
-      // Fall back to simulation if AI service is not available
-      console.log('AI service not available, using simulation');
-      generationResult = simulateAIQuestionGeneration(sourceText, count);
+      // // console.log('AI service not available, using simulation');
+      generationResult = simulateAIQuestionGeneration(sourceText, numQuestionsToGenerate);
     }
-    
-    // Create a new question set
-    const questionSet = await prisma.questionSet.create({
+
+    let questionSetName: string;
+    if (requestedTitle) {
+      questionSetName = requestedTitle;
+    } else if ('title' in generationResult && typeof generationResult.title === 'string') {
+      questionSetName = generationResult.title;
+    } else {
+      const sourceSnippet = sourceText.length > 30 ? sourceText.substring(0, 30) + '...' : sourceText;
+      questionSetName = `Quiz for "${sourceSnippet}"`;
+    }
+
+    const questionsToCreate = generationResult.questions.map((q: GeneratedQuestion | any) => ({
+      text: q.text || q.question_text,
+      answer: q.answer || q.answer_text || null,
+      questionType: q.questionType || q.question_type,
+      options: { set: q.options || [] },
+    }));
+
+    const createdQuestionSet = await prisma.questionSet.create({
       data: {
-        name: title || generationResult.title,
+        name: questionSetName,
         folderId,
-        // Initialize mastery scores
-        overallMasteryScore: 0,
-        understandScore: 0,
-        useScore: 0,
-        exploreScore: 0,
-        forgettingScore: 0,
-        masteryOverTime: {},
-        reviewCount: 0
-      }
+        currentTotalMasteryScore: 0,
+        currentForgottenPercentage: 0,
+        reviewCount: 0,
+        questions: {
+          create: questionsToCreate,
+        },
+      },
+      include: { questions: true }
     });
-    
-    // Create questions from the generated result
-    await Promise.all(
-      generationResult.questions.map(question => 
-        prisma.question.create({
-          data: {
-            text: question.text,
-            answer: question.answer,
-            questionType: question.questionType,
-            options: question.options || [],
-            questionSetId: questionSet.id,
-            // Adding required fields from the updated schema
-            uueFocus: 'Understand',
-            conceptTags: [],
-            marksAvailable: 1
-          }
-        })
-      )
-    );
-    
+
+    const responseQuestions = generationResult.questions.map((q: GeneratedQuestion | any) => ({
+      text: q.text || q.question_text,
+      answer: q.answer || q.answer_text || null,
+      questionType: q.questionType || q.question_type,
+      options: q.options || [],
+    }));
+
     res.status(201).json({
       message: 'Question set created successfully',
       questionSet: {
-        id: questionSet.id,
-        name: questionSet.name,
-        questionCount: generationResult.questions.length
-      }
+        id: createdQuestionSet.id,
+        name: createdQuestionSet.name,
+        questionCount: responseQuestions.length,
+        folderId: createdQuestionSet.folderId,
+        questions: responseQuestions,
+      },
     });
-    
+
   } catch (error) {
-    console.error('Error generating questions:', error);
     next(error);
   }
 };
@@ -352,7 +348,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
           text: q.text,
           answer: q.answer || '',
           questionType: q.questionType,
-          uueFocus: q.uueFocus || q.learningStage || 'Understand',
+          uueFocus: q.uueFocus || 'Understand',
           difficultyScore: q.difficultyScore || 0.5,
           timesAnswered: q.timesAnswered || 0,
           lastAnswerCorrect: q.lastAnswerCorrect
@@ -398,7 +394,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
             text: q.text,
             answer: q.answer || '',
             questionType: q.questionType,
-            uueFocus: q.uueFocus || q.learningStage || 'Understand',
+            uueFocus: q.uueFocus || 'Understand',
             difficultyScore: q.difficultyScore || 0.5,
             timesAnswered: q.timesAnswered || 0,
             lastAnswerCorrect: q.lastAnswerCorrect
@@ -432,7 +428,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
               text: q.text,
               answer: q.answer || '',
               questionType: q.questionType,
-              uueFocus: q.uueFocus || q.learningStage || 'Understand',
+              uueFocus: q.uueFocus || 'Understand',
               difficultyScore: q.difficultyScore || 0.5,
               timesAnswered: q.timesAnswered || 0,
               lastAnswerCorrect: q.lastAnswerCorrect
@@ -498,34 +494,33 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
     
     if (isAIServiceAvailable) {
       try {
-        // Add detailed logging for the context object
-        console.log('\n==== AI CONTROLLER: CONTEXT LOGGING START ====');
-        console.log(`Request for folder ID: ${folderId || 'none'}, question set ID: ${questionSetId || 'none'}`);
-        console.log(`User ID: ${userId}, Message: "${message?.substring(0, 50)}${message?.length > 50 ? '...' : ''}"`); 
+        // console.log('==== AI CONTROLLER: CONTEXT LOGGING START ====');
+        // console.log(`Request for folder ID: ${folderId || 'none'}, question set ID: ${questionSetId || 'none'}`);
+        // console.log(`User Info: ID ${aiContext.userInfo?.id}, Email: ${aiContext.userInfo?.email}`);}${message?.length > 50 ? '...' : ''}"`); 
         
         if (folderInfo) {
-          console.log('\nFolder Information:');
-          console.log(JSON.stringify(folderInfo, null, 2));
+          // console.log('\nFolder Information:');
+          // console.log(JSON.stringify(folderInfo, null, 2));
         }
         
         if (questionSets.length > 0) {
-          console.log('\nQuestion Sets Summary:');
-          console.log(`Total Sets: ${questionSets.length}`);
-          questionSets.forEach((qs, index) => {
-            console.log(`\n  Set ${index + 1}: ${qs.name} (ID: ${qs.id})`);
-            console.log(`  Questions: ${qs.questions.length}`);
-            console.log(`  First few questions: ${qs.questions.slice(0, 2).map(q => `"${q.text.substring(0, 30)}..."`).join(', ')}${qs.questions.length > 2 ? ', ...' : ''}`);
-          });
+          // console.log('\nQuestion Sets Summary:');
+          // console.log(`Total Sets: ${questionSets.length}`);
+          // questionSets.forEach((qs, index) => {
+          //   console.log(`  Set ${index + 1}: ${qs.name} (ID: ${qs.id})`);
+          //   console.log(`  Questions: ${qs.questions.length}`);
+          //   console.log(`  First few questions: ${qs.questions.slice(0, 2).map(q => `"${q.text.substring(0, 30)}..."`).join(', ')}${qs.questions.length > 2 ? ', ...' : ''}`);
+          // });
         }
         
         if (aiContext.summary) {
-          console.log('\nContext Summary:');
-          console.log(JSON.stringify(aiContext.summary, null, 2));
+          // console.log('\nContext Summary:');
+          // console.log('Context Summary:', JSON.stringify(aiContext.summary, null, 2));
         }
         
-        console.log('\nFull Context Object:');
-        console.log(JSON.stringify(aiContext, null, 2));
-        console.log('==== AI CONTROLLER: CONTEXT LOGGING END ====\n');
+        // console.log('\nFull Context Object:');
+        // console.log('Context for AI Chat:', JSON.stringify(aiContext, null, 2));
+        // console.log('==== AI CONTROLLER: CONTEXT LOGGING END ====');
         
         // Prepare request for AI service
         const chatRequest: ChatRequest = {
@@ -539,14 +534,13 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
         
         // Send the AI response with additional data
         res.status(200).json({
-          response: result.response.message,
-          references: result.response.references,
-          suggestedQuestions: result.response.suggestedQuestions,
+          success: result.success, // Add success field
+          response: result.response, // Use the whole response object
           metadata: result.metadata
         });
         return;
       } catch (aiError) {
-        console.error('Error from AI service:', aiError);
+        if (process.env.NODE_ENV !== 'test') { console.error('Error from AI service:', aiError); }
         // Fall back to simulation if AI service fails
         const context: ChatContext = {};
         if (questionSetId) context.questionSetId = questionSetId;
@@ -556,7 +550,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
       }
     } else {
       // Fall back to simulation if AI service is not available
-      console.log('AI service not available, using simulation');
+      // console.log('AI service not available, using simulation');
       const context: ChatContext = {};
       if (questionSetId) context.questionSetId = questionSetId;
       if (folderId) context.folderId = folderId;

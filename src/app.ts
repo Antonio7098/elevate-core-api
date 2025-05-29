@@ -2,21 +2,21 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { PrismaClient } from '@prisma/client';
-import { authRouter } from './routes/auth.ts';
-import userRouter from './routes/user.routes.ts';
-import folderRouter from './routes/folder.routes.ts';
-import aiRouter from './routes/ai.routes.ts';
-import reviewRouter from './routes/review.routes.ts';
-import evaluationRouter from './routes/evaluation.routes.ts';
-import standaloneQuestionSetRouter from './routes/standalone-questionset.routes.ts';
-import standaloneQuestionRouter from './routes/standalone-question.routes.ts';
+import prisma from './lib/prisma'; // Import shared prisma instance
+import { authRouter } from './routes/auth'; 
+import userRouter from './routes/user.routes';
+import folderRouter from './routes/folder.routes';
+import aiRouter from './routes/ai.routes';
+import reviewRouter from './routes/review.routes';
+import evaluationRouter from './routes/evaluation.routes';
+import standaloneQuestionSetRouter from './routes/standalone-questionset.routes';
+import standaloneQuestionRouter from './routes/standalone-question.routes';
+import dashboardRouter from './routes/dashboard.routes';
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
-const prisma = new PrismaClient();
 
 // Middleware
 app.use(cors());
@@ -26,18 +26,21 @@ app.use(express.json());
 app.use('/api/auth', authRouter);
 app.use('/api/users', userRouter);
 app.use('/api/folders', folderRouter);
-app.use('/api/ai', aiRouter);
+app.use('/api/ai', aiRouter); // Note: /api/ai is used twice, ensure this is intended or consolidate
 app.use('/api/reviews', reviewRouter);
-app.use('/api/ai', evaluationRouter);
+app.use('/api/ai', evaluationRouter); // Second use of /api/ai
+app.use('/api/dashboard', dashboardRouter);
 
 // Additional standalone routes for direct access
 app.use('/api/questionsets', standaloneQuestionSetRouter);
 app.use('/api/questions', standaloneQuestionRouter);
 
+
 // Error handling middleware
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error(err.stack);
-  res.status(500).send('Something broke!');
+  console.error('Unhandled error:', err.stack); // Log the full error
+  res.status(500).json({ message: 'Something broke!', error: err.message });
 });
 
 export default app;

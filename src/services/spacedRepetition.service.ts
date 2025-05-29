@@ -8,9 +8,9 @@
 
 import { PrismaClient, QuestionSet, Question as PrismaQuestion, UserQuestionSetReview } from '@prisma/client';
 
-// Extended Question type with uueFocus instead of learningStage
-type Question = Omit<PrismaQuestion, 'learningStage'> & {
-  uueFocus: string;
+// Extended Question type with additional properties
+type Question = PrismaQuestion & {
+  uueFocus?: string;
   userAnswers?: any[];
 };
 
@@ -27,15 +27,16 @@ export const EXPLORE_WEIGHT = 0.2;    // 20% weight for exploration
 
 // Intervals (in days) for each mastery level range
 export const INTERVALS = [
-  { min: 0, max: 20, days: 1 },    // Very low mastery: review tomorrow
-  { min: 20, max: 40, days: 2 },   // Low mastery: review in 2 days
-  { min: 40, max: 60, days: 4 },   // Medium mastery: review in 4 days
-  { min: 60, max: 80, days: 7 },   // Good mastery: review in 7 days
-  { min: 80, max: 90, days: 14 },  // Very good mastery: review in 14 days
-  { min: 90, max: 100, days: 30 }, // Excellent mastery: review in 30 days
+  { min: 0, max: 19, days: 1 },    // Scores 0-19: review tomorrow
+  { min: 20, max: 40, days: 2 },   // Scores 20-40: review in 2 days
+  { min: 41, max: 60, days: 4 },   // Scores 41-60: review in 4 days
+  { min: 61, max: 80, days: 7 },   // Scores 61-80: review in 7 days
+  { min: 81, max: 90, days: 14 },  // Scores 81-90: review in 14 days
+  { min: 91, max: 100, days: 30 }  // Scores 91-100: review in 30 days
 ];
 
 const DEFAULT_INTERVAL = 1; // Default interval in days
+const MAX_SCORE_PER_QUESTION = 1; // Max score for a question outcome is 1 (0-1 scale)
 
 /**
  * Calculate the next review date and update mastery scores for a question set
@@ -60,7 +61,7 @@ export const calculateQuestionSetNextReview = async (
       timeSpent: number;
       scoreAchieved?: number;
       confidence?: number;
-      userAnswer: string;
+      userAnswerText: string;
     }>;
   }
 ) => {
@@ -107,8 +108,8 @@ export const calculateQuestionSetNextReview = async (
       understandScore: reviewData.understandScore,
       useScore: reviewData.useScore,
       exploreScore: reviewData.exploreScore,
-      overallMasteryScore: newOverallScore,
-      forgettingScore,
+      currentTotalMasteryScore: newOverallScore,
+      currentForgottenPercentage: forgettingScore,
       nextReviewAt: nextReviewDate,
       currentIntervalDays: newInterval,
       lastReviewedAt: new Date(),
@@ -116,11 +117,13 @@ export const calculateQuestionSetNextReview = async (
       userReviews: {
         create: {
           userId: reviewData.userId,
-          understandScore: reviewData.understandScore,
-          useScore: reviewData.useScore,
-          exploreScore: reviewData.exploreScore,
-          overallScore: newOverallScore,
+          sessionStartedAt: new Date(Date.now() - reviewData.timeSpent * 1000),
+          setUnderstandScoreAfter: reviewData.understandScore,
+          setUseScoreAfter: reviewData.useScore,
+          setExploreScoreAfter: reviewData.exploreScore,
+          setTotalMasteryScoreAfter: newOverallScore,
           timeSpent: reviewData.timeSpent,
+          questionsReviewedInSession: [],
         }
       }
     }
@@ -160,32 +163,40 @@ export const updateQuestionPerformance = async (
     timeSpent: number;
     scoreAchieved?: number;
     confidence?: number;
-    userAnswer: string;
+    userAnswerText: string;
   }>,
   userId: number
 ) => {
   const updates = questionAnswers.map(async (answer) => {
     // Create UserQuestionAnswer record first
-    await prisma.userQuestionAnswer.create({
-      data: {
-        userId: userId,
-        questionId: answer.questionId,
-        userAnswer: answer.userAnswer,
-        isCorrect: answer.isCorrect,
-        scoreAchieved: answer.scoreAchieved, // Will be null if not provided
-        timeSpent: answer.timeSpent, // Defaulted to 0 from controller if not sent
-        answeredAt: new Date(),
-        // confidence field from original 'answer' is not in UserQuestionAnswer schema, so not included here
-      },
-    });
-
-    // Then, find the question to update its aggregate stats
-    const question = await prisma.question.findUnique({
-      where: { id: answer.questionId },
-    });
+    // Get the question to determine its questionSetId
+  // Get the question to determine its questionSetId and update its aggregate stats
+  const question = await prisma.question.findUnique({
+    where: { id: answer.questionId },
+  });
+  
+  if (!question) {
+    if (process.env.NODE_ENV !== 'test') { console.warn(`Question with ID ${answer.questionId} not found during performance update.`); }
+    return;
+  }
+  
+  await prisma.userQuestionAnswer.create({
+    data: {
+      userId: userId,
+      questionId: answer.questionId,
+      questionSetId: question.questionSetId,
+      userAnswerText: answer.userAnswerText,
+      isCorrect: answer.isCorrect,
+      scoreAchieved: answer.scoreAchieved || 0, // Default to 0 if not provided
+      timeSpent: answer.timeSpent, // Defaulted to 0 from controller if not sent
+      answeredAt: new Date(),
+      uueFocusTested: 'Understand', // Default to Understand if not specified
+      // confidence field from original 'answer' is not in UserQuestionAnswer schema, so not included here
+    },
+  });
 
     if (!question) {
-      console.warn(`Question with ID ${answer.questionId} not found during performance update.`);
+      if (process.env.NODE_ENV !== 'test') { console.warn(`Question with ID ${answer.questionId} not found during performance update.`); }
       return; // Skip if question not found
     }
 
@@ -211,8 +222,8 @@ export const updateQuestionPerformance = async (
       where: { id: answer.questionId },
       data: {
         lastAnswerCorrect: answer.isCorrect,
-        timesAnswered: { increment: 1 },
-        timesAnsweredWrong: answer.isCorrect ? undefined : { increment: 1 },
+        timesAnsweredCorrectly: answer.isCorrect ? { increment: 1 } : undefined,
+        timesAnsweredIncorrectly: answer.isCorrect ? undefined : { increment: 1 },
         // DO NOT include 'userAnswers: { create: ... } }' here, as UserQuestionAnswer is created above.
       },
     });
@@ -259,16 +270,13 @@ export const getDueQuestionSets = async (userId: number): Promise<DueQuestionSet
     }
   });
   
-  // Map the learningStage field to uueFocus for each question
+  // Map questions and set default uueFocus if needed
   const dueQuestionSets = questionSets.map(set => ({
     ...set,
     questions: set.questions.map(q => ({
-      ...q,
-      // @ts-ignore - Convert learningStage to uueFocus
-      uueFocus: q.learningStage || 'Understand',
-      // @ts-ignore - Remove learningStage
-      learningStage: undefined
-    })) as unknown as Question[]
+      ...q
+      // uueFocus is preserved from q.uueFocus
+    })) as Question[]
   })) as DueQuestionSet[];
   
   return dueQuestionSets;
@@ -327,9 +335,8 @@ export const getPrioritizedQuestions = async (
   const prioritizedQuestions = questionSet.questions.map(question => {
     let priorityScore = 0;
     
-    // Convert learningStage to uueFocus for compatibility
-    // @ts-ignore - Access learningStage property
-    const uueFocus = question.uueFocus || question.learningStage || 'Understand';
+    // Get the UUE focus for this question
+    const uueFocus = question.uueFocus || questionSet.currentUUESetStage || 'Understand';
     
     // 1. Prioritize questions based on U-U-E focus
     if (uueFocus === currentFocus) {
@@ -354,10 +361,11 @@ export const getPrioritizedQuestions = async (
     }
     
     // 4. Prioritize questions that haven't been answered many times
-    if (question.timesAnswered === 0) {
+    const totalAnswers = (question.timesAnsweredCorrectly || 0) + (question.timesAnsweredIncorrectly || 0);
+    if (totalAnswers === 0) {
       priorityScore += 20; // New questions get high priority
     } else {
-      priorityScore += Math.max(0, 20 - question.timesAnswered * 2);
+      priorityScore += Math.max(0, 20 - totalAnswers * 2);
     }
     
     // 5. Analyze recent performance from user answers
@@ -371,9 +379,8 @@ export const getPrioritizedQuestions = async (
       priorityScore += Math.max(0, 20 - (correctPercentage / 5));
     }
     
-    // Convert learningStage to uueFocus for compatibility
-    // @ts-ignore - Access learningStage property
-    const questionUueFocus = question.uueFocus || question.learningStage || 'Understand';
+    // Get the UUE focus for this question
+    const questionUueFocus = question.uueFocus || questionSet.currentUUESetStage || 'Understand';
     
     return {
       ...question,
@@ -394,6 +401,228 @@ export const getPrioritizedQuestions = async (
  * @param userId - User ID to get progress for
  * @returns Summary of the user's progress
  */
+/**
+ * Process a review session for a question set, update all relevant scores and SR data.
+ * 
+ * @param userId - ID of the user
+ * @param questionSetId - ID of the question set reviewed
+ * @param outcomes - Array of outcomes from the review session
+ * @param sessionStartTime - Optional start time of the session
+ * @returns Updated QuestionSet object
+ */
+export const processQuestionSetReview = async (
+  userId: number,
+  questionSetId: number,
+  outcomes: Array<{ questionId: number; scoreAchieved: number; userAnswerText?: string; timeSpentOnQuestion?: number }>,
+  sessionStartTime: Date,
+  timeSpentInSeconds: number
+): Promise<QuestionSet> => {
+  return prisma.$transaction(async (tx) => {
+    const sessionEndedAt = new Date();
+
+    // 1. Log the Session (Create UserQuestionSetReview)
+    // We'll create it first, then update it with final scores later.
+    const userQuestionSetReview = await tx.userQuestionSetReview.create({
+      data: {
+        userId,
+        questionSetId,
+        sessionStartedAt: sessionStartTime,
+        sessionEndedAt: sessionEndedAt,
+        timeSpent: timeSpentInSeconds,
+        questionsReviewedInSession: [], // Will be updated later with more details if needed, or kept simple
+        // Other snapshot fields (scores, next review) will be updated at the end.
+      },
+    });
+
+    // 2. Process Individual Question Outcomes
+    for (const outcome of outcomes) {
+      const question = await tx.question.findUnique({
+        where: { id: outcome.questionId },
+      });
+      if (!question) {
+        // Or handle more gracefully, e.g., log and skip
+        throw new Error(`Question with ID ${outcome.questionId} not found during review processing.`);
+      }
+
+      // Assuming scoreAchieved is 0-1. isCorrect if score is e.g. >= 0.6.
+      const isCorrect = outcome.scoreAchieved >= 0.6; 
+
+      await tx.userQuestionAnswer.create({
+        data: {
+          userId,
+          questionId: outcome.questionId,
+          questionSetId, // Link to the question set as well
+          reviewSessionId: userQuestionSetReview.id, // Link to the session review log
+          scoreAchieved: outcome.scoreAchieved, // This is 0-1 as per schema UserQuestionAnswer.scoreAchieved
+          isCorrect,
+          uueFocusTested: question.uueFocus || 'Understand', // Default to 'Understand' if not set
+          answeredAt: sessionEndedAt, // Use session end time for all answers in this batch
+          userAnswerText: outcome.userAnswerText,
+          timeSpent: outcome.timeSpentOnQuestion || 0, // Assuming time per question might be passed in outcomes
+        },
+      });
+
+      // Update individual Question statistics
+      await tx.question.update({
+        where: { id: outcome.questionId },
+        data: {
+          currentMasteryScore: outcome.scoreAchieved, // Set to current answer's score (0-1)
+          lastAnswerCorrect: isCorrect,
+          timesAnsweredCorrectly: {
+            increment: isCorrect ? 1 : 0,
+          },
+          timesAnsweredIncorrectly: {
+            increment: !isCorrect ? 1 : 0,
+          },
+        },
+      });
+    }
+
+    // 3. Update QuestionSet U-U-E Scores
+    const questionsInSet = await tx.question.findMany({
+      where: { questionSetId },
+    });
+
+    let totalUnderstandScore = 0;
+    let countUnderstandQuestions = 0;
+    let totalUseScore = 0;
+    let countUseQuestions = 0;
+    let totalExploreScore = 0;
+    let countExploreQuestions = 0;
+
+    for (const q of questionsInSet) {
+      const latestAnswer = await tx.userQuestionAnswer.findFirst({
+        where: {
+          userId,
+          questionId: q.id,
+          questionSetId, // ensure it's for this set context if questions can be in multiple sets (not typical)
+        },
+        orderBy: { answeredAt: 'desc' },
+      });
+
+      if (latestAnswer) {
+        const score = latestAnswer.scoreAchieved; // This is 0-5
+        switch (q.uueFocus) {
+          case 'Understand':
+            totalUnderstandScore += score;
+            countUnderstandQuestions++;
+            break;
+          case 'Use':
+            totalUseScore += score;
+            countUseQuestions++;
+            break;
+          case 'Explore':
+            totalExploreScore += score;
+            countExploreQuestions++;
+            break;
+        }
+      }
+    }
+
+    // Calculate raw 0-1 scores
+    const rawUnderstandScore = countUnderstandQuestions > 0 ? (totalUnderstandScore / countUnderstandQuestions) / MAX_SCORE_PER_QUESTION : 0;
+    const rawUseScore = countUseQuestions > 0 ? (totalUseScore / countUseQuestions) / MAX_SCORE_PER_QUESTION : 0;
+    const rawExploreScore = countExploreQuestions > 0 ? (totalExploreScore / countExploreQuestions) / MAX_SCORE_PER_QUESTION : 0;
+
+    // 4. Update QuestionSet Total Mastery Score (0-1 scale)
+    const rawTotalMasteryScore = 
+      (rawUnderstandScore * UNDERSTAND_WEIGHT) +
+      (rawUseScore * USE_WEIGHT) +
+      (rawExploreScore * EXPLORE_WEIGHT);
+
+    // 5. Update QuestionSet Scores, Stage, SR Data, and Mastery History
+    const originalQuestionSet = await tx.questionSet.findUnique({ 
+      where: { id: questionSetId },
+      select: { reviewCount: true, masteryHistory: true, currentUUESetStage: true } // Select only needed fields
+    });
+    if (!originalQuestionSet) {
+      throw new Error(`QuestionSet with ID ${questionSetId} not found for final update.`);
+    }
+
+    const scaledUnderstandScore = Math.round(rawUnderstandScore * 100);
+    const scaledUseScore = Math.round(rawUseScore * 100);
+    const scaledExploreScore = Math.round(rawExploreScore * 100);
+    const scaledTotalMasteryScore = Math.round(rawTotalMasteryScore * 100);
+
+    // Determine new Current UUE Stage for the Question Set
+    let newCurrentUUESetStage = 'Understand'; // Default stage
+    const STAGE_THRESHOLD = 70; // Threshold to advance UUE stage
+    if (scaledUnderstandScore >= STAGE_THRESHOLD) {
+      newCurrentUUESetStage = 'Use';
+      if (scaledUseScore >= STAGE_THRESHOLD) {
+        newCurrentUUESetStage = 'Explore';
+      }
+    }
+
+    const reviewCount = (originalQuestionSet.reviewCount || 0) + 1;
+    const newIntervalDays = getIntervalForMastery(scaledTotalMasteryScore);
+    const nextReviewAt = new Date(sessionEndedAt.getTime() + newIntervalDays * 24 * 60 * 60 * 1000);
+    nextReviewAt.setHours(0, 0, 0, 0); 
+
+    // Update Mastery History
+    const newMasteryEntry = {
+      timestamp: sessionEndedAt.toISOString(), // Store as ISO string
+      totalMasteryScore: scaledTotalMasteryScore,
+      understandScore: scaledUnderstandScore,
+      useScore: scaledUseScore,
+      exploreScore: scaledExploreScore,
+      intervalDays: newIntervalDays,
+    };
+    
+    const existingHistory = Array.isArray(originalQuestionSet.masteryHistory)
+                              ? originalQuestionSet.masteryHistory.filter(entry => entry !== null) // Filter out nulls
+                              : [];
+    // Ensure existing entries are compatible if needed, though Prisma.JsonValue should be fine once nulls are out.
+    // For this specific error, filtering nulls is the main goal.
+    const updatedMasteryHistory = [...existingHistory, newMasteryEntry];
+
+    const updatedQuestionSetWithRelations = await tx.questionSet.update({
+      where: { id: questionSetId },
+      data: {
+        understandScore: scaledUnderstandScore,
+        useScore: scaledUseScore,
+        exploreScore: scaledExploreScore,
+        currentTotalMasteryScore: scaledTotalMasteryScore,
+        currentUUESetStage: newCurrentUUESetStage,
+        lastReviewedAt: sessionEndedAt,
+        reviewCount,
+        currentIntervalDays: newIntervalDays,
+        nextReviewAt,
+        masteryHistory: updatedMasteryHistory,
+      },
+      include: { 
+        questions: true,
+        folder: true,
+      }
+    });
+
+    // 6. Finalize UserQuestionSetReview Record
+    const questionsReviewedInSessionData = outcomes.map(o => ({
+      questionId: o.questionId,
+      scoreAchieved: o.scoreAchieved, 
+      isCorrect: o.scoreAchieved >= 0.6 
+    }));
+
+    await tx.userQuestionSetReview.update({
+      where: { id: userQuestionSetReview.id },
+      data: {
+        sessionEndedAt, 
+        timeSpent: timeSpentInSeconds, 
+        questionsReviewedInSession: questionsReviewedInSessionData,
+        setUnderstandScoreAfter: scaledUnderstandScore,
+        setUseScoreAfter: scaledUseScore,
+        setExploreScoreAfter: scaledExploreScore,
+        setTotalMasteryScoreAfter: scaledTotalMasteryScore,
+        setNextReviewAtAfter: nextReviewAt,
+        setIntervalAfter: newIntervalDays,
+      },
+    });
+
+    // 7. Return: The updated QuestionSet object.
+    return updatedQuestionSetWithRelations;
+  });
+};
+
 export const getUserProgressSummary = async (userId: number) => {
   // Get all question sets for the user
   const questionSets = await prisma.questionSet.findMany({
@@ -403,28 +632,22 @@ export const getUserProgressSummary = async (userId: number) => {
       }
     },
     include: {
-      questions: true,
-      userReviews: {
-        orderBy: {
-          completedAt: 'desc'
-        },
-        take: 10 // Get the 10 most recent reviews
-      }
+      questions: true
     }
   });
   
   // Calculate overall statistics
   const totalSets = questionSets.length;
   const totalQuestions = questionSets.reduce((sum, set) => sum + set.questions.length, 0);
-  const masteredSets = questionSets.filter(set => set.overallMasteryScore >= 90).length;
-  const progressingSets = questionSets.filter(set => set.overallMasteryScore >= 40 && set.overallMasteryScore < 90).length;
-  const newSets = questionSets.filter(set => set.overallMasteryScore < 40).length;
+  const masteredSets = questionSets.filter(set => set.currentTotalMasteryScore >= 90).length;
+  const progressingSets = questionSets.filter(set => set.currentTotalMasteryScore >= 40 && set.currentTotalMasteryScore < 90).length;
+  const newSets = questionSets.filter(set => set.currentTotalMasteryScore < 40).length;
   
   // Calculate average scores
   const avgUnderstandScore = questionSets.reduce((sum, set) => sum + set.understandScore, 0) / Math.max(1, totalSets);
   const avgUseScore = questionSets.reduce((sum, set) => sum + set.useScore, 0) / Math.max(1, totalSets);
   const avgExploreScore = questionSets.reduce((sum, set) => sum + set.exploreScore, 0) / Math.max(1, totalSets);
-  const avgOverallScore = questionSets.reduce((sum, set) => sum + set.overallMasteryScore, 0) / Math.max(1, totalSets);
+  const avgOverallScore = questionSets.reduce((sum, set) => sum + set.currentTotalMasteryScore, 0) / Math.max(1, totalSets);
   
   // Get due sets for today
   const now = new Date();
@@ -436,11 +659,11 @@ export const getUserProgressSummary = async (userId: number) => {
   // Calculate review streak and consistency
   const reviews = await prisma.userQuestionSetReview.findMany({
     where: { userId },
-    orderBy: { completedAt: 'desc' }
+    orderBy: { sessionEndedAt: 'desc' }
   });
   
   // Check if user has reviewed in the last 24 hours
-  const lastReview = reviews[0]?.completedAt;
+  const lastReview = reviews[0]?.sessionEndedAt;
   const reviewedToday = lastReview && 
     (new Date().getTime() - lastReview.getTime()) < 24 * 60 * 60 * 1000;
   
@@ -454,7 +677,7 @@ export const getUserProgressSummary = async (userId: number) => {
     // Group reviews by day
     const reviewDays = new Set();
     reviews.forEach(review => {
-      const day = new Date(review.completedAt);
+      const day = new Date(review.sessionEndedAt);
       day.setHours(0, 0, 0, 0);
       reviewDays.add(day.getTime());
     });

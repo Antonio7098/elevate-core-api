@@ -139,8 +139,8 @@ describe('Spaced Repetition Service', () => {
         overallScore: 62,
         timeSpent: 300,
         questionAnswers: [
-          { questionId: 101, isCorrect: true, timeSpent: 150, scoreAchieved: 100, confidence: 0.8 },
-          { questionId: 102, isCorrect: false, timeSpent: 150, scoreAchieved: 0, confidence: 0.2 }
+          { questionId: 101, isCorrect: true, timeSpent: 150, scoreAchieved: 100, confidence: 0.8, userAnswerText: "Test answer 1" },
+          { questionId: 102, isCorrect: false, timeSpent: 150, scoreAchieved: 0, confidence: 0.2, userAnswerText: "Test answer 2" }
         ]
       };
       
@@ -166,8 +166,8 @@ describe('Spaced Repetition Service', () => {
       // Verify that nextReviewAt is a Date
       expect(updateCall.data.nextReviewAt).toBeInstanceOf(Date);
       
-      // Verify that overallMasteryScore is calculated correctly
-      expect(updateCall.data.overallMasteryScore).toBe(
+      // Verify that currentTotalMasteryScore is calculated correctly
+      expect(updateCall.data.currentTotalMasteryScore).toBe(
         70 * UNDERSTAND_WEIGHT + 60 * USE_WEIGHT + 50 * EXPLORE_WEIGHT
       );
     });
@@ -196,7 +196,7 @@ describe('Spaced Repetition Service', () => {
           currentIntervalDays: 4,
           lastReviewedAt: new Date('2023-01-01'),
           reviewCount: 3,
-          questions: [{ id: 101, learningStage: 'Understand' }, { id: 102, learningStage: 'Use' }],
+          questions: [{ id: 101, uueFocus: 'Understand' }, { id: 102, uueFocus: 'Use' }],
           folder: { id: 1, name: 'Folder 1', description: 'Test folder 1' }
         },
         { 
@@ -210,7 +210,7 @@ describe('Spaced Repetition Service', () => {
           currentIntervalDays: 7,
           lastReviewedAt: new Date('2023-01-05'),
           reviewCount: 5,
-          questions: [{ id: 201, learningStage: 'Explore' }],
+          questions: [{ id: 201, uueFocus: 'Explore' }],
           folder: { id: 1, name: 'Folder 1', description: 'Test folder 1' }
         },
         { 
@@ -222,9 +222,9 @@ describe('Spaced Repetition Service', () => {
           overallMasteryScore: 90, 
           nextReviewAt: tomorrow,
           currentIntervalDays: 14,
-          lastReviewedAt: new Date('2023-01-10'),
-          reviewCount: 8,
-          questions: [{ id: 301, learningStage: 'Understand' }, { id: 302, learningStage: 'Use' }, { id: 303, learningStage: 'Explore' }],
+          lastReviewedAt: new Date('2023-02-01'),
+          reviewCount: 10,
+          questions: [{ id: 301, uueFocus: 'Understand' }, { id: 302, uueFocus: 'Use' }, { id: 303, uueFocus: 'Explore' }],
           folder: { id: 2, name: 'Folder 2', description: 'Test folder 2' }
         },
         { 
@@ -238,7 +238,7 @@ describe('Spaced Repetition Service', () => {
           currentIntervalDays: 1,
           lastReviewedAt: null,
           reviewCount: 0,
-          questions: [{ id: 401, learningStage: 'Understand' }],
+          questions: [{ id: 401, uueFocus: 'Understand' }],
           folder: { id: 2, name: 'Folder 2', description: 'Test folder 2' }
         }
       ];
@@ -272,7 +272,6 @@ describe('Spaced Repetition Service', () => {
       // Set 3 should not be included as it's due tomorrow
       expect(dueSetIds).not.toContain(3);
       
-      // Verify that learningStage was converted to uueFocus
       const set1 = dueQuestionSets.find(qs => qs.id === 1);
       expect(set1?.questions[0].uueFocus).toBe('Understand');
       expect(set1?.questions[1].uueFocus).toBe('Use');

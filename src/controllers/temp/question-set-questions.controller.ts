@@ -61,9 +61,6 @@ export const getQuestionsByQuestionSetId = async (req: AuthRequest, res: Respons
         questionType: q.questionType,
         answer: q.answer,
         options: q.options,
-        learningStage: q.learningStage,
-        conceptTags: q.conceptTags,
-        difficultyScore: q.difficultyScore,
         createdAt: q.createdAt,
         updatedAt: q.updatedAt
       }))

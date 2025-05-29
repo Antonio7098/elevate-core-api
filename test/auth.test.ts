@@ -69,8 +69,10 @@ describe('Auth API', () => {
         .expect('Content-Type', /json/)
         .expect(400);
 
-      expect(response.body).toHaveProperty('message');
-      expect(response.body.message).toContain('email');
+      expect(response.body).toHaveProperty('errors');
+      expect(Array.isArray(response.body.errors)).toBe(true);
+      expect(response.body.errors.length).toBeGreaterThan(0);
+      expect(response.body.errors[0].msg).toContain('email');
     });
 
     it('should not register with short password', async () => {
@@ -83,8 +85,10 @@ describe('Auth API', () => {
         .expect('Content-Type', /json/)
         .expect(400);
 
-      expect(response.body).toHaveProperty('message');
-      expect(response.body.message).toContain('password');
+      expect(response.body).toHaveProperty('errors');
+      expect(Array.isArray(response.body.errors)).toBe(true);
+      expect(response.body.errors.length).toBeGreaterThan(0);
+      expect(response.body.errors[0].msg.toLowerCase()).toContain('password');
     });
   });
 
@@ -164,7 +168,7 @@ describe('Auth API', () => {
         .expect('Content-Type', /json/)
         .expect(401);
 
-      expect(response.body).toHaveProperty('message', 'No token provided');
+      expect(response.body).toHaveProperty('message', 'No token, authorization denied');
     });
 
     it('should not get profile with invalid token', async () => {
@@ -175,7 +179,7 @@ describe('Auth API', () => {
         .expect(401);
 
       expect(response.body).toHaveProperty('message');
-      expect(response.body.message).toMatch(/invalid|malformed/i);
+      expect(response.body.message).toBe('Token is not valid');
     });
   });
 });

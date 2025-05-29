@@ -59,7 +59,6 @@ export const getQuestionsBySetId = async (req: AuthRequest, res: Response, next:
         // Temporarily using only createdAt until Prisma types are updated
         createdAt: 'asc'
         // TODO: Add these back after Prisma types are updated:
-        // learningStage: 'asc',
         // difficultyScore: 'desc',
       },
     });
@@ -125,7 +124,6 @@ export const getQuestionsBySet = async (req: AuthRequest, res: Response, next: N
         // Temporarily using only createdAt until Prisma types are updated
         createdAt: 'asc'
         // TODO: Add these back after Prisma types are updated:
-        // learningStage: 'asc',
         // difficultyScore: 'desc',
       },
     });

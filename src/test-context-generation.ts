@@ -51,13 +51,11 @@ async function testContextGeneration() {
                       text: 'What is the quadratic formula?',
                       answer: 'x = (-b ± √(b² - 4ac)) / 2a',
                       questionType: 'OPEN_ENDED',
-                      masteryScore: 0
                     },
                     {
                       text: 'Solve for x: 2x + 5 = 13',
                       answer: 'x = 4',
                       questionType: 'OPEN_ENDED',
-                      masteryScore: 0
                     }
                   ]
                 }
@@ -70,13 +68,11 @@ async function testContextGeneration() {
                       text: 'What is the formula for the area of a circle?',
                       answer: 'A = πr²',
                       questionType: 'OPEN_ENDED',
-                      masteryScore: 0
                     },
                     {
                       text: 'What is the Pythagorean theorem?',
                       answer: 'a² + b² = c²',
                       questionType: 'OPEN_ENDED',
-                      masteryScore: 0
                     }
                   ]
                 }

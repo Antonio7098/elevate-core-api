@@ -97,7 +97,6 @@ export const validateQuestionCreate = [
     .notEmpty()
     .withMessage('Options cannot contain empty strings')
     .trim(),
-  // masteryScore defaults to 0, nextReviewAt is optional DateTime - no specific validation here for creation unless required
   handleValidationErrors,
 ];
 
@@ -214,16 +213,16 @@ export const validateSubmitReview = [
     .withMessage('UUE focus must be a string for each outcome')
     .isIn(['Understand', 'Use', 'Explore'])
     .withMessage('UUE focus must be one of "Understand", "Use", or "Explore" for each outcome'),
-  check('outcomes.*.userAnswer')
+  check('outcomes.*.userAnswerText')
     .exists() // Ensure the field is present, even if an empty string
     .isString()
-    .withMessage('User answer must be a string for each outcome')
+    .withMessage('User answer text must be a string for each outcome')
     .trim(), // Trim, but allow empty string
-  check('timeSpent')
+  check('sessionDurationSeconds')
     .notEmpty()
-    .withMessage('Time spent is required')
+    .withMessage('sessionDurationSeconds is required')
     .isInt({ min: 0 })
-    .withMessage('Time spent must be a non-negative integer')
+    .withMessage('sessionDurationSeconds must be a non-negative number')
     .toInt(),
   handleValidationErrors,
 ];

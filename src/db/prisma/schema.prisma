@@ -9,12 +9,13 @@ datasource db {
 
 // Define the User model
 model User {
-  id                   Int      @id @default(autoincrement())
-  email                String   @unique
-  password             String
-  folders              Folder[]
-  questionSetReviews   UserQuestionSetReview[]
-  questionAnswers      UserQuestionAnswer[]
+  id                      Int                     @id @default(autoincrement())
+  email                   String                  @unique
+  password                String
+  dailyStudyTimeMinutes   Int                     @default(30) // For "Today's Tasks" algorithm capacity
+  folders                 Folder[]
+  questionSetReviews      UserQuestionSetReview[]
+  questionAnswers         UserQuestionAnswer[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -22,39 +23,52 @@ model User {
 
 // Define the Folder model
 model Folder {
-  id          Int        @id @default(autoincrement())
-  name        String
-  description String?
-  userId      Int
-  user        User       @relation(fields: [userId], references: [id])
-  questionSets QuestionSet[]
+  id                  Int           @id @default(autoincrement())
+  name                String
+  description         String?
+  userId              Int
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questionSets        QuestionSet[]
+  currentMasteryScore Float? // Aggregated/calculated (0-1)
+  masteryHistory      Json[] // [{ timestamp: DateTime, score: Float }]
 
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
 }
 
 // Define the QuestionSet model
 model QuestionSet {
-  id                 Int       @id @default(autoincrement())
-  name               String
-  folderId           Int
-  folder             Folder    @relation(fields: [folderId], references: [id])
-  questions          Question[]
+  id                         Int                     @id @default(autoincrement())
+  name                       String
+  folderId                   Int
+  folder                     Folder                  @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  questions                  Question[]
+  userReviews                UserQuestionSetReview[] // User's review history for this set
+  userAnswers                UserQuestionAnswer[]    // Answers specifically linked to this question set
+
+  // U-U-E Scores & Total Mastery
+  understandScore            Float                   @default(0) // Current understanding score (0-100)
+  useScore                   Float                   @default(0) // Current application score (0-100)
+  exploreScore               Float                   @default(0) // Current exploration score (0-100)
+  currentTotalMasteryScore   Float                   @default(0) // Calculated from U-U-E scores (0-100)
   
-  // Spaced Repetition fields
-  overallMasteryScore Float     @default(0) // Overall mastery (0-100)
-  understandScore     Float     @default(0) // Understanding score (0-100)
-  useScore            Float     @default(0) // Application score (0-100)
-  exploreScore        Float     @default(0) // Exploration score (0-100)
-  forgettingScore     Float     @default(0) // Forgetting curve score (0-100)
-  nextReviewAt        DateTime? // When this set should be reviewed next
-  currentIntervalDays Float?    // Current interval in days
-  lastReviewedAt      DateTime? // When this set was last reviewed
-  reviewCount         Int       @default(0) // Number of times this set has been reviewed
-  masteryOverTime     Json?     // Timeseries of mastery scores
-  userReviews         UserQuestionSetReview[] // User's review history for this set
+  // Spaced Repetition (Set-Level)
+  nextReviewAt               DateTime?               // When this set should be reviewed next
+  currentIntervalDays        Float?                  @default(1) // Current interval in days
+  lastReviewedAt             DateTime?               // When this set was last reviewed
+  reviewCount                Int                     @default(0) // Number of times this set has been reviewed
+  
+  // Personalized Forgetting Curve (Set-Level)
+  forgettingCurveParams      Json?                   // e.g., {"memoryStrength": float, "lastReviewedDecayRate": float, "lastReviewTimestamp": DateTime}
+  currentForgottenPercentage Float?                  // Calculated based on forgettingCurveParams and time since lastReviewedAt (0-1)
+  
+  // U-U-E Stage for the Set
+  currentUUESetStage         String                  @default("Understand") // Values: "Understand", "Use", "Explore"
+  
+  // Mastery History
+  masteryHistory             Json[]                  // [{ timestamp: DateTime, totalMasteryScore: Float, understandScore: Float, useScore: Float, exploreScore: Float }]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -65,71 +79,94 @@ model QuestionSet {
 
 // Define the Question model
 model Question {
-  id                Int         @id @default(autoincrement())
-  text              String      // Renamed from 'question'
-  answer            String?     // Make answer nullable
-  options           String[]    // For multiple-choice, etc. Now a required list (can be empty)
-  questionType      String      // e.g., 'multiple-choice', 'short-answer', 'flashcard'
+  id                       Int                  @id @default(autoincrement())
+  text                     String
+  answer                   String?
+  options                  String[]
+  questionType             String               // e.g., 'multiple-choice', 'short-answer', 'flashcard'
   
-  // U-U-E categorization
-  uueFocus         String      @default("Understand") // Understand, Use, or Explore
-  conceptTags       String[]    // Tags for fundamental concepts this question covers
+  // U-U-E Focus
+  uueFocus                 String               @default("Understand") // Values: "Understand", "Use", "Explore"
   
-  // Individual question performance tracking
-  lastAnswerCorrect Boolean?    // Was the last answer correct?
-  timesAnswered     Int         @default(0) // Total times this question was answered
-  timesAnsweredWrong Int        @default(0) // Times this question was answered incorrectly
-  marksAvailable    Int?        // Total marks this question is out of (e.g., 1-5)
+  // Individual Question Performance (for prioritization within a set review)
+  currentMasteryScore      Float?               // User's mastery of this specific question (0-1)
+  lastAnswerCorrect        Boolean?
+  timesAnsweredCorrectly   Int                  @default(0)
+  timesAnsweredIncorrectly Int                  @default(0)
+  difficultyScore          Float?               // AI-assigned or calculated (0-1)
+  conceptTags              String[]             // List of strings (can be empty)
+  marksAvailable           Int?                 // Total marks this question is out of (e.g., 1-5)
   
-  questionSetId     Int
-  questionSet       QuestionSet @relation(fields: [questionSetId], references: [id])
-  userAnswers       UserQuestionAnswer[] // User's answer history for this question
+  questionSetId            Int
+  questionSet              QuestionSet          @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
+  userAnswers              UserQuestionAnswer[] // User's answer history for this question
 
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([questionSetId])
   @@index([uueFocus])
 }
 
-// Track user's reviews of question sets
-model UserQuestionSetReview {
-  id            Int         @id @default(autoincrement())
-  userId        Int
-  user          User        @relation(fields: [userId], references: [id])
-  questionSetId Int
-  questionSet   QuestionSet @relation(fields: [questionSetId], references: [id])
-  
-  // Review metrics
-  understandScore Float     // Understanding score for this review (0-100)
-  useScore        Float     // Application score for this review (0-100)
-  exploreScore    Float     // Exploration score for this review (0-100)
-  overallScore    Float     // Overall score for this review (0-100)
-  timeSpent       Int       // Time spent on review in seconds
-  completedAt     DateTime  @default(now())
-
-  @@index([userId])
-  @@index([questionSetId])
-  @@index([completedAt])
-}
-
 // Track user's answers to individual questions
 model UserQuestionAnswer {
-  id          Int       @id @default(autoincrement())
-  userId      Int
-  user        User      @relation(fields: [userId], references: [id])
-  questionId  Int
-  question    Question  @relation(fields: [questionId], references: [id])
+  id               Int        @id @default(autoincrement())
+  userId           Int
+  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questionId       Int
+  question         Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionSetId    Int?       // Made optional for migration
+  questionSet      QuestionSet? @relation(fields: [questionSetId], references: [id], onDelete: Cascade) // Made optional for migration
   
-  // Answer data
-  userAnswer    String    // User's submitted answer
-  isCorrect     Boolean   // Whether the answer was correct
-  scoreAchieved Int       @default(0) // Score achieved for this answer (raw marks, e.g., 0-5)
-  confidence    Int?      // User's confidence level (1-5) if provided
-  timeSpent     Int       // Time spent answering in seconds
-  answeredAt    DateTime  @default(now())
+  userAnswerText   String?    // The actual answer provided by the user
+  scoreAchieved    Float      // Score from AI evaluation (0-1)
+  isCorrect        Boolean    // Derived from scoreAchieved
+  feedbackFromAI   String?    // Detailed feedback from AI
+  answeredAt       DateTime   @default(now())
+  reviewSessionId  Int?       // Link to UserQuestionSetReview
+  reviewSession    UserQuestionSetReview? @relation(fields: [reviewSessionId], references: [id], onDelete: SetNull) // Optional: onDelete: SetNull or Restrict based on desired behavior
+  uueFocusTested   String?    // Made optional for migration: The U-U-E focus of the question at the time of answering
+  
+  confidence       Int?       // User's confidence level (1-5) if provided
+  timeSpent        Int        // Time spent answering in seconds
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@index([userId])
   @@index([questionId])
+  @@index([questionSetId])
   @@index([answeredAt])
+  @@index([reviewSessionId])
+}
+
+// Track user's reviews of question sets
+model UserQuestionSetReview {
+  id                           Int                  @id @default(autoincrement())
+  userId                       Int
+  user                         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questionSetId                Int
+  questionSet                  QuestionSet          @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
+  
+  sessionStartedAt             DateTime?            // Made optional for migration
+  sessionEndedAt               DateTime             @default(now())
+  questionsReviewedInSession   Json[]               // List of { questionId: Int, scoreAchieved: Float }
+  answers                      UserQuestionAnswer[] // Answers recorded during this review session
+
+  // Snapshots of set scores AFTER this review
+  setUnderstandScoreAfter      Float?               // Made optional for migration: Snapshot of the set's U-score after this review
+  setUseScoreAfter             Float?               // Made optional for migration: Snapshot of the set's U-score after this review
+  setExploreScoreAfter         Float?               // Made optional for migration: Snapshot of the set's E-score after this review
+  setTotalMasteryScoreAfter    Float?               // Made optional for migration: Snapshot of the set's total mastery after this review
+  setNextReviewAtAfter         DateTime?            // Snapshot of the set's next review date after this review
+  setIntervalAfter             Float?               // Snapshot of the set's interval after this review
+  
+  timeSpent                    Int                  // Time spent on review in seconds
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([userId])
+  @@index([questionSetId])
+  @@index([sessionEndedAt])
 }

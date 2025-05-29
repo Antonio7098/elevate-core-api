@@ -84,9 +84,9 @@ app.get('/api/questionsets/:id/questions', authenticate, async (req: any, res: a
         questionType: q.questionType,
         answer: q.answer,
         options: q.options,
-        learningStage: q.learningStage,
-        conceptTags: q.conceptTags,
+        conceptTags: q.conceptTags || [],
         difficultyScore: q.difficultyScore,
+        currentMasteryScore: q.currentMasteryScore,
         createdAt: q.createdAt,
         updatedAt: q.updatedAt
       }))

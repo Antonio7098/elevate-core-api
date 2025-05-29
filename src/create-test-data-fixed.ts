@@ -49,11 +49,11 @@ async function main() {
           name: 'Test Question Set',
           folderId: folder.id,
           // Add spaced repetition fields
-          overallMasteryScore: 0,
+          currentTotalMasteryScore: 0,
           understandScore: 0,
           useScore: 0,
           exploreScore: 0,
-          forgettingScore: 0,
+          currentForgottenPercentage: 0,
           currentIntervalDays: 1,
           reviewCount: 0,
         },
@@ -78,9 +78,6 @@ async function main() {
             answer: 'Paris',
             options: ['Paris', 'London', 'Berlin', 'Madrid'],
             questionSetId: questionSet.id,
-            learningStage: 'understand',
-            conceptTags: ['geography', 'europe', 'capitals'],
-            difficultyScore: 0.3,
           },
         }),
         prisma.question.create({
@@ -90,9 +87,6 @@ async function main() {
             answer: '4',
             options: [],
             questionSetId: questionSet.id,
-            learningStage: 'understand',
-            conceptTags: ['math', 'addition', 'basics'],
-            difficultyScore: 0.1,
           },
         }),
         prisma.question.create({
@@ -102,9 +96,6 @@ async function main() {
             answer: 'Photosynthesis is the process by which plants convert light energy into chemical energy.',
             options: [],
             questionSetId: questionSet.id,
-            learningStage: 'explore',
-            conceptTags: ['biology', 'plants', 'energy'],
-            difficultyScore: 0.7,
           },
         }),
       ]);

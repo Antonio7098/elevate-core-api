@@ -85,12 +85,13 @@ app.get('/api/questionsets/:id/questions', authenticate, async (req: any, res: a
         understandScore: questionSet.understandScore || 0,
         useScore: questionSet.useScore || 0,
         exploreScore: questionSet.exploreScore || 0,
-        overallMasteryScore: questionSet.overallMasteryScore || 0,
-        forgettingScore: questionSet.forgettingScore || 0,
+        currentTotalMasteryScore: questionSet.currentTotalMasteryScore || 0,
+        currentForgottenPercentage: questionSet.currentForgottenPercentage || 0,
         nextReviewAt: questionSet.nextReviewAt,
         currentIntervalDays: questionSet.currentIntervalDays || 1,
         lastReviewedAt: questionSet.lastReviewedAt,
-        reviewCount: questionSet.reviewCount || 0
+        reviewCount: questionSet.reviewCount || 0,
+        currentUUESetStage: questionSet.currentUUESetStage || 'Understand'
       },
       questions: questions.map(q => ({
         id: q.id,
@@ -98,12 +99,12 @@ app.get('/api/questionsets/:id/questions', authenticate, async (req: any, res: a
         questionType: q.questionType,
         answer: q.answer,
         options: q.options,
-        learningStage: q.learningStage,
-        conceptTags: q.conceptTags,
+        conceptTags: q.conceptTags || [],
         difficultyScore: q.difficultyScore,
         lastAnswerCorrect: q.lastAnswerCorrect,
-        timesAnswered: q.timesAnswered,
-        timesAnsweredWrong: q.timesAnsweredWrong,
+        timesAnsweredCorrectly: q.timesAnsweredCorrectly || 0,
+        timesAnsweredIncorrectly: q.timesAnsweredIncorrectly || 0,
+        currentMasteryScore: q.currentMasteryScore || 0,
         createdAt: q.createdAt,
         updatedAt: q.updatedAt
       })),

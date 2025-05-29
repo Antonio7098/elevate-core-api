@@ -115,6 +115,62 @@ This Core API is responsible for:
 
 ---
 
+---
+
+## Key Learning Systems
+
+This section details the core mechanisms that drive the personalized learning experience in Elevate.
+
+### Spaced Repetition System (V2 - Question Set Level)
+
+Elevate employs an advanced spaced repetition system (SRS) designed to optimize learning and retention at the **Question Set** level. This V2 system moves beyond individual question tracking to provide a more holistic view of a user's mastery over a collection of related concepts.
+
+**Key Characteristics:**
+
+*   **Set-Level Mastery:** Instead of tracking mastery for each question independently, the system primarily focuses on the user's overall understanding and recall of an entire Question Set.
+*   **U-U-E Scoring:** Each Question Set's progress is measured across three dimensions of learning:
+    *   **Understand (`understandScore`):** Basic comprehension and recall of facts.
+    *   **Use (`useScore`):** Ability to apply knowledge in familiar contexts.
+    *   **Explore (`exploreScore`):** Capacity to synthesize, analyze, and apply knowledge in novel situations or make connections.
+    *   These scores (0-100) are updated based on performance during review sessions.
+*   **Overall Set Mastery (`currentTotalMasteryScore`):** A composite score reflecting the overall mastery of the Question Set.
+*   **Forgetting Curve (`currentForgottenPercentage`):** An estimate of how much content from the set might have been forgotten.
+*   **Review Scheduling:** The `nextReviewAt` date for a Question Set is determined by its current mastery scores and performance history, ensuring that users revisit material at optimal intervals to combat forgetting.
+
+### Dashboard and Progress Tracking
+
+The user dashboard provides insights into their learning journey, reflecting the Question Set-Level SR V2 metrics.
+
+*   **Endpoint:** `GET /api/reviews/stats`
+*   **Key Statistics Provided:**
+    *   `totalSets`: Total number of question sets created by the user.
+    *   `masteredSets`: Number of sets where a high level of mastery has been achieved.
+    *   `progressingSets`: Sets actively being learned.
+    *   `newSets`: Sets not yet reviewed.
+    *   `dueSets`: Number of sets currently due for review.
+    *   `avgScores`: Average U-U-E scores across all relevant sets.
+    *   `reviewStreak`: Current consecutive days of review activity.
+    *   `reviewedToday`: Whether the user has completed a review session today.
+    *   `totalReviews`: Total number of review sessions completed.
+
+### Review Session Question Selection Algorithm
+
+When a user starts a review session for a due Question Set (e.g., via `GET /api/reviews/today/:questionSetId/questions`), the system uses a sophisticated algorithm to select and prioritize questions:
+
+1.  **Identify Due Question Set:** The user typically selects a Question Set that is due for review.
+2.  **Fetch Question Set Data:** The system retrieves the Question Set, including all its questions and their historical performance data (e.g., recent answers).
+3.  **Determine Current U-U-E Focus for the Set:** Based on the Question Set's current `understandScore`, `useScore`, and `exploreScore`, the system determines the primary learning stage for the set (e.g., if "Understand" is mastered, the focus shifts to "Use").
+4.  **Prioritize Individual Questions:** Each question within the set is assigned a priority score based on several factors:
+    *   **Alignment with Set's Current U-U-E Focus:** Questions matching the set's current U-U-E learning stage (e.g., "Understand," "Use," or "Explore," as defined per question or inherited from the set) receive higher priority.
+    *   **Performance History:** Questions answered incorrectly or less confidently in the past are prioritized.
+    *   **Time Since Last Review:** While the primary review interval is set-level, individual question performance can influence its likelihood of appearing.
+    *   **New vs. Seen Questions:** New questions or those less frequently seen might be prioritized to ensure coverage.
+5.  **Serve Prioritized Questions:** The API then returns a list of questions for the review session, ordered by this priority.
+
+This ensures that review sessions are targeted, efficient, and adapt to the user's current learning stage within each Question Set.
+
+---
+
 ## API Endpoints
 
 The API base path is `/api`.
@@ -197,6 +253,38 @@ All question routes are protected and require authentication.
 -   **`DELETE /:id`**: Delete a specific question.
     -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
     -   **Response:** Success message.
+
+### Reviews & Spaced Repetition (`/api/reviews`)
+
+These endpoints manage the review process based on the Spaced Repetition System.
+
+-   **`GET /today`**: Get all question sets due for review today for the authenticated user.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Response:** An array of Question Set objects that are due.
+-   **`GET /today/:questionSetId/questions`**: Get prioritized questions for a specific due question set to start a review session.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Response:** An array of Question objects, prioritized for the review session.
+-   **`POST /`**: Submit review outcomes for a completed session.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Body:**
+        ```json
+        {
+          "questionSetId": "string",
+          "outcomes": [
+            {
+              "questionId": "string",
+              "scoreAchieved": "number (0-5)", 
+              "userAnswerText": "string (optional)",
+              "uueFocus": "string ('Understand'|'Use'|'Explore')"
+            }
+          ],
+          "sessionDurationSeconds": "number"
+        }
+        ```
+    -   **Response:** The updated Question Set object with new mastery scores and next review date.
+-   **`GET /stats`**: Get learning statistics for the authenticated user.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Response:** An object containing various progress statistics (see "Dashboard and Progress Tracking" section for details).
 
 ### AI Service Integration (`/api/ai`)
 

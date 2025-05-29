@@ -2,10 +2,64 @@ import request from 'supertest';
 import { PrismaClient } from '@prisma/client';
 import app from '../../app';
 import jwt from 'jsonwebtoken';
+import { AIService } from '../../services/aiService';
+
+jest.mock('../../services/aiService');
 
 const prisma = new PrismaClient();
 
 describe('AI Routes Integration Tests', () => {
+
+  const mockGeneratedQuestions = (count: number) => Array.from({ length: count }, (_, i) => ({
+    // id: `mock-question-${i}`, // Controller will create actual questions with IDs
+    text: `Generated Question ${i + 1} from mock`,
+    answer: `Generated Answer ${i + 1} from mock`,
+    questionType: 'flashcard',
+    options: [],
+    uueFocus: 'Understand'
+  }));
+
+  beforeEach(() => {
+    // Reset mocks before each test and set default implementations
+    jest.clearAllMocks();
+
+    // AIService is a mock constructor due to jest.mock()
+    // We mock its implementation to return an object with the desired mocked methods.
+    (AIService as jest.MockedClass<typeof AIService>).mockImplementation(() => {
+      return {
+        isServiceAvailable: jest.fn().mockResolvedValue(true),
+        generateQuestions: jest.fn().mockImplementation(async (payload: { sourceText: string; questionCount: number; folderId: string; }) => {
+          return Promise.resolve({
+            response: {
+              questions: mockGeneratedQuestions(payload.questionCount || 2),
+            },
+            metadata: {}
+          });
+        }),
+        chat: jest.fn().mockImplementation(async (payload: { message: string; context?: any }) => {
+          let simulatedResponse = `Simulated AI response to: ${payload.message}`;
+          let contextInfo = '';
+          if (payload.context?.questionSetId) {
+            contextInfo = ` (context: Question Set ${payload.context.questionSetId})`;
+          } else if (payload.context?.folderId) {
+            contextInfo = ` (context: Folder ${payload.context.folderId})`;
+          }
+          return Promise.resolve({
+            response: {
+              response: simulatedResponse + contextInfo,
+              references: [],
+              suggestedQuestions: []
+            },
+            metadata: {}
+          });
+        }),
+        // Add other AIService methods here if they are called by the controller
+        // For example, if evaluateAnswer or getHealth are used:
+        // evaluateAnswer: jest.fn().mockResolvedValue({ response: { feedback: "Mocked feedback", is_correct: true }, metadata: {} }),
+        // getHealth: jest.fn().mockResolvedValue({ status: "healthy" }),
+      } as unknown as AIService; // Cast to AIService instance type
+    });
+  });
   let user1Token: string;
   let user2Token: string;
   let user1Id: number;
@@ -80,7 +134,6 @@ describe('AI Routes Integration Tests', () => {
         questionType: 'flashcard',
         options: [],
         questionSetId: user1QuestionSet.id,
-        masteryScore: 0
       },
     });
 
@@ -91,7 +144,6 @@ describe('AI Routes Integration Tests', () => {
         questionType: 'multiple-choice',
         options: ['Option A', 'Option B', 'Option C'],
         questionSetId: user1QuestionSet.id,
-        masteryScore: 0
       },
     });
   });
@@ -207,7 +259,7 @@ describe('AI Routes Integration Tests', () => {
         });
 
       expect(res.statusCode).toEqual(404);
-      expect(res.body).toHaveProperty('message', 'Question set not found or access denied');
+      expect(res.body).toHaveProperty('message', 'Question set not found or not owned by user');
     });
 
     it('should return 404 if folder does not exist or belongs to another user', async () => {
@@ -221,7 +273,7 @@ describe('AI Routes Integration Tests', () => {
         });
 
       expect(res.statusCode).toEqual(404);
-      expect(res.body).toHaveProperty('message', 'Folder not found or access denied');
+      expect(res.body).toHaveProperty('message', 'Folder not found or not owned by user');
     });
 
     it('should return 400 if message is missing', async () => {

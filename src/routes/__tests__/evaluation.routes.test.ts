@@ -23,6 +23,10 @@ jest.mock('@prisma/client', () => {
       findUnique: jest.fn(),
       update: jest.fn()
     },
+    userQuestionAnswer: {
+      create: jest.fn(),
+      // Add other methods like findUnique, findMany, update if they are used by the service via this route
+    },
     $disconnect: jest.fn(),
   };
   return {
@@ -131,7 +135,6 @@ describe('Evaluation Routes', () => {
         answer: 'Photosynthesis is the process used by plants to convert light energy into chemical energy.',
         questionType: 'short-answer',
         options: [],
-        masteryScore: 1,
         questionSet: {
           name: 'Biology',
           folder: {
@@ -181,12 +184,15 @@ describe('Evaluation Routes', () => {
       
       // Verify AI service was called with correct parameters
       expect(aiService.evaluateAnswer).toHaveBeenCalledWith({
-        questionId: 1,
-        questionText: 'Explain how photosynthesis works.',
-        expectedAnswer: 'Photosynthesis is the process used by plants to convert light energy into chemical energy.',
-        questionType: 'short-answer',
+        questionContext: {
+          questionId: 1,
+          questionText: 'Explain how photosynthesis works.',
+          expectedAnswer: 'Photosynthesis is the process used by plants to convert light energy into chemical energy.',
+          questionType: 'short-answer',
+          options: [],
+          marksAvailable: 1 // Assuming default marksAvailable is 1 for this test case
+        },
         userAnswer: 'Photosynthesis is how plants make their food using sunlight.',
-        options: [],
         context: {
           questionSetName: 'Biology',
           folderName: 'Science'
@@ -197,8 +203,6 @@ describe('Evaluation Routes', () => {
       expect(prisma.question.update).toHaveBeenCalled();
       const updateCall = prisma.question.update.mock.calls[0][0];
       expect(updateCall.where.id).toBe(1);
-      expect(updateCall.data).toHaveProperty('masteryScore');
-      expect(updateCall.data).toHaveProperty('nextReviewAt');
     });
 
     it('should not update mastery if updateMastery is false', async () => {
@@ -209,7 +213,6 @@ describe('Evaluation Routes', () => {
         answer: 'Paris',
         questionType: 'multiple-choice',
         options: ['London', 'Paris', 'Berlin', 'Madrid'],
-        masteryScore: 2,
         questionSet: {
           name: 'Geography',
           folder: {
@@ -259,7 +262,6 @@ describe('Evaluation Routes', () => {
         answer: 'Quantum computing uses quantum bits...',
         questionType: 'short-answer',
         options: [],
-        masteryScore: 1,
         questionSet: {
           name: 'Physics',
           folder: {
@@ -279,7 +281,7 @@ describe('Evaluation Routes', () => {
         });
 
       expect(response.status).toBe(503);
-      expect(response.body.message).toContain('unavailable');
+      expect(response.body.evaluation.feedback).toContain('unavailable');
       expect(response.body.fallback).toBe(false);
     });
   });

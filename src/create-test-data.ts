@@ -50,7 +50,7 @@ async function main() {
         name: 'Past Due Question Set',
         folderId: folder.id,
         // Spaced repetition fields
-        overallMasteryScore: 30,
+        currentTotalMasteryScore: 30,
         understandScore: 40,
         useScore: 30,
         exploreScore: 20,
@@ -69,7 +69,7 @@ async function main() {
         name: 'Due Today Question Set',
         folderId: folder.id,
         // Spaced repetition fields
-        overallMasteryScore: 50,
+        currentTotalMasteryScore: 50,
         understandScore: 60,
         useScore: 50,
         exploreScore: 30,
@@ -89,7 +89,7 @@ async function main() {
         name: 'Due Tomorrow Question Set',
         folderId: folder.id,
         // Spaced repetition fields
-        overallMasteryScore: 70,
+        currentTotalMasteryScore: 70,
         understandScore: 75,
         useScore: 70,
         exploreScore: 60,
@@ -105,7 +105,7 @@ async function main() {
         name: 'Never Reviewed Question Set',
         folderId: folder.id,
         // Spaced repetition fields
-        overallMasteryScore: 0,
+        currentTotalMasteryScore: 0,
         understandScore: 0,
         useScore: 0,
         exploreScore: 0,
@@ -218,11 +218,13 @@ async function main() {
         data: {
           userId: user.id,
           questionId: questions[0].id,
-          userAnswer: 'Paris',
+          questionSetId: questionSet1.id, // Add the questionSetId
+          userAnswerText: 'Paris', // Renamed from userAnswer
           isCorrect: true,
           scoreAchieved: 1.0,
           answeredAt: oneWeekAgo,
-          timeSpent: 15 // 15 seconds to answer
+          timeSpent: 15, // 15 seconds to answer
+          uueFocusTested: 'Understand' // Required field
         }
       }),
       // Incorrect answer from 3 days ago
@@ -230,11 +232,13 @@ async function main() {
         data: {
           userId: user.id,
           questionId: questions[1].id,
-          userAnswer: '5',
+          questionSetId: questionSet1.id, // Add the questionSetId
+          userAnswerText: '5', // Renamed from userAnswer
           isCorrect: false,
           scoreAchieved: 0.0,
           answeredAt: threeDaysAgo,
-          timeSpent: 30 // 30 seconds to answer
+          timeSpent: 30, // 30 seconds to answer
+          uueFocusTested: 'Understand' // Required field
         }
       }),
     ]);

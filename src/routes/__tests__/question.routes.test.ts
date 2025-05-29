@@ -55,7 +55,7 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
         understandScore: 0,
         useScore: 0,
         exploreScore: 0,
-        overallMasteryScore: 0,
+        currentTotalMasteryScore: 0,
         currentIntervalDays: 1,
         nextReviewAt: null,
         lastReviewedAt: null
@@ -92,8 +92,8 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
             uueFocus: 'Understand',
             conceptTags: ['concept1', 'concept2'],
             difficultyScore: 0.5,
-            timesAnswered: 0,
-            timesAnsweredWrong: 0,
+            timesAnsweredCorrectly: 0,
+            timesAnsweredIncorrectly: 0,
             lastAnswerCorrect: null
           },
           { 
@@ -104,8 +104,8 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
             uueFocus: 'Use',
             conceptTags: ['concept2', 'concept3'],
             difficultyScore: 0.7,
-            timesAnswered: 0,
-            timesAnsweredWrong: 0,
+            timesAnsweredCorrectly: 0,
+            timesAnsweredIncorrectly: 0,
             lastAnswerCorrect: null
           },
         ],

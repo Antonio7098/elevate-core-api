@@ -4,12 +4,13 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import {
   getDueQuestionSets,
   getPrioritizedQuestions,
-  calculateQuestionSetNextReview,
   getUserProgressSummary,
-  UNDERSTAND_WEIGHT,
-  USE_WEIGHT,
-  EXPLORE_WEIGHT,
-  updateQuestionPerformance
+  processQuestionSetReview, // Added
+  // calculateQuestionSetNextReview, // Removed
+  // updateQuestionPerformance, // Removed
+  UNDERSTAND_WEIGHT, // Kept if used elsewhere, otherwise can be removed if submitReview was only consumer
+  USE_WEIGHT,        // Kept if used elsewhere
+  EXPLORE_WEIGHT     // Kept if used elsewhere
 } from '../services/spacedRepetition.service';
 
 const prisma = new PrismaClient();
@@ -25,7 +26,7 @@ type QuestionSetWithRelations = QuestionSet & {
 };
 
 // Type for prioritized question with uueFocus field
-type PrioritizedQuestion = Omit<Question, 'learningStage'> & {
+type PrioritizedQuestion = Question & {
   priorityScore: number;
   uueFocus: string;
 };
@@ -35,14 +36,14 @@ type PrioritizedQuestion = Omit<Question, 'learningStage'> & {
  * GET /api/reviews/today
  */
 export const getTodayReviews = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
-  console.log(`🔍 [Reviews] GET /api/reviews/today called`);
-  console.log(`🔍 [Reviews] Request headers:`, req.headers);
-  console.log(`🔍 [Reviews] Auth header: ${req.headers.authorization || 'None'}`);
-  console.log(`🔍 [Reviews] req.user:`, req.user);
+  if (process.env.NODE_ENV !== 'test') { console.log(`🔍 [Reviews] GET /api/reviews/today called`); }
+  if (process.env.NODE_ENV !== 'test') { console.log(`🔍 [Reviews] Request headers:`, req.headers); }
+  if (process.env.NODE_ENV !== 'test') { console.log(`🔍 [Reviews] Auth header: ${req.headers.authorization || 'None'}`); }
+  if (process.env.NODE_ENV !== 'test') { console.log(`🔍 [Reviews] req.user:`, req.user); }
   
   try {
     const userId = req.user?.userId;
-    console.log(`🔍 [Reviews] Extracted userId from req.user:`, userId);
+    if (process.env.NODE_ENV !== 'test') { console.log(`🔍 [Reviews] Extracted userId from req.user:`, userId); }
     
     if (!userId) {
       console.error(`❌ [Reviews] User not authenticated - userId is missing from req.user`);
@@ -66,7 +67,7 @@ export const getTodayReviews = async (req: AuthRequest, res: Response, next: Nex
         understandScore: set.understandScore,
         useScore: set.useScore,
         exploreScore: set.exploreScore,
-        overallMasteryScore: set.overallMasteryScore,
+        overallMasteryScore: set.currentTotalMasteryScore,
         // Review info
         lastReviewedAt: set.lastReviewedAt,
         reviewCount: set.reviewCount,
@@ -143,17 +144,18 @@ export const getReviewQuestions = async (req: AuthRequest, res: Response, next: 
 };
 
 // New interface for the incoming payload from the frontend
-interface FrontendReviewOutcome {
-  questionId: string;
-  scoreAchieved: number;
-  uueFocus: 'Understand' | 'Use' | 'Explore';
-  userAnswer: string;
+export interface FrontendReviewOutcome {
+  questionId: string; // Will be parsed to number
+  scoreAchieved: number; // Expected as 0-5 from frontend, will be normalized to 0-1 for service
+  uueFocus?: 'Understand' | 'Use' | 'Explore'; // Optional: service fetches authoritative uueFocus
+  userAnswerText?: string; // Renamed from userAnswer
+  timeSpentOnQuestion?: number; // Optional: time spent on this specific question
 }
 
-interface FrontendReviewSubmission {
-  questionSetId: string;
+export interface FrontendReviewSubmission {
+  questionSetId: string; // Will be parsed to number
   outcomes: FrontendReviewOutcome[];
-  timeSpent: number; // Added to capture total session time
+  sessionDurationSeconds: number; // Renamed from timeSpent, total time for the review session in seconds
 }
 
 /**
@@ -178,161 +180,110 @@ interface QuestionSetReviewSubmission {
   }>;
 }
 
+interface UserQuestionAnswerData {
+  questionId: number;
+  isCorrect: boolean;
+  scoreAchieved: number;
+  timeSpent: number;
+  userAnswerText: string;
+}
+
 /**
  * Submit a review for a question set
  * POST /api/reviews
  */
 export const submitReview = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  const sessionStartTime = new Date(); // Capture session start time
   try {
+    if (process.env.NODE_ENV !== 'test') { console.log('SUBMIT_REVIEW_START: Content-Type:', req.headers['content-type']); }
+    if (process.env.NODE_ENV !== 'test') { console.log('SUBMIT_REVIEW_START: Request Body:', JSON.stringify(req.body, null, 2)); }
     const userId = req.user?.userId;
-    const frontendReviewData = req.body as FrontendReviewSubmission;
 
     if (!userId) {
+      console.error('SUBMIT_REVIEW_ERROR: User not authenticated');
       res.status(401).json({ message: 'User not authenticated' });
       return;
     }
 
-    const questionSetIdNumber = parseInt(frontendReviewData.questionSetId, 10);
-    if (isNaN(questionSetIdNumber)) {
-      res.status(400).json({ message: 'Invalid Question Set ID format.' });
+    const { questionSetId: rawQuestionSetId, outcomes: rawOutcomes, sessionDurationSeconds } = req.body as FrontendReviewSubmission;
+
+    // Validate payload
+    if (!rawQuestionSetId || !rawOutcomes || !Array.isArray(rawOutcomes) || typeof sessionDurationSeconds !== 'number') {
+      console.error('SUBMIT_REVIEW_ERROR: Invalid payload structure - missing fields');
+      res.status(400).json({ message: 'Invalid payload: questionSetId, outcomes array, and sessionDurationSeconds are required.' });
       return;
     }
 
-    // Fetch the question set and its questions to verify ownership and get necessary data
-    const questionSet = await prisma.questionSet.findFirst({
-      where: {
-        id: questionSetIdNumber,
-        folder: {
-          userId: userId
-        }
-      },
-      include: {
-        questions: true // Include all questions for this set
-      }
-    });
-
-    if (!questionSet) {
-      res.status(404).json({ message: 'Question set not found or access denied' });
+    const questionSetId = parseInt(rawQuestionSetId);
+    if (isNaN(questionSetId)) {
+      console.error('SUBMIT_REVIEW_ERROR: Invalid questionSetId format');
+      res.status(400).json({ message: 'Invalid questionSetId format. Must be a number.' });
       return;
     }
 
-    // Create a map of questions for easy lookup
-    const questionsMap = new Map(questionSet.questions.map(q => [q.id.toString(), q]));
-
-    const parsedQuestionAnswers: Array<{
-      questionId: number;
-      isCorrect: boolean;
-      timeSpent: number; 
-      scoreAchieved: number; // Raw marks
-      confidence?: number; 
-      userAnswer: string;
-    }> = [];
-
-    let understandRawScore = 0;
-    let understandMaxMarks = 0;
-    let useRawScore = 0;
-    let useMaxMarks = 0;
-    let exploreRawScore = 0;
-    let exploreMaxMarks = 0;
-
-    for (const outcome of frontendReviewData.outcomes) {
-      const questionIdNumber = parseInt(outcome.questionId, 10);
-      if (isNaN(questionIdNumber)) {
-        res.status(400).json({ message: `Invalid Question ID format for outcome: ${outcome.questionId}` });
-        return;
-      }
-
-      const question = questionsMap.get(outcome.questionId);
-      if (!question) {
-        res.status(400).json({ message: `Question ID ${outcome.questionId} does not belong to Question Set ID ${questionSetIdNumber} or not found.` });
-        return;
-      }
-
-      const currentQuestionMarksAvailable = question.marksAvailable || 1; // Default to 1 if not set
-      const isCorrectForThisQuestion = outcome.scoreAchieved / currentQuestionMarksAvailable >= 0.5; // 50% or more marks
-
-      parsedQuestionAnswers.push({
-        questionId: questionIdNumber,
-        isCorrect: isCorrectForThisQuestion,
-        scoreAchieved: outcome.scoreAchieved, // Store raw marks
-        timeSpent: 0, // Default as frontend does not send per-question time for now
-        userAnswer: outcome.userAnswer,
-      });
-
-      // Use uueFocus from the DB Question entity as source of truth
-      switch (question.uueFocus) { 
-        case 'Understand':
-          understandRawScore += outcome.scoreAchieved;
-          understandMaxMarks += currentQuestionMarksAvailable;
-          break;
-        case 'Use':
-          useRawScore += outcome.scoreAchieved;
-          useMaxMarks += currentQuestionMarksAvailable;
-          break;
-        case 'Explore':
-          exploreRawScore += outcome.scoreAchieved;
-          exploreMaxMarks += currentQuestionMarksAvailable;
-          break;
-      }
+    if (rawOutcomes.length === 0) {
+      console.error('SUBMIT_REVIEW_ERROR: Outcomes array cannot be empty');
+      res.status(400).json({ message: 'Outcomes array cannot be empty.' });
+      return;
     }
 
-    const calculatedUnderstandScore = understandMaxMarks > 0 ? (understandRawScore / understandMaxMarks) * 100 : 0;
-    const calculatedUseScore = useMaxMarks > 0 ? (useRawScore / useMaxMarks) * 100 : 0;
-    const calculatedExploreScore = exploreMaxMarks > 0 ? (exploreRawScore / exploreMaxMarks) * 100 : 0;
-
-    const calculatedOverallScore = 
-      (calculatedUnderstandScore * UNDERSTAND_WEIGHT) +
-      (calculatedUseScore * USE_WEIGHT) +
-      (calculatedExploreScore * EXPLORE_WEIGHT);
-    
-    // updateQuestionPerformance is called within calculateQuestionSetNextReview
-    // No need to call it directly here if calculateQuestionSetNextReview handles it.
-
-    // Create UserQuestionSetReview entry
-    await prisma.userQuestionSetReview.create({
-      data: {
-        userId: userId,
-        questionSetId: questionSetIdNumber,
-        understandScore: calculatedUnderstandScore,
-        useScore: calculatedUseScore,
-        exploreScore: calculatedExploreScore,
-        overallScore: calculatedOverallScore,
-        timeSpent: frontendReviewData.timeSpent,
-        // completedAt is @default(now())
+    const processedOutcomes = rawOutcomes.map(outcome => {
+      const qId = parseInt(outcome.questionId);
+      if (isNaN(qId)) {
+        // This error will be caught by the catch block below
+        throw new Error(`Invalid questionId in outcomes: ${outcome.questionId}. Must be a number.`);
       }
+
+      const scoreAchievedRaw = outcome.scoreAchieved;
+      if (typeof scoreAchievedRaw !== 'number' || scoreAchievedRaw < 0 || scoreAchievedRaw > 5) {
+        // This error will be caught by the catch block below
+        throw new Error(`Invalid scoreAchieved in outcomes: ${scoreAchievedRaw} for QID ${qId}. Must be a number between 0 and 5.`);
+      }
+      // Normalize score from 0-5 (frontend) to 0-1 (service)
+      const normalizedScore = scoreAchievedRaw / 5;
+      
+      return {
+        questionId: qId,
+        scoreAchieved: normalizedScore,
+        userAnswerText: outcome.userAnswerText,
+        timeSpentOnQuestion: outcome.timeSpentOnQuestion, // This is optional in FrontendReviewOutcome
+      };
     });
 
-    // Call the service function to update QuestionSet mastery and next review date
-    const updatedQuestionSet = await calculateQuestionSetNextReview(
-      questionSetIdNumber,
-      {
-        userId, // userId is needed by calculateQuestionSetNextReview for context or further updates
-        understandScore: calculatedUnderstandScore, // Pass the 0-100 score
-        useScore: calculatedUseScore,             // Pass the 0-100 score
-        exploreScore: calculatedExploreScore,       // Pass the 0-100 score
-        overallScore: calculatedOverallScore,       // Pass the 0-100 score
-        timeSpent: frontendReviewData.timeSpent,
-        questionAnswers: parsedQuestionAnswers // Pass the raw scores here for UserQuestionAnswer creation
-      }
+    const updatedQuestionSet = await processQuestionSetReview(
+      userId,
+      questionSetId,
+      processedOutcomes,
+      sessionStartTime, 
+      sessionDurationSeconds 
     );
 
-    res.status(200).json({
-      questionSet: {
-        id: updatedQuestionSet.id,
-        name: updatedQuestionSet.name,
-        understandScore: updatedQuestionSet.understandScore,
-        useScore: updatedQuestionSet.useScore,
-        exploreScore: updatedQuestionSet.exploreScore,
-        overallMasteryScore: updatedQuestionSet.overallMasteryScore,
-        nextReviewAt: updatedQuestionSet.nextReviewAt,
-        reviewCount: updatedQuestionSet.reviewCount
-      },
-      message: 'Review submitted successfully'
-    });
-    
+    // Return the updated QuestionSet directly as per service layer's return
+    res.status(200).json(updatedQuestionSet);
+
   } catch (error) {
-    console.error('Error submitting review:', error);
-    next(error);
+    if (process.env.NODE_ENV !== 'test') { console.error('====== DETAILED ERROR IN SUBMIT REVIEW ======', error); } // Outer log for any error
+    if (error instanceof Error) {
+      if (process.env.NODE_ENV !== 'test') { console.error('Error Name:', error.name); }         // Detailed log for Error instances
+      if (process.env.NODE_ENV !== 'test') { console.error('Error Message:', error.message); }   // Detailed log
+      if (process.env.NODE_ENV !== 'test') { console.error('Error Stack:', error.stack); }       // Detailed log
+
+      // Specific error handling based on message content
+      if (error.message.startsWith('Invalid questionId') || error.message.startsWith('Invalid scoreAchieved')) {
+        res.status(400).json({ message: error.message });
+        return;
+      } else if (error.message.includes('not found during review processing') || error.message.includes('QuestionSet with ID')) { // Catch service layer 'not found' for questions or question sets
+        res.status(404).json({ message: error.message }); 
+        return;
+      } else {
+        // For other Error instances, pass to the global error handler
+        next(error);
+      }
+    } else {
+      // Handle cases where the thrown object is not an Error instance
+      console.error('Non-Error object thrown in submitReview:', error);
+      next(error); 
+    }
   }
 };
 
