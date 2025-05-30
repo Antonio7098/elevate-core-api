@@ -127,5 +127,17 @@
       "path": "/api/reviews/stats",
       "description": "Get statistics about the user's review progress and mastery levels. Requires JWT."
     }
+  ],
+  "stats": [
+    {
+      "method": "GET",
+      "path": "/api/stats/questionsets/:setId/details",
+      "description": "Get mastery history, review count, review dates, and current spaced repetition status for a specific Question Set. Requires JWT."
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats/folders/:folderId/details",
+      "description": "Get mastery history and other statistics for a specific Folder, including summaries of its Question Sets. Requires JWT."
+    }
   ]
 }

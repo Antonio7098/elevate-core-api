@@ -155,6 +155,13 @@ The user dashboard provides insights into their learning journey, reflecting the
 
 ### Review Session Question Selection Algorithm
 
+### Statistics and History Endpoints
+
+New endpoints provide detailed statistics and history for Question Sets and Folders, supporting features like mastery over time graphs and review frequency tracking.
+
+- **`GET /api/stats/questionsets/:setId/details`**: Retrieves detailed statistics for a specific Question Set, including its complete mastery history (timestamps and UUE scores), total review sessions, review dates, and current spaced repetition data (e.g., `currentIntervalDays`, `nextReviewAt`).
+- **`GET /api/stats/folders/:folderId/details`**: Retrieves detailed statistics for a specific Folder, including its aggregated mastery history and a summary of its Question Sets (name, current mastery, next review date), and total review sessions conducted for sets within that folder.
+
 When a user starts a review session for a due Question Set (e.g., via `GET /api/reviews/today/:questionSetId/questions`), the system uses a sophisticated algorithm to select and prioritize questions:
 
 1.  **Identify Due Question Set:** The user typically selects a Question Set that is due for review.
@@ -285,6 +292,20 @@ These endpoints manage the review process based on the Spaced Repetition System.
 -   **`GET /stats`**: Get learning statistics for the authenticated user.
     -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
     -   **Response:** An object containing various progress statistics (see "Dashboard and Progress Tracking" section for details).
+
+### Stats (`/api/stats`)
+
+All stats routes are protected and require authentication.
+
+-   **`GET /questionsets/:setId/details`**: Get detailed statistics for a specific Question Set.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Params:** `setId` (integer)
+    -   **Response:** An object containing `masteryHistory`, `totalReviews`, `reviewDates`, `currentSpacedRepetitionDetails` (like `currentIntervalDays`, `nextReviewAt`, `currentForgottenPercentage`, UUE scores).
+
+-   **`GET /folders/:folderId/details`**: Get detailed statistics for a specific Folder.
+    -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
+    -   **Params:** `folderId` (integer)
+    -   **Response:** An object containing `masteryHistory` for the folder, `totalReviewSessionsInFolder`, and `questionSetSummaries` (list of objects with `id`, `name`, `currentTotalMasteryScore`, `nextReviewAt` for each set in the folder).
 
 ### AI Service Integration (`/api/ai`)
 

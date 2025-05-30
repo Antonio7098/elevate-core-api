@@ -12,6 +12,8 @@ import evaluationRouter from './routes/evaluation.routes';
 import standaloneQuestionSetRouter from './routes/standalone-questionset.routes';
 import standaloneQuestionRouter from './routes/standalone-question.routes';
 import dashboardRouter from './routes/dashboard.routes';
+import todaysTasksRoutes from './routes/todaysTasks.routes';
+import statsRouter from './routes/stats.routes';
 
 // Load environment variables
 dotenv.config();
@@ -30,6 +32,8 @@ app.use('/api/ai', aiRouter); // Note: /api/ai is used twice, ensure this is int
 app.use('/api/reviews', reviewRouter);
 app.use('/api/ai', evaluationRouter); // Second use of /api/ai
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/todays-tasks', todaysTasksRoutes);
+app.use('/api/stats', statsRouter);
 
 // Additional standalone routes for direct access
 app.use('/api/questionsets', standaloneQuestionSetRouter);

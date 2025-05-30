@@ -453,7 +453,7 @@ export const processQuestionSetReview = async (
           questionId: outcome.questionId,
           questionSetId, // Link to the question set as well
           reviewSessionId: userQuestionSetReview.id, // Link to the session review log
-          scoreAchieved: outcome.scoreAchieved, // This is 0-1 as per schema UserQuestionAnswer.scoreAchieved
+          scoreAchieved: outcome.scoreAchieved / 5.0, // Scale 0-5 input to 0-1 for storage
           isCorrect,
           uueFocusTested: question.uueFocus || 'Understand', // Default to 'Understand' if not set
           answeredAt: sessionEndedAt, // Use session end time for all answers in this batch
@@ -501,7 +501,7 @@ export const processQuestionSetReview = async (
       });
 
       if (latestAnswer) {
-        const score = latestAnswer.scoreAchieved; // This is 0-5
+        const score = latestAnswer.scoreAchieved; // This is 0-1 (scaled from 0-5 input)
         switch (q.uueFocus) {
           case 'Understand':
             totalUnderstandScore += score;
@@ -595,6 +595,50 @@ export const processQuestionSetReview = async (
         folder: true,
       }
     });
+
+    // --- Update Folder Mastery ---
+    const parentFolder = updatedQuestionSetWithRelations.folder;
+
+    if (parentFolder) {
+      const setsInFolder = await tx.questionSet.findMany({
+        where: { folderId: parentFolder.id },
+        select: { currentTotalMasteryScore: true },
+      });
+
+      let sumOfSetMasteryScores = 0;
+      let countOfSetsWithScores = 0;
+      for (const qs of setsInFolder) {
+        // QuestionSet.currentTotalMasteryScore is 0-100
+        if (qs.currentTotalMasteryScore !== null && qs.currentTotalMasteryScore !== undefined) {
+          sumOfSetMasteryScores += qs.currentTotalMasteryScore;
+          countOfSetsWithScores++;
+        }
+      }
+
+      const newFolderAggregatedScore = countOfSetsWithScores > 0
+        ? Math.round(sumOfSetMasteryScores / countOfSetsWithScores)
+        : 0; // Default to 0 if no sets or no scores (0-100 scale)
+
+      const newFolderMasteryEntry = {
+        timestamp: sessionEndedAt.toISOString(),
+        aggregatedScore: newFolderAggregatedScore, // 0-100 scale
+      };
+
+      // Ensure existingFolderHistory is an array of non-null JsonValues.
+      const existingFolderHistory = Array.isArray(parentFolder.masteryHistory)
+        ? parentFolder.masteryHistory.filter(entry => entry !== null)
+        : [];
+      const updatedFolderMasteryHistory = [...existingFolderHistory, newFolderMasteryEntry];
+
+      await tx.folder.update({
+        where: { id: parentFolder.id },
+        data: {
+          currentMasteryScore: newFolderAggregatedScore, // Store as 0-100, consistent with QuestionSet scores
+          masteryHistory: updatedFolderMasteryHistory,
+        },
+      });
+    }
+    // --- End of Folder Mastery Update ---
 
     // 6. Finalize UserQuestionSetReview Record
     const questionsReviewedInSessionData = outcomes.map(o => ({
