@@ -14,7 +14,7 @@ model User {
   password                String
   dailyStudyTimeMinutes   Int                     @default(30) // For "Today's Tasks" algorithm capacity
   folders                 Folder[]
-  questionSetReviews      UserQuestionSetReview[]
+  studySessions           UserStudySession[]
   questionAnswers         UserQuestionAnswer[]
 
   createdAt DateTime @default(now())
@@ -45,7 +45,6 @@ model QuestionSet {
   folderId                   Int
   folder                     Folder                  @relation(fields: [folderId], references: [id], onDelete: Cascade)
   questions                  Question[]
-  userReviews                UserQuestionSetReview[] // User's review history for this set
   userAnswers                UserQuestionAnswer[]    // Answers specifically linked to this question set
 
   // U-U-E Scores & Total Mastery
@@ -123,13 +122,13 @@ model UserQuestionAnswer {
   isCorrect        Boolean    // Derived from scoreAchieved
   feedbackFromAI   String?    // Detailed feedback from AI
   answeredAt       DateTime   @default(now())
-  reviewSessionId  Int?       // Link to UserQuestionSetReview
-  reviewSession    UserQuestionSetReview? @relation(fields: [reviewSessionId], references: [id], onDelete: SetNull) // Optional: onDelete: SetNull or Restrict based on desired behavior
   uueFocusTested   String?    // Made optional for migration: The U-U-E focus of the question at the time of answering
   
   confidence       Int?       // User's confidence level (1-5) if provided
   timeSpent        Int        // Time spent answering in seconds
 
+  userStudySessionId Int?              
+  studySession       UserStudySession? @relation(fields: [userStudySessionId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
@@ -137,36 +136,24 @@ model UserQuestionAnswer {
   @@index([questionId])
   @@index([questionSetId])
   @@index([answeredAt])
-  @@index([reviewSessionId])
+  @@index([userStudySessionId])
 }
 
 // Track user's reviews of question sets
-model UserQuestionSetReview {
+model UserStudySession {
   id                           Int                  @id @default(autoincrement())
   userId                       Int
   user                         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  questionSetId                Int
-  questionSet                  QuestionSet          @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
-  
-  sessionStartedAt             DateTime?            // Made optional for migration
-  sessionEndedAt               DateTime             @default(now())
-  questionsReviewedInSession   Json[]               // List of { questionId: Int, scoreAchieved: Float }
-  answers                      UserQuestionAnswer[] // Answers recorded during this review session
+  sessionStartedAt       DateTime?            // When the session began
+  sessionEndedAt         DateTime             @default(now()) // When the session ended
+  timeSpentSeconds       Int                  // Total time for the session in seconds
+  answeredQuestionsCount Int                  // Number of questions answered in this session
 
-  // Snapshots of set scores AFTER this review
-  setUnderstandScoreAfter      Float?               // Made optional for migration: Snapshot of the set's U-score after this review
-  setUseScoreAfter             Float?               // Made optional for migration: Snapshot of the set's U-score after this review
-  setExploreScoreAfter         Float?               // Made optional for migration: Snapshot of the set's E-score after this review
-  setTotalMasteryScoreAfter    Float?               // Made optional for migration: Snapshot of the set's total mastery after this review
-  setNextReviewAtAfter         DateTime?            // Snapshot of the set's next review date after this review
-  setIntervalAfter             Float?               // Snapshot of the set's interval after this review
-  
-  timeSpent                    Int                  // Time spent on review in seconds
+  userQuestionAnswers    UserQuestionAnswer[] // Relation to all answers in this session
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
   @@index([userId])
-  @@index([questionSetId])
   @@index([sessionEndedAt])
 }

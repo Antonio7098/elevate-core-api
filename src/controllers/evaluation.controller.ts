@@ -9,13 +9,15 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { aiService } from '../services/aiService';
 import { EvaluateAnswerRequest } from '../types/ai-service.types';
-import { calculateQuestionSetNextReview, updateQuestionPerformance } from '../services/spacedRepetition.service';
+import { processQuestionSetReview } from '../services/spacedRepetition.service';
+import { FrontendReviewOutcome } from './review.controller';
 
-const prisma = new PrismaClient();
+
+
 
 /**
  * Evaluate a user's answer to a question using AI
@@ -23,326 +25,291 @@ const prisma = new PrismaClient();
  */
 export const evaluateAnswer = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { questionId, userAnswer, updateMastery = true } = req.body;
+    const { questionId, userAnswer, updateMastery = true, timeSpentOnQuestion = 0 } = req.body; // Added timeSpentOnQuestion
     const userId = req.user?.userId;
-    
+
     if (!userId) {
       res.status(401).json({ message: 'User not authenticated' });
       return;
     }
-    
-    // Retrieve the question and verify ownership
+
     const question = await prisma.question.findFirst({
       where: {
         id: questionId,
-        questionSet: {
-          folder: {
-            userId: userId
-          }
-        }
+        questionSet: { folder: { userId: userId } }
       },
-      include: {
-        questionSet: {
-          include: {
-            folder: {
-              select: {
-                name: true
-              }
-            }
-          }
-        }
-      }
+      include: { questionSet: { include: { folder: true } } }
     });
-    
-    if (!question) {
-      res.status(404).json({ message: 'Question not found or access denied' });
+
+    if (!question || !question.questionSet) { // Ensure questionSet is available
+      res.status(404).json({ message: 'Question not found, not part of a set, or access denied' });
       return;
     }
-    
-    // Check if AI service is available
+
     const isAIServiceAvailable = await aiService.isAvailable();
-
-    // Define a variable to hold the data for UserQuestionAnswer
-    let questionAnswerDataForDb: {
-      questionId: number;
-      isCorrect: boolean;
-      userAnswerText: string;
-      timeSpent: number;
-      confidence?: number;
-      scoreAchieved?: number;
-    };
-    
+    console.log(`Controller: isAIServiceAvailable resolved to: ${isAIServiceAvailable} for questionId: ${questionId}`);
+    let evaluationResult: any; // To store AI or manual evaluation outcome
     let clientResponsePayload: any;
+    let scoreForSr: number; // Normalized score (0-5) for Spaced Repetition
 
-    if (!isAIServiceAvailable) {
-      // Fallback to simple evaluation for multiple-choice or true-false questions
-      if (question.questionType === 'multiple-choice' || question.questionType === 'true-false') {
-        const isCorrect = userAnswer.trim().toLowerCase() === (question.answer || '').trim().toLowerCase();
-        const currentMarksAvailable = question.marksAvailable || 1; // Default to 1
-        
-        questionAnswerDataForDb = {
-          questionId: question.id,
-          isCorrect: isCorrect,
-          userAnswerText: userAnswer, // Store original user answer from req.body for UserQuestionAnswer
-          timeSpent: 0, // Placeholder, consider passing actual time from frontend
-          confidence: 3, // Default confidence
-          scoreAchieved: isCorrect ? currentMarksAvailable : 0 // Raw score
-        };
+    // Helper function to determine if AI evaluation is required
+    const isAIEvaluationRequired = (qType: string): boolean => {
+      return !['multiple-choice', 'true-false', 'short-answer-exact'].includes(qType);
+    };
 
-        // Update question stats
-        if (updateMastery) {
-          await prisma.question.update({
-          where: { id: questionId },
-          data: {
-            lastAnswerCorrect: isCorrect,
-            timesAnsweredCorrectly: isCorrect ? { increment: 1 } : undefined,
-            timesAnsweredIncorrectly: isCorrect ? undefined : { increment: 1 },
-          }
-        });
-
-        // Log the answer attempt
-        await updateQuestionPerformance([questionAnswerDataForDb], userId);
-       }
-        
-        // if (updateMastery) { // Temporarily comment out this block
-        //   let scoreUpdate = {};
-        //   const uueFocus = (question as any).uueFocus || 'Understand';
-        //   
-        //   if (uueFocus === 'Understand') {
-        //     scoreUpdate = {
-        //       understandScore: isCorrect 
-        //         ? Math.min(100, (question.questionSet.understandScore || 0) + 5)
-        //         : Math.max(0, (question.questionSet.understandScore || 0) - 3)
-        //     };
-        //   } else if (uueFocus === 'Use') {
-        //     scoreUpdate = {
-        //       useScore: isCorrect 
-        //         ? Math.min(100, (question.questionSet.useScore || 0) + 5)
-        //         : Math.max(0, (question.questionSet.useScore || 0) - 3)
-        //     };
-        //   } else if (uueFocus === 'Explore') {
-        //     scoreUpdate = {
-        //       exploreScore: isCorrect 
-        //         ? Math.min(100, (question.questionSet.exploreScore || 0) + 5)
-        //         : Math.max(0, (question.questionSet.exploreScore || 0) - 3)
-        //     };
-        //   }
-        //   
-        //   const reviewData = {
-        //     userId,
-        //     questionSetId: question.questionSet.id,
-        //     understandScore: question.questionSet.understandScore || 0,
-        //     useScore: question.questionSet.useScore || 0,
-        //     exploreScore: question.questionSet.exploreScore || 0,
-        //     overallScore: Math.round(((
-        //       (question.questionSet.understandScore || 0) + 
-        //       (question.questionSet.useScore || 0) + 
-        //       (question.questionSet.exploreScore || 0)
-        //     )) / 3),
-        //     timeSpent: 0, 
-        //     questionAnswers: [questionAnswerDataForDb], // Use the structured data
-        //     ...scoreUpdate
-        //   };
-        //   
-        //   await calculateQuestionSetNextReview(question.questionSet.id, reviewData);
-        // }
-        
-        clientResponsePayload = {
-          evaluation: {
-            isCorrect,
-            score: (questionAnswerDataForDb.scoreAchieved ?? 0) / currentMarksAvailable, // Normalized score 0-1 for client
-            feedback: isCorrect 
-              ? 'Correct! Well done.' 
-              : `Incorrect. The correct answer is: ${question.answer}`,
-            correctedAnswer: question.answer,
-            marksAvailable: currentMarksAvailable,
-            scoreAchieved: questionAnswerDataForDb.scoreAchieved // Raw score for client
-          }
-        };
-        res.status(200).json(clientResponsePayload);
-        return;
-      }
-      
-      // For other question types without AI, mark as pending evaluation or simple feedback
-      questionAnswerDataForDb = {
-        questionId: question.id,
-        isCorrect: false, // Cannot determine
-        userAnswerText: userAnswer, // Store original user answer from req.body for UserQuestionAnswer
-        timeSpent: 0,
-        scoreAchieved: 0 // No score awarded
-      };
-      await updateQuestionPerformance([questionAnswerDataForDb], userId);
-      
+    if (!isAIServiceAvailable && isAIEvaluationRequired(question.questionType)) {
+      // AI needed but unavailable: Record answer, mark as pending, inform user
+      scoreForSr = 0; // No evaluation, so score is 0 for SR
       clientResponsePayload = {
-        evaluation: {
-          isCorrect: null, // Undetermined
-          score: null,     // Undetermined
-          feedback: 'This question type requires AI evaluation, which is currently unavailable. Your answer has been recorded.',
-          pendingEvaluation: true,
-          marksAvailable: question.marksAvailable || 1,
-          scoreAchieved: 0
-        },
-        fallback: false
-      };
-      res.status(503).json(clientResponsePayload);
-      return;
-    }
-
-    // AI Path
-    try {
-      const currentMarksAvailableForAI = question.marksAvailable || 1;
-      const aiRequest: EvaluateAnswerRequest = {
-        questionContext: {
-          questionId: question.id,
-          questionText: question.text,
-          expectedAnswer: question.answer || undefined,
-          questionType: question.questionType,
-          options: (question as any).options || [], // Assuming options might be on the question object
-          marksAvailable: currentMarksAvailableForAI
-        },
-        userAnswer: userAnswer, // AI Service expects 'userAnswer'
-        context: {
-          questionSetName: question.questionSet.name,
-          folderName: question.questionSet.folder?.name
-        }
-      };
-
-      const aiEvaluationResult = await aiService.evaluateAnswer(aiRequest);
-
-      let rawScoreFromAI: number;
-      let isCorrectFromAI: boolean;
-
-      if (aiEvaluationResult.success && aiEvaluationResult.evaluation) {
-        const evalData = aiEvaluationResult.evaluation;
-        rawScoreFromAI = Math.round(evalData.score * currentMarksAvailableForAI);
-        // Ensure rawScoreFromAI is within 0 and currentMarksAvailableForAI
-        rawScoreFromAI = Math.max(0, Math.min(rawScoreFromAI, currentMarksAvailableForAI));
-
-        if (evalData.isCorrect === true) {
-          isCorrectFromAI = true;
-        } else if (evalData.isCorrect === 'partially_correct') {
-          isCorrectFromAI = true; // Treat partially correct as correct for this flag
-        } else if (evalData.isCorrect === false) {
-          isCorrectFromAI = false;
-        } else {
-          // Fallback if isCorrect is not a recognized boolean or 'partially_correct'
-          isCorrectFromAI = rawScoreFromAI / currentMarksAvailableForAI >= 0.5; 
-        }
-        
-        questionAnswerDataForDb = {
-          questionId: question.id,
-          isCorrect: isCorrectFromAI,
-          userAnswerText: userAnswer, // Store original user answer from req.body for UserQuestionAnswer
-          timeSpent: 0, // Placeholder
-          scoreAchieved: rawScoreFromAI,
-          confidence: aiEvaluationResult.metadata?.confidenceScore // Store confidence if available
-        };
-
-        clientResponsePayload = {
-          evaluation: {
-            isCorrect: (typeof evalData.isCorrect === 'string' && ['correct', 'partially_correct', 'incorrect'].includes(evalData.isCorrect)) 
-                       ? evalData.isCorrect 
-                       : isCorrectFromAI,
-            score: evalData.score, // Normalized 0-1 score from AI
-            feedback: evalData.feedback || (isCorrectFromAI ? 'Correct.' : 'Needs improvement.'),
-            correctedAnswer: evalData.correctedAnswer,
-            marksAvailable: currentMarksAvailableForAI,
-            scoreAchieved: rawScoreFromAI // Raw score
-          },
-          metadata: aiEvaluationResult.metadata 
-        };
-
-      } else {
-        // AI service call was not successful or evaluation block is missing
-        console.error('AI evaluation failed or returned unexpected structure:', aiEvaluationResult);
-        rawScoreFromAI = 0;
-        isCorrectFromAI = false;
-        questionAnswerDataForDb = {
-          questionId: question.id,
-          isCorrect: false,
-          userAnswerText: userAnswer, // Store original answer
-          timeSpent: 0,
-          scoreAchieved: 0
-        };
-        clientResponsePayload = {
-          evaluation: {
-            isCorrect: null,
-            score: null,
-            feedback: 'AI evaluation was inconclusive. Answer recorded.',
-            pendingEvaluation: true,
-            marksAvailable: currentMarksAvailableForAI,
-            scoreAchieved: 0
-          }
-        };
-      }
-
-      // Update question stats (remove difficultyScore)
-      if (updateMastery) {
-        await prisma.question.update({
-        where: { id: questionId },
-        data: {
-          lastAnswerCorrect: isCorrectFromAI,
-          timesAnsweredCorrectly: isCorrectFromAI ? { increment: 1 } : undefined,
-          timesAnsweredIncorrectly: isCorrectFromAI ? undefined : { increment: 1 },
-        }
-      });
-      }
-
-      // Log the answer attempt
-      if (updateMastery && questionAnswerDataForDb) {
-         await updateQuestionPerformance([questionAnswerDataForDb], userId);
-      }
-      
-      res.status(200).json(clientResponsePayload);
-
-    } catch (aiError: any) {
-      console.error('AI evaluation error:', aiError);
-      // Fallback if AI evaluation fails catastrophically
-      questionAnswerDataForDb = {
-        questionId: question.id,
-        isCorrect: false, // Cannot determine
-        userAnswerText: userAnswer,
-        timeSpent: 0,
-        scoreAchieved: 0 // No score awarded
-      };
-      await updateQuestionPerformance([questionAnswerDataForDb], userId);
-
-      res.status(500).json({
-        message: 'AI evaluation service failed. Your answer has been recorded.',
-        error: aiError.message || 'Unknown AI error',
         evaluation: {
           isCorrect: null,
           score: null,
-          feedback: 'AI evaluation service failed. Your answer has been recorded but could not be evaluated.',
+          feedback: 'AI evaluation is currently unavailable. Your answer has been recorded and will be evaluated later.',
           pendingEvaluation: true,
           marksAvailable: question.marksAvailable || 1,
-          scoreAchieved: 0
-        }
-      });
-    }
-
-  } catch (error) {
-    console.error('Error evaluating answer:', error);
-    // Ensure a UserQuestionAnswer record is created even in case of an unexpected error after initial checks
-    // This helps in auditing and debugging, but only if userId and questionId are available.
-    const { questionId } = req.body;
-    const userId = req.user?.userId;
-    if (userId && questionId) {
-      try {
-        const errorAnswerData = {
-          questionId: parseInt(questionId as string, 10),
-          isCorrect: false, // Mark as incorrect due to error
-          userAnswerText: req.body.userAnswer || "Error during processing",
-          timeSpent: 0,
-          confidence: 0,
           scoreAchieved: 0,
-          notes: `Error: ${error instanceof Error ? error.message : String(error)}` // Add error note
+        },
+        message: 'AI evaluation service unavailable. Answer recorded for later evaluation.',
+        fallback: false // Added as per test expectation
+      };
+      // Update question stats: increment timesAnsweredIncorrectly as it's unevaluated
+      if (updateMastery) {
+        await prisma.question.update({
+          where: { id: questionId },
+          data: { timesAnsweredIncorrectly: { increment: 1 } },
+        });
+      }
+      res.status(503).json(clientResponsePayload);
+
+    } else if (!isAIEvaluationRequired(question.questionType) || (!isAIServiceAvailable && !isAIEvaluationRequired(question.questionType))) {
+      // Manual evaluation path (MCQ, T/F, Short-Answer-Exact) OR AI not needed and not available
+      const userAnswerTrimmed = userAnswer.trim().toLowerCase();
+      const correctAnswerTrimmed = (question.answer || '').trim().toLowerCase();
+      const isCorrect = userAnswerTrimmed === correctAnswerTrimmed;
+      const marksAvailable = question.marksAvailable || 1;
+      const scoreAchieved = isCorrect ? marksAvailable : 0;
+      scoreForSr = isCorrect ? 5 : 1; // Max score for correct, min for incorrect
+
+      evaluationResult = {
+        isCorrect: isCorrect,
+        score: scoreAchieved / marksAvailable, // Normalized 0-1
+        feedback: isCorrect ? 'Correct!' : `Incorrect. The correct answer is: ${question.answer}`,
+        correctedAnswer: question.answer,
+        marksAvailable: marksAvailable,
+        scoreAchieved: scoreAchieved,
+      };
+      clientResponsePayload = { evaluation: evaluationResult };
+
+      if (updateMastery) {
+        await prisma.question.update({
+          where: { id: questionId },
+          data: {
+            timesAnsweredCorrectly: isCorrect ? { increment: 1 } : undefined,
+            timesAnsweredIncorrectly: !isCorrect ? { increment: 1 } : undefined,
+          },
+        });
+      }
+      res.status(200).json(clientResponsePayload);
+
+    } else {
+      // AI Evaluation Path
+      try {
+        const marksAvailable = question.marksAvailable || 1;
+        // Construct the payload for the AI service, conforming to EvaluateAnswerRequest.
+        const aiServicePayload: EvaluateAnswerRequest = {
+          questionContext: {
+            questionId: question.id,
+            questionText: question.text,
+            expectedAnswer: question.answer || undefined,
+            questionType: question.questionType,
+            options: (question as any).options || [],
+            marksAvailable: marksAvailable,
+          },
+          userAnswer: userAnswer,
+          context: {
+            questionSetName: question.questionSet.name,
+            folderName: question.questionSet.folder?.name,
+          }
         };
-        await updateQuestionPerformance([errorAnswerData], userId);
-      } catch (dbError) {
-        console.error('Failed to log error answer to DB:', dbError);
+
+        console.log('aiServicePayload before call (EvaluateAnswerRequest structure):', JSON.stringify(aiServicePayload, null, 2));
+
+        // Call the AI service. Cast to 'any' to bypass TypeScript type checking for this
+        // temporary payload structure, as aiService.evaluateAnswer expects EvaluateAnswerRequest.
+        const aiResult = await aiService.evaluateAnswer(aiServicePayload);
+
+        if (aiResult.success && aiResult.evaluation) {
+          const evalData = aiResult.evaluation;
+          const scoreAchieved = Math.max(0, Math.min(Math.round(evalData.score * marksAvailable), marksAvailable));
+          let isCorrectFlagForStats: boolean;
+
+          if (typeof evalData.isCorrect === 'boolean') {
+            isCorrectFlagForStats = evalData.isCorrect;
+          } else if (evalData.isCorrect === 'partially_correct') {
+            isCorrectFlagForStats = true; // Treat as correct for stats if partially correct
+          } else {
+            isCorrectFlagForStats = scoreAchieved / marksAvailable >= 0.5; // Fallback based on score
+          }
+          
+          // Map AI score (0-1 normalized) to SR score (0-5)
+          if (evalData.score === 0) scoreForSr = 0;
+          else if (evalData.score < 0.2) scoreForSr = 1;
+          else if (evalData.score < 0.4) scoreForSr = 2;
+          else if (evalData.score < 0.6) scoreForSr = 3;
+          else if (evalData.score < 0.8) scoreForSr = 4;
+          else scoreForSr = 5;
+
+          evaluationResult = {
+            isCorrect: evalData.isCorrect, // This can be boolean or 'partially_correct', 'incorrect'
+            score: evalData.score, // Normalized 0-1
+            feedback: evalData.feedback,
+            correctedAnswer: evalData.correctedAnswer,
+            marksAvailable: marksAvailable,
+            scoreAchieved: scoreAchieved,
+          };
+          clientResponsePayload = {
+            evaluation: evaluationResult,
+            metadata: aiResult.metadata ? {
+              processingTime: aiResult.metadata.processingTime,
+              model: aiResult.metadata.model,
+              confidenceScore: aiResult.metadata.confidenceScore,
+            } : undefined,
+          };
+
+          if (updateMastery) {
+            await prisma.question.update({
+              where: { id: questionId },
+              data: {
+                timesAnsweredCorrectly: isCorrectFlagForStats ? { increment: 1 } : undefined,
+                timesAnsweredIncorrectly: !isCorrectFlagForStats ? { increment: 1 } : undefined,
+              },
+            });
+          }
+          res.status(200).json(clientResponsePayload);
+        } else {
+          // AI evaluation failed or inconclusive
+          console.error('AI evaluation inconclusive:', aiResult);
+          scoreForSr = 0; // Treat as incorrect for SR
+          clientResponsePayload = {
+            evaluation: {
+              isCorrect: null,
+              score: null,
+              feedback: aiResult.evaluation?.feedback || 'AI evaluation was inconclusive. Your answer has been recorded.',
+              pendingEvaluation: true,
+              marksAvailable: question.marksAvailable || 1,
+              scoreAchieved: 0,
+            },
+             message: 'AI evaluation inconclusive. Answer recorded for potential manual review.'
+          };
+           if (updateMastery) {
+            await prisma.question.update({ // Still update attempt count
+              where: { id: questionId },
+              data: { timesAnsweredIncorrectly: { increment: 1 } },
+            });
+          }
+          res.status(200).json(clientResponsePayload); // 200 because answer recorded, but evaluation is pending/failed
+        }
+      } catch (aiError: any) {
+        console.error('AI service error during evaluation:', aiError);
+        scoreForSr = 0; // Treat as incorrect for SR
+        clientResponsePayload = {
+          message: 'AI evaluation service encountered an error. Your answer has been recorded.',
+          error: aiError.message || 'Unknown AI error',
+          evaluation: {
+            isCorrect: null,
+            score: null,
+            feedback: 'AI evaluation service failed. Your answer has been recorded.',
+            pendingEvaluation: true,
+            marksAvailable: question.marksAvailable || 1,
+            scoreAchieved: 0,
+          },
+        };
+        if (updateMastery) {
+          await prisma.question.update({ // Still update attempt count
+            where: { id: questionId },
+            data: { timesAnsweredIncorrectly: { increment: 1 } },
+          });
+        }
+        res.status(500).json(clientResponsePayload);
       }
     }
-    next(error);
+
+    // Spaced Repetition Update (common path, if updateMastery is true and questionSet exists)
+    if (updateMastery && question.questionSet) {
+      const outcomeForSpacedRepetition = {
+        questionId: question.id, // Use number directly, as expected by processQuestionSetReview
+        scoreAchieved: scoreForSr, // Use the 0-5 score
+        userAnswerText: userAnswer,
+        timeSpentOnQuestion: timeSpentOnQuestion, // Use from request body
+        // uueFocus is not part of the 'outcomes' element structure for processQuestionSetReview.
+        // The service function will derive uueFocus from the question object it fetches.
+      };
+
+      try {
+        await processQuestionSetReview(
+          userId,
+          [outcomeForSpacedRepetition],
+          new Date(), // sessionStartTime (can be approximated or passed from client)
+          0 // sessionDurationSeconds (can be approximated or passed from client if this is a single Q eval)
+        );
+      } catch (srError) {
+        console.error(`Spaced repetition update failed for question ${questionId} in set ${question.questionSet.id}:`, srError);
+        // Log error, but don't let SR failure break the primary evaluation flow response to client
+      }
+    } else if (updateMastery && !question.questionSet) {
+        console.warn(`SR update skipped for question ${questionId}: Question set missing.`);
+    }
+
+  } catch (error: any) {
+    console.error('Overall error in evaluateAnswer:', error);
+    // Generic error handling
+    const { questionId: qIdFromReqString, userAnswer: uaFromReq, updateMastery: umFromReq = true } = req.body;
+    const uIdFromReq = req.user?.userId;
+
+    if (uIdFromReq && qIdFromReqString && umFromReq) {
+        try {
+            const numericQId = parseInt(qIdFromReqString, 10);
+            if (isNaN(numericQId)) {
+                console.error(`Invalid questionId format in request body: ${qIdFromReqString}`);
+                // Optionally, you might want to send a 400 response here
+                // For now, we'll let it proceed, and it might fail further down if qExists is null
+            }
+
+            const qExists = await prisma.question.findUnique({ 
+                where: { id: numericQId }, // Use parsed numeric ID
+                include: { questionSet: true } 
+            });
+
+            if (qExists && qExists.questionSet) {
+                 const fallbackOutcomeTyped: FrontendReviewOutcome = {
+                    questionId: numericQId.toString(), // Store as string for FrontendReviewOutcome type
+                    scoreAchieved: 0,
+                    userAnswerText: uaFromReq || "Error during processing",
+                    timeSpentOnQuestion: req.body.timeSpentOnQuestion || 0,
+                    uueFocus: (qExists.uueFocus === "Understand" || qExists.uueFocus === "Use" || qExists.uueFocus === "Explore") ? qExists.uueFocus : undefined,
+                };
+
+                // Construct the payload for processQuestionSetReview with numeric questionId and correct fields
+                const reviewOutcomeForService = {
+                    questionId: numericQId, // Use numeric ID for the service
+                    scoreAchieved: fallbackOutcomeTyped.scoreAchieved,
+                    userAnswerText: fallbackOutcomeTyped.userAnswerText,
+                    timeSpentOnQuestion: fallbackOutcomeTyped.timeSpentOnQuestion,
+                    // uueFocus is not part of the type expected by processQuestionSetReview's outcomes
+                };
+
+                await processQuestionSetReview(
+                    uIdFromReq,
+                    [reviewOutcomeForService],
+                    new Date(),
+                    0
+                );
+                console.log(`Fallback SR update for question ${numericQId} due to error: ${error.message}`);
+            }
+        } catch (dbError) {
+            console.error('Failed to log error answer to SR/DB in global catch:', dbError);
+        }
+    }
+    next(error); // Pass to global error handler
   }
 };

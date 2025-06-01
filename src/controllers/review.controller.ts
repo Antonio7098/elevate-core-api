@@ -16,7 +16,7 @@ import {
 const prisma = new PrismaClient();
 
 // Type for Question Set with related data
-type QuestionSetWithRelations = QuestionSet & {
+export type QuestionSetWithRelations = QuestionSet & {
   questions: Question[];
   folder: {
     id: number;
@@ -25,8 +25,8 @@ type QuestionSetWithRelations = QuestionSet & {
   };
 };
 
-// Type for prioritized question with uueFocus field
-type PrioritizedQuestion = Question & {
+// Interface for prioritized question, extending the base Prisma Question type
+export interface PrioritizedQuestion extends Question {
   priorityScore: number;
   uueFocus: string;
 };
@@ -72,7 +72,7 @@ export const getTodayReviews = async (req: AuthRequest, res: Response, next: Nex
         lastReviewedAt: set.lastReviewedAt,
         reviewCount: set.reviewCount,
         // First few questions as preview
-        previewQuestions: set.questions.slice(0, 3).map(q => ({
+        previewQuestions: set.questions.slice(0, 3).map((q: Question) => ({
           id: q.id,
           text: q.text,
           questionType: q.questionType,
@@ -125,7 +125,7 @@ export const getReviewQuestions = async (req: AuthRequest, res: Response, next: 
       questionSetId,
       questionSetName: questionSet.name,
       count: questions.length,
-      questions: questions.map(q => ({
+      questions: questions.map((q: PrioritizedQuestion) => ({
         id: q.id,
         text: q.text,
         questionType: q.questionType,
@@ -252,7 +252,6 @@ export const submitReview = async (req: AuthRequest, res: Response, next: NextFu
 
     const updatedQuestionSet = await processQuestionSetReview(
       userId,
-      questionSetId,
       processedOutcomes,
       sessionStartTime, 
       sessionDurationSeconds 

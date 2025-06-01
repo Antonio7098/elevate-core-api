@@ -1,10 +1,9 @@
-import { PrismaClient, QuestionSet, UserQuestionSetReview } from '@prisma/client';
+import prisma from '../lib/prisma';
+import { QuestionSet, UserStudySession, Prisma } from '@prisma/client';
 import createError from 'http-errors';
 
-const prisma = new PrismaClient();
-
 export interface QuestionSetStatsDetails {
-  masteryHistory: any[]; // Prisma.JsonValue[] but any[] for simplicity here
+  masteryHistory: Prisma.JsonValue[];
   reviewCount: number;
   reviewDates: Date[];
   currentSRStatus: {
@@ -12,7 +11,7 @@ export interface QuestionSetStatsDetails {
     nextReviewAt: Date | null;
     currentIntervalDays: number | null;
     currentForgottenPercentage: number | null;
-    forgettingCurveParams: any | null; // Prisma.JsonValue but any for simplicity
+    forgettingCurveParams: Prisma.JsonValue | null;
   };
   understandScore: number;
   useScore: number;
@@ -39,10 +38,14 @@ export const fetchQuestionSetStatsDetails = async (
     throw createError(403, 'User does not have access to this QuestionSet.');
   }
 
-  const reviewSessions = await prisma.userQuestionSetReview.findMany({
+  const reviewSessions = await prisma.userStudySession.findMany({
     where: {
       userId,
-      questionSetId,
+      userQuestionAnswers: {
+        some: {
+          questionSetId: questionSetId,
+        },
+      },
     },
     orderBy: {
       sessionEndedAt: 'asc',
@@ -52,10 +55,10 @@ export const fetchQuestionSetStatsDetails = async (
     },
   });
 
-  const reviewDates = reviewSessions.map(rs => rs.sessionEndedAt);
+  const reviewDates = reviewSessions.map((rs: { sessionEndedAt: Date }) => rs.sessionEndedAt);
 
   return {
-    masteryHistory: questionSet.masteryHistory.filter(h => h !== null), // Ensure no nulls
+    masteryHistory: questionSet.masteryHistory.filter((h: Prisma.JsonValue | null) => h !== null) as Prisma.JsonValue[], // Ensure no nulls
     reviewCount: questionSet.reviewCount,
     reviewDates,
     currentSRStatus: {
@@ -80,7 +83,7 @@ export interface QuestionSetSummary {
 }
 
 export interface FolderStatsDetails {
-  masteryHistory: any[]; // Prisma.JsonValue[]
+  masteryHistory: Prisma.JsonValue[];
   totalReviewSessionsInFolder: number;
   questionSetSummaries: QuestionSetSummary[];
 }
@@ -114,7 +117,7 @@ export const fetchFolderStatsDetails = async (
     },
   });
 
-  const questionSetSummaries: QuestionSetSummary[] = questionSetsInFolder.map(qs => ({
+  const questionSetSummaries: QuestionSetSummary[] = questionSetsInFolder.map(qs => ({ // qs is implicitly typed by Prisma based on the select statement
     id: qs.id,
     name: qs.name,
     currentTotalMasteryScore: qs.currentTotalMasteryScore,
@@ -123,17 +126,21 @@ export const fetchFolderStatsDetails = async (
 
   // Calculate total review sessions in the folder
   const questionSetIds = questionSetsInFolder.map(qs => qs.id);
-  const totalReviewSessionsInFolder = await prisma.userQuestionSetReview.count({
+  const totalReviewSessionsInFolder = await prisma.userStudySession.count({
     where: {
       userId,
-      questionSetId: {
-        in: questionSetIds,
+      userQuestionAnswers: {
+        some: {
+          questionSetId: {
+            in: questionSetIds,
+          },
+        },
       },
     },
   });
 
   return {
-    masteryHistory: folder.masteryHistory.filter(h => h !== null), // Ensure no nulls
+    masteryHistory: folder.masteryHistory.filter((h: Prisma.JsonValue | null) => h !== null) as Prisma.JsonValue[], // Ensure no nulls
     totalReviewSessionsInFolder,
     questionSetSummaries,
   };
