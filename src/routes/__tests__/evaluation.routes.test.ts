@@ -1,6 +1,18 @@
 import request from 'supertest';
 import app from '../../app';
 import { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient as PrismaClientType } from '@prisma/client'; // For typing mocks
+
+// Utility type for deep partial mocks of Prisma client and its delegates
+type DeepPartialMocked<T> = T extends (...args: any[]) => any // Base case for T itself being a function
+  ? jest.Mock // If T is a function, its mock is jest.Mock
+  : T extends object
+    ? {
+        [P in keyof T]?: T[P] extends (...args: any[]) => any // If property T[P] is a function
+          ? jest.Mock // Then its mock type in the partial mock is jest.Mock
+          : DeepPartialMocked<T[P]>; // Otherwise, recurse for nested objects
+      }
+    : T;
 import { aiService } from '../../services/aiService';
 
 // Mock the AI service
@@ -12,9 +24,9 @@ jest.mock('../../services/aiService', () => ({
 }));
 
 // Mock Prisma
-jest.mock('@prisma/client', () => {
-  const mockPrismaClient = {
-    question: {
+jest.mock('@prisma/client', (): { PrismaClient: jest.Mock<PrismaClientType> } => {
+  const mockPrismaClient: DeepPartialMocked<PrismaClientType> = {
+    question: { /* Prisma.QuestionDelegate */
       findFirst: jest.fn(),
       update: jest.fn(),
       findUnique: jest.fn().mockImplementation((args) => {
@@ -26,37 +38,59 @@ jest.mock('@prisma/client', () => {
       }),
     },
     questionSet: {
-      findUnique: jest.fn(),
-      update: jest.fn(),
+      findUnique: jest.fn().mockImplementation((args) => {
+        if (args && args.where && args.where.id) {
+          return Promise.resolve({
+            id: args.where.id,
+            name: 'Mock Question Set',
+            currentTotalMasteryScore: 50,
+            understandScore: 50,
+            useScore: 50,
+            exploreScore: 50,
+            currentUUESetStage: 'Understand',
+            questions: [{ id: 1, uueFocus: 'Understand', questionSetId: args.where.id, currentMasteryScore: 50 }], // Ensure all selected fields are present
+            folderId: 1,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            userId: 1, // Assuming a userId is associated or available via folder
+            folder: { userId: 1 } // Ensure folder.userId is available if service logic needs it
+          });
+        }
+        return Promise.resolve(null);
+      }),
+      update: jest.fn().mockImplementation((args) => {
+        if (args && args.data && args.where && args.where.id) {
+          // Return an object that merges the ID with the update data
+          return Promise.resolve({ id: args.where.id, ...args.data });
+        }
+        return Promise.resolve(null);
+      }),
     },
-    userQuestionAnswer: {
-      create: jest.fn(),
+    userQuestionAnswer: { /* Prisma.UserQuestionAnswerDelegate */
+      create: jest.fn().mockImplementation((args) => {
+        if (args && args.data) {
+          return Promise.resolve({
+            id: Math.floor(Math.random() * 10000),
+            ...args.data,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+        return Promise.resolve(null);
+      }),
     },
-    userQuestionSetProgress: {
-      findMany: jest.fn().mockResolvedValue([]), // Default to empty array
-      upsert: jest.fn().mockImplementation(args => Promise.resolve({ 
-        userId: args.create.userId,
-        questionSetId: args.create.questionSetId,
-        currentTotalMasteryScore: args.create.currentTotalMasteryScore || 0,
-        currentForgottenPercentage: args.create.currentForgottenPercentage || 0,
-        currentIntervalDays: args.create.currentIntervalDays || 0,
-        lastReviewedAt: args.create.lastReviewedAt || new Date(),
-        nextReviewAt: args.create.nextReviewAt || new Date(),
-        isNewlyLearned: args.create.isNewlyLearned || false,
-        uueFocusDistribution: args.create.uueFocusDistribution || { Understand: 0, Use: 0, Explore: 0 },
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })),
-    },
-    userStudySession: { // Added mock for userStudySession
+
+    userStudySession: { /* Prisma.UserStudySessionDelegate */ // Added mock for userStudySession
       create: jest.fn().mockResolvedValue({ id: 1, userId: 1, sessionStartedAt: new Date(), sessionEndedAt: new Date(), timeSpentSeconds: 0, answeredQuestionsCount: 1 }), // Ensure it returns an ID
     },
     $disconnect: jest.fn(),
     // Added mock for $transaction
-    $transaction: jest.fn(async (callback) => callback(mockPrismaClient)),
+    $transaction: jest.fn(async (callback: (tx: Prisma.TransactionClient) => Promise<any>) => 
+      callback(mockPrismaClient as unknown as Prisma.TransactionClient)
+    ),
   };
   return {
-    PrismaClient: jest.fn(() => mockPrismaClient),
+    PrismaClient: jest.fn(() => mockPrismaClient as unknown as PrismaClientType),
   };
 });
 
@@ -121,8 +155,7 @@ describe('Evaluation Routes', () => {
         overallMasteryScore: 75,
         understandScore: 85,
         useScore: 65,
-        exploreScore: 55,
-        nextReviewAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
+        exploreScore: 55
       });
 
       // Mock AI service is unavailable
@@ -163,9 +196,12 @@ describe('Evaluation Routes', () => {
         answer: 'Photosynthesis is the process used by plants to convert light energy into chemical energy.',
         questionType: 'short-answer',
         options: [],
+        questionSetId: 1, // Added top-level questionSetId
         questionSet: {
+          id: 1, // Added id for questionSet
           name: 'Biology',
           folder: {
+            id: 1, // Added id for folder
             name: 'Science'
           }
         }
@@ -173,8 +209,12 @@ describe('Evaluation Routes', () => {
 
       // Mock updated question
       prisma.question.findUnique.mockResolvedValue({
-        masteryScore: 2,
-        nextReviewAt: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000) // 4 days from now
+        id: 1,
+        text: 'Explain how photosynthesis works.',
+        answer: 'Photosynthesis is the process used by plants to convert light energy into chemical energy.',
+        questionType: 'short-answer',
+        options: [],
+        questionSetId: 1
       });
 
       // Mock AI service is available
@@ -308,9 +348,12 @@ describe('Evaluation Routes', () => {
         answer: 'Quantum computing uses quantum bits...',
         questionType: 'short-answer',
         options: [],
+        questionSetId: 1, // Added top-level questionSetId
         questionSet: {
+          id: 1, // Added id for questionSet
           name: 'Physics',
           folder: {
+            id: 1, // Added id for folder
             name: 'Advanced Topics'
           }
         }

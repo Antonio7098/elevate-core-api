@@ -112,8 +112,8 @@ async function createTestUser() {
                     answer: q.answer,
                     options: q.options || [],
                     questionType: q.questionType,
-                    masteryScore: 0,
-                    nextReviewAt: new Date()
+                    
+                    
                   }))
                 }
               }))

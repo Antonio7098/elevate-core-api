@@ -1,3 +1,5 @@
+console.log('\n\n\n*** SPACED REPETITION SERVICE LOADED (VERSION: 2025-06-02T14:40:00Z) ***\n\n\n');
+
 /**
  * Spaced Repetition Service
  * 
@@ -49,7 +51,7 @@ const MAX_SCORE_PER_QUESTION = 1; // Max score for a question outcome is 1 (0-1 
  */
 export const processQuestionSetReview = async (
   userId: number,
-  outcomes: Array<{
+  originalOutcomes: ReadonlyArray<{ // Renamed original parameter
     questionId: number;
     scoreAchieved: number; // 0-1 from AI eval, or frontend 0-5 converted prior to this call
     userAnswerText?: string;
@@ -58,6 +60,11 @@ export const processQuestionSetReview = async (
   sessionStartTime: Date,
   sessionDurationSeconds: number
 ): Promise<QuestionSet> => {
+  // Create a deep copy of the outcomes to prevent external mutations or unexpected shared references
+  const outcomes = originalOutcomes.map(o => ({ ...o })); // Shallow copy of each object, deep enough for primitive properties
+
+  console.log('[SERVICE DEBUG] processQuestionSetReview received originalOutcomes at function START:', JSON.stringify(originalOutcomes));
+  console.log('[SERVICE DEBUG] processQuestionSetReview using deep-copied outcomes for processing:', JSON.stringify(outcomes));
   return prisma.$transaction(async (tx) => {
     // Step A: Create UserStudySession Record
     const sessionEndedAt = new Date();
@@ -73,7 +80,13 @@ export const processQuestionSetReview = async (
 
     const userQuestionAnswers = [];
     // Step B: Process Each Outcome (Create UserQuestionAnswer records)
-    for (const outcome of outcomes) {
+    for (const loopOutcome of outcomes) { // Corrected loop variable
+      // Explicitly clone the outcome object for this iteration to ensure complete isolation
+      const outcome = { ...loopOutcome };
+      // Alternative deep clone if simple spread isn't enough (though it should be for these flat objects)
+      // const outcome = JSON.parse(JSON.stringify(loopOutcome));
+      console.log(`[SERVICE DEBUG Loop Iteration Start] Processing QID: ${outcome.questionId}, Current outcome object:`, JSON.stringify(outcome));
+      console.log(`[SERVICE DEBUG Before findUnique] QID: ${outcome.questionId}, outcome.scoreAchieved: ${outcome.scoreAchieved}, outcome object:`, JSON.stringify(outcome));
       const question = await tx.question.findUnique({
         where: { id: outcome.questionId },
         select: { 
@@ -85,12 +98,14 @@ export const processQuestionSetReview = async (
           // difficultyScore: true, // Removed, deprecated field
         }
       });
+      console.log(`[SERVICE DEBUG After findUnique] QID: ${outcome.questionId}, outcome.scoreAchieved: ${outcome.scoreAchieved}, outcome object:`, JSON.stringify(outcome));
 
       if (!question || !question.questionSetId) {
         // Throw an error for non-existent questions to trigger a 404 response
         throw new Error(`Question with ID ${outcome.questionId} not found during review processing.`);
       }
 
+      console.log(`[SERVICE DEBUG Before isCorrect calc] QID: ${outcome.questionId}, outcome.scoreAchieved: ${outcome.scoreAchieved}`);
       const isCorrect = outcome.scoreAchieved > 0.6; // Example: Define how isCorrect is derived
 
       const uqa = await tx.userQuestionAnswer.create({
@@ -112,7 +127,9 @@ export const processQuestionSetReview = async (
       // Update Question performance statistics directly
       if (question) { // Ensure question object is available
         const totalMarks = question.totalMarksAvailable || 1; // Default to 1 if not set, ensure it's at least 1
+        console.log(`[SERVICE DEBUG Before normalizedScore calc] QID: ${outcome.questionId}, outcome.scoreAchieved: ${outcome.scoreAchieved}, totalMarks: ${totalMarks}`);
         const normalizedScore = outcome.scoreAchieved / Math.max(1, totalMarks); // Avoid division by zero
+        console.log(`[SERVICE DEBUG processQuestionSetReview Loop] QID: ${outcome.questionId}, outcome.scoreAchieved: ${outcome.scoreAchieved}, totalMarks: ${totalMarks}, normalizedScore: ${normalizedScore}, isCorrect: ${isCorrect}`);
 
         // const difficultyAdjustment = isCorrect ? -0.05 : 0.05; // difficultyScore removed
         // const currentDifficulty = typeof question.difficultyScore === 'number' ? question.difficultyScore : 0.5; // difficultyScore removed
@@ -195,8 +212,8 @@ export const processQuestionSetReview = async (
       // Calculate Understand score
       let totalUnderstandScore = 0;
       for (const q of understandQuestions) {
-        const latestAnswer = answersByQuestionId.get(q.id);
-        const score = latestAnswer ? latestAnswer.scoreAchieved : 0; // Default to 0 if never answered
+        // Use currentMasteryScore from the question, which was updated earlier in the transaction
+        const score = q.currentMasteryScore || 0; 
         totalUnderstandScore += score;
       }
       const understandQuestionsCount = understandQuestions.length;
@@ -206,8 +223,8 @@ export const processQuestionSetReview = async (
       // Calculate Use score
       let totalUseScore = 0;
       for (const q of useQuestions) {
-        const latestAnswer = answersByQuestionId.get(q.id);
-        const score = latestAnswer ? latestAnswer.scoreAchieved : 0; // Default to 0 if never answered
+        // Use currentMasteryScore from the question, which was updated earlier in the transaction
+        const score = q.currentMasteryScore || 0; 
         totalUseScore += score;
       }
       const useQuestionsCount = useQuestions.length;
@@ -217,8 +234,8 @@ export const processQuestionSetReview = async (
       // Calculate Explore score
       let totalExploreScore = 0;
       for (const q of exploreQuestions) {
-        const latestAnswer = answersByQuestionId.get(q.id);
-        const score = latestAnswer ? latestAnswer.scoreAchieved : 0; // Default to 0 if never answered
+        // Use currentMasteryScore from the question, which was updated earlier in the transaction
+        const score = q.currentMasteryScore || 0; 
         totalExploreScore += score;
       }
       const exploreQuestionsCount = exploreQuestions.length;
@@ -363,6 +380,8 @@ export const getDueQuestionSets = async (userId: number): Promise<QuestionSetWit
   now.setHours(0, 0, 0, 0); // Set to beginning of day for comparison
   
   // Get all question sets for the user
+  console.log('[SERVICE DEBUG getDueQuestionSets] typeof prisma.questionSet:', typeof prisma.questionSet);
+  console.log('[SERVICE DEBUG getDueQuestionSets] typeof prisma.questionSet.findMany:', typeof prisma.questionSet?.findMany);
   const questionSets = await prisma.questionSet.findMany({
     where: {
       folder: {
@@ -400,6 +419,8 @@ export const getPrioritizedQuestions = async (
   count: number = 10
 ): Promise<PrioritizedQuestion[]> => {
   // Get the question set with all questions
+  console.log('[SERVICE DEBUG getPrioritizedQuestions] typeof prisma.questionSet:', typeof prisma.questionSet);
+  console.log('[SERVICE DEBUG getPrioritizedQuestions] typeof prisma.questionSet.findUnique:', typeof prisma.questionSet?.findUnique);
   const questionSet = await prisma.questionSet.findUnique({
     where: { id: questionSetId },
     include: {
@@ -515,23 +536,26 @@ export const getUserProgressSummary = async (userId: number) => {
     }
   });
   
-  // Calculate overall statistics
-  const totalSets = questionSets.length;
-  const totalQuestions = questionSets.reduce((sum, set) => sum + set.questions.length, 0);
-  const masteredSets = questionSets.filter(set => set.currentTotalMasteryScore >= 90).length;
-  const progressingSets = questionSets.filter(set => set.currentTotalMasteryScore >= 40 && set.currentTotalMasteryScore < 90).length;
-  const newSets = questionSets.filter(set => set.currentTotalMasteryScore < 40).length;
+  // Ensure we have an array of QuestionSetWithRelations
+  const typedQuestionSets = questionSets as QuestionSetWithRelations[];
   
-  // Calculate average scores
-  const avgUnderstandScore = questionSets.reduce((sum, set) => sum + set.understandScore, 0) / Math.max(1, totalSets);
-  const avgUseScore = questionSets.reduce((sum, set) => sum + set.useScore, 0) / Math.max(1, totalSets);
-  const avgExploreScore = questionSets.reduce((sum, set) => sum + set.exploreScore, 0) / Math.max(1, totalSets);
-  const avgOverallScore = questionSets.reduce((sum, set) => sum + set.currentTotalMasteryScore, 0) / Math.max(1, totalSets);
+  // Calculate overall statistics
+  const totalSets = typedQuestionSets.length;
+  const totalQuestions = typedQuestionSets.reduce((sum, set) => sum + (set.questions?.length || 0), 0);
+  const masteredSets = typedQuestionSets.filter(set => (set.currentTotalMasteryScore || 0) >= 90).length;
+  const progressingSets = typedQuestionSets.filter(set => (set.currentTotalMasteryScore || 0) >= 40 && (set.currentTotalMasteryScore || 0) < 90).length;
+  const newSets = typedQuestionSets.filter(set => (set.currentTotalMasteryScore || 0) < 40).length;
+  
+  // Calculate average scores with null checks
+  const avgUnderstandScore = typedQuestionSets.reduce((sum, set) => sum + (set.understandScore || 0), 0) / Math.max(1, totalSets);
+  const avgUseScore = typedQuestionSets.reduce((sum, set) => sum + (set.useScore || 0), 0) / Math.max(1, totalSets);
+  const avgExploreScore = typedQuestionSets.reduce((sum, set) => sum + (set.exploreScore || 0), 0) / Math.max(1, totalSets);
+  const avgOverallScore = typedQuestionSets.reduce((sum, set) => sum + (set.currentTotalMasteryScore || 0), 0) / Math.max(1, totalSets);
   
   // Get due sets for today
   const now = new Date();
   now.setHours(0, 0, 0, 0);
-  const dueSets = questionSets.filter(set => 
+  const dueSets = typedQuestionSets.filter(set => 
     set.nextReviewAt === null || new Date(set.nextReviewAt) <= now
   ).length;
   
