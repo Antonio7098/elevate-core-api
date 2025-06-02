@@ -54,6 +54,11 @@ export interface GeneratedQuestion {
   answer: string;
   options?: string[];
   explanation?: string;
+  uueFocus?: 'Understand' | 'Use' | 'Explore';
+  difficulty?: string | number;
+  topics?: string[];
+  totalMarksAvailable?: number; // NEW: Total marks available for this question (1-5)
+  markingCriteria?: string[] | string; // NEW: Criteria for marking/grading the answer
 }
 
 /**

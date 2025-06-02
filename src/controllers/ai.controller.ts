@@ -240,6 +240,11 @@ export const generateQuestionsFromSource = async (req: AuthRequest, res: Respons
       answer: q.answer || q.answer_text || null,
       questionType: q.questionType || q.question_type,
       options: { set: q.options || [] },
+      uueFocus: q.uueFocus || 'Understand',
+      difficultyScore: typeof q.difficulty === 'string' ? parseFloat(q.difficulty) || 0.5 : q.difficulty || 0.5,
+      conceptTags: { set: q.topics || [] },
+      totalMarksAvailable: q.totalMarksAvailable || 1, // Using the mapped field name
+      markingCriteria: q.markingCriteria || null, // New field for marking criteria
     }));
 
     const createdQuestionSet = await prisma.questionSet.create({
@@ -261,6 +266,11 @@ export const generateQuestionsFromSource = async (req: AuthRequest, res: Respons
       answer: q.answer || q.answer_text || null,
       questionType: q.questionType || q.question_type,
       options: q.options || [],
+      uueFocus: q.uueFocus || 'Understand',
+      difficulty: q.difficulty || 0.5,
+      topics: q.topics || [],
+      totalMarksAvailable: q.totalMarksAvailable || 1, // New field from AI service
+      markingCriteria: q.markingCriteria || null, // New field from AI service
     }));
 
     res.status(201).json({

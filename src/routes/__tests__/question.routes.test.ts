@@ -82,33 +82,49 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
   describe('Successful Retrieval', () => {
     it('should retrieve all questions for a specific question set', async () => {
       // 1. Create sample questions in user1Qs1
-      await prisma.question.createMany({
-        data: [
-          { 
-            text: 'Q1 Text', 
-            answer: 'A1', 
-            questionSetId: user1Qs1.id, 
-            questionType: 'flashcard',
-            uueFocus: 'Understand',
-            conceptTags: ['concept1', 'concept2'],
-            difficultyScore: 0.5,
-            timesAnsweredCorrectly: 0,
-            timesAnsweredIncorrectly: 0,
-            lastAnswerCorrect: null
-          },
-          { 
-            text: 'Q2 Text', 
-            answer: 'A2', 
-            questionSetId: user1Qs1.id, 
-            questionType: 'flashcard',
-            uueFocus: 'Use',
-            conceptTags: ['concept2', 'concept3'],
-            difficultyScore: 0.7,
-            timesAnsweredCorrectly: 0,
-            timesAnsweredIncorrectly: 0,
-            lastAnswerCorrect: null
-          },
-        ],
+      // Create test questions one by one to handle the JSON field properly
+      await prisma.question.create({
+        data: { 
+          text: 'Q1 Text', 
+          answer: 'A1', 
+          questionSetId: user1Qs1.id, 
+          questionType: 'flashcard',
+          uueFocus: 'Understand',
+          conceptTags: ['concept1', 'concept2'],
+          difficultyScore: 0.5,
+          timesAnsweredCorrectly: 0,
+          timesAnsweredIncorrectly: 0,
+          lastAnswerCorrect: null,
+          // In the schema, totalMarksAvailable is mapped to marksAvailable in the database
+          // but we need to use totalMarksAvailable in the Prisma client
+          totalMarksAvailable: 2, 
+          markingCriteria: [
+            { criterion: 'Basic understanding', marks: 1 },
+            { criterion: 'Detailed explanation', marks: 1 }
+          ]
+        } as any
+      });
+      
+      await prisma.question.create({
+        data: { 
+          text: 'Q2 Text', 
+          answer: 'A2', 
+          questionSetId: user1Qs1.id, 
+          questionType: 'flashcard',
+          uueFocus: 'Use',
+          conceptTags: ['concept2', 'concept3'],
+          difficultyScore: 0.7,
+          timesAnsweredCorrectly: 0,
+          timesAnsweredIncorrectly: 0,
+          lastAnswerCorrect: null,
+          // In the schema, totalMarksAvailable is mapped to marksAvailable in the database
+          // but we need to use totalMarksAvailable in the Prisma client
+          totalMarksAvailable: 4, 
+          markingCriteria: [
+            { criterion: 'Correct application', marks: 2 },
+            { criterion: 'Clear reasoning', marks: 2 }
+          ]
+        } as any
       });
 
       const res = await request(app)
@@ -120,6 +136,16 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
       expect(res.body.length).toBe(2);
       expect(res.body[0]).toHaveProperty('text', 'Q1 Text');
       expect(res.body[1]).toHaveProperty('text', 'Q2 Text');
+      // Verify new question attributes are returned
+      expect(res.body[0]).toHaveProperty('totalMarksAvailable', 2);
+      expect(res.body[0]).toHaveProperty('markingCriteria');
+      expect(res.body[0].markingCriteria).toHaveLength(2);
+      expect(res.body[0].markingCriteria[0]).toHaveProperty('criterion', 'Basic understanding');
+      
+      expect(res.body[1]).toHaveProperty('totalMarksAvailable', 4);
+      expect(res.body[1]).toHaveProperty('markingCriteria');
+      expect(res.body[1].markingCriteria).toHaveLength(2);
+      expect(res.body[1].markingCriteria[1]).toHaveProperty('marks', 2);
     });
 
     it('should return an empty array if the question set has no questions', async () => {
@@ -198,11 +224,21 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
 
   // --- Test cases for POST endpoint ---
   describe('POST /api/folders/:folderId/questionsets/:setId/questions - Create Question', () => {
+    // We need to use totalMarksAvailable in both the request and response
+    // because that's the field name in the Prisma client (though it's mapped to marksAvailable in DB)
     const validQuestionData = {
       text: 'What is the capital of France?',
       questionType: 'multiple-choice',
       options: ['Paris', 'London', 'Berlin', 'Madrid'],
       answer: 'Paris',
+      uueFocus: 'Understand',
+      difficultyScore: 0.5,
+      conceptTags: ['Geography', 'Europe'],
+      totalMarksAvailable: 3, // This is mapped to marksAvailable in the database
+      markingCriteria: [
+        { criterion: 'Correct identification of capital', marks: 1 },
+        { criterion: 'Understanding of European geography', marks: 2 }
+      ]
     };
 
     it('should create a new question successfully with all valid data', async () => {
@@ -218,6 +254,8 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
       expect(res.body.options).toEqual(validQuestionData.options);
       expect(res.body.answer).toEqual(validQuestionData.answer);
       expect(res.body.questionSetId).toEqual(user1Qs1.id);
+      expect(res.body.totalMarksAvailable).toEqual(validQuestionData.totalMarksAvailable);
+      expect(res.body.markingCriteria).toEqual(validQuestionData.markingCriteria);
     });
 
     it('should create a new question successfully with only required data (text, questionType)', async () => {
@@ -261,7 +299,7 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
         .set('Authorization', `Bearer ${user1Token}`)
         .send(validQuestionData);
       expect(res.statusCode).toEqual(404);
-      expect(res.body.message).toEqual('Question set not found in this folder or access denied.');
+      expect(res.body.message).toEqual('Question set not found in this folder.');
     });
 
     it('should return 404 if trying to create a question in another user\'s folder', async () => {

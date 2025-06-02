@@ -113,7 +113,12 @@ describe('AI Controller', () => {
             options: ['Option A', 'Option B', 'Option C'],
             uueFocus: 'Understand',
             conceptTags: ['concept1', 'concept2'],
-            difficultyScore: 0.5
+            difficultyScore: 0.5,
+            totalMarksAvailable: 3,
+            markingCriteria: [
+              { criterion: 'Correct identification of capital', marks: 1 },
+              { criterion: 'Explanation of significance', marks: 2 }
+            ]
           },
           {
             text: 'What is test question 2?',
@@ -122,7 +127,13 @@ describe('AI Controller', () => {
             options: [],
             uueFocus: 'Use',
             conceptTags: ['concept2', 'concept3'],
-            difficultyScore: 0.7
+            difficultyScore: 0.7,
+            totalMarksAvailable: 5,
+            markingCriteria: [
+              { criterion: 'Correct formula', marks: 2 },
+              { criterion: 'Accurate calculation', marks: 2 },
+              { criterion: 'Clear explanation', marks: 1 }
+            ]
           }
         ],
         metadata: {
@@ -148,6 +159,17 @@ describe('AI Controller', () => {
       expect(jsonResponse).toHaveProperty('questionSet');
       expect(jsonResponse.questionSet).toHaveProperty('questions');
       expect(jsonResponse.questionSet.questions.length).toBe(2);
+      
+      // Verify new question attributes are included in the response
+      expect(jsonResponse.questionSet.questions[0]).toHaveProperty('totalMarksAvailable', 3);
+      expect(jsonResponse.questionSet.questions[0]).toHaveProperty('markingCriteria');
+      expect(jsonResponse.questionSet.questions[0].markingCriteria).toHaveLength(2);
+      expect(jsonResponse.questionSet.questions[0].markingCriteria[0]).toHaveProperty('criterion', 'Correct identification of capital');
+      
+      expect(jsonResponse.questionSet.questions[1]).toHaveProperty('totalMarksAvailable', 5);
+      expect(jsonResponse.questionSet.questions[1]).toHaveProperty('markingCriteria');
+      expect(jsonResponse.questionSet.questions[1].markingCriteria).toHaveLength(3);
+      expect(jsonResponse.questionSet.questions[1].markingCriteria[2]).toHaveProperty('marks', 1);
     });
 
     it('should fall back to simulation when AI service is unavailable', async () => {

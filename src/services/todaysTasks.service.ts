@@ -104,15 +104,14 @@ export const getPrioritizedQuestionsFromSet = async (
       uueFocus: true;
       questionType: true;
       currentMasteryScore: true;
-      difficultyScore: true;
       createdAt: true;
       updatedAt: true;
       options: true;
       lastAnswerCorrect: true;
       timesAnsweredCorrectly: true;
       timesAnsweredIncorrectly: true;
-      conceptTags: true;
-      marksAvailable: true;
+      totalMarksAvailable: true;
+      markingCriteria: true;
       userAnswers: {
         select: { scoreAchieved: true; answeredAt: true };
         // orderBy and take are runtime modifiers, not part of the payload type structure here
@@ -135,15 +134,14 @@ export const getPrioritizedQuestionsFromSet = async (
       uueFocus: true,
       questionType: true,
       currentMasteryScore: true,
-      difficultyScore: true, 
-      createdAt: true,       
-      updatedAt: true,     
-      options: true,       
-      lastAnswerCorrect: true, 
-      timesAnsweredCorrectly: true, 
-      timesAnsweredIncorrectly: true, 
-      conceptTags: true,
-      marksAvailable: true,
+      createdAt: true,
+      updatedAt: true,
+      options: true,
+      lastAnswerCorrect: true,
+      timesAnsweredCorrectly: true,
+      timesAnsweredIncorrectly: true,
+      totalMarksAvailable: true,
+      markingCriteria: true,
       userAnswers: { 
         where: { userId },
         select: { scoreAchieved: true, answeredAt: true },
@@ -152,7 +150,6 @@ export const getPrioritizedQuestionsFromSet = async (
       },
     },
     orderBy: [
-      { difficultyScore: 'desc' }, 
       { createdAt: 'asc' }, 
     ],
     take: fetchAll ? undefined : 1,
@@ -176,7 +173,7 @@ export const getPrioritizedQuestionsFromSet = async (
       } else {
         priority += 200; // New question, high priority
       }
-      priority += (q.difficultyScore || 3) * 10; // Difficulty (default to 3 if null)
+      // priority += (q.difficultyScore || 3) * 10; // Difficulty (default to 3 if null) - Field removed
       
       // Add a small factor for age if needed, e.g., based on q.createdAt or lastAnswer.answeredAt
       // For now, this is a basic prioritization

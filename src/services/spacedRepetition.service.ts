@@ -76,6 +76,14 @@ export const processQuestionSetReview = async (
     for (const outcome of outcomes) {
       const question = await tx.question.findUnique({
         where: { id: outcome.questionId },
+        select: { 
+          id: true, 
+          questionSetId: true, 
+          uueFocus: true,
+          currentMasteryScore: true,
+          totalMarksAvailable: true // Added for normalization
+          // difficultyScore: true, // Removed, deprecated field
+        }
       });
 
       if (!question || !question.questionSetId) {
@@ -103,13 +111,12 @@ export const processQuestionSetReview = async (
 
       // Update Question performance statistics directly
       if (question) { // Ensure question object is available
-        const marksAvailable = question.marksAvailable || 5; // Default to 5 if not set
-        const normalizedScore = outcome.scoreAchieved / Math.max(1, marksAvailable); // Avoid division by zero
+        const totalMarks = question.totalMarksAvailable || 1; // Default to 1 if not set, ensure it's at least 1
+        const normalizedScore = outcome.scoreAchieved / Math.max(1, totalMarks); // Avoid division by zero
 
-        const difficultyAdjustment = isCorrect ? -0.05 : 0.05;
-        // Ensure question.difficultyScore is treated as a number, default to 0.5 if null/undefined
-        const currentDifficulty = typeof question.difficultyScore === 'number' ? question.difficultyScore : 0.5;
-        const newDifficultyScore = Math.max(0, Math.min(1, currentDifficulty + difficultyAdjustment));
+        // const difficultyAdjustment = isCorrect ? -0.05 : 0.05; // difficultyScore removed
+        // const currentDifficulty = typeof question.difficultyScore === 'number' ? question.difficultyScore : 0.5; // difficultyScore removed
+        // const newDifficultyScore = Math.max(0, Math.min(1, currentDifficulty + difficultyAdjustment)); // difficultyScore removed
 
         await tx.question.update({
           where: { id: outcome.questionId },
@@ -118,14 +125,20 @@ export const processQuestionSetReview = async (
             timesAnsweredCorrectly: isCorrect ? { increment: 1 } : undefined,
             timesAnsweredIncorrectly: !isCorrect ? { increment: 1 } : undefined,
             currentMasteryScore: normalizedScore,
-            difficultyScore: newDifficultyScore,
+            // difficultyScore: newDifficultyScore, // Removed, deprecated field
           },
         });
       }
     }
 
     // Step C: Identify Unique Affected QuestionSets
-    const affectedQuestionSetIds = [...new Set(userQuestionAnswers.map(uqa => uqa.questionSetId).filter(id => id !== null) as number[])];
+    // Filter out any potentially null/undefined uqa objects before mapping
+    const validUserQuestionAnswers = userQuestionAnswers.filter(uqa => uqa);
+    const affectedQuestionSetIds = [...new Set(
+      validUserQuestionAnswers
+        .map(uqa => uqa.questionSetId)
+        .filter(id => id !== null && id !== undefined) as number[]
+    )];
 
     // Step D: For Each Affected questionSetId
     for (const qSetId of affectedQuestionSetIds) {
@@ -174,47 +187,50 @@ export const processQuestionSetReview = async (
       }
 
       // D2. Calculate U-U-E Scores for the Set
+      // Group all questions in the set by their U-U-E focus
+      const understandQuestions = questionsInSet.filter(q => q.uueFocus === 'Understand' || !q.uueFocus); // Default to Understand if not set
+      const useQuestions = questionsInSet.filter(q => q.uueFocus === 'Use');
+      const exploreQuestions = questionsInSet.filter(q => q.uueFocus === 'Explore');
+      
+      // Calculate Understand score
       let totalUnderstandScore = 0;
-      let understandQuestionsCount = 0;
-      let totalUseScore = 0;
-      let useQuestionsCount = 0;
-      let totalExploreScore = 0;
-      let exploreQuestionsCount = 0;
-
-      for (const q of questionsInSet) {
-        // Get the most recent answer from our pre-fetched map
+      for (const q of understandQuestions) {
         const latestAnswer = answersByQuestionId.get(q.id);
-        const score = latestAnswer ? latestAnswer.scoreAchieved : 0; // Default to 0 if no answer found
-
-        switch (q.uueFocus) {
-          case 'Understand':
-            totalUnderstandScore += score;
-            understandQuestionsCount++;
-            break;
-          case 'Use':
-            totalUseScore += score;
-            useQuestionsCount++;
-            break;
-          case 'Explore':
-            totalExploreScore += score;
-            exploreQuestionsCount++;
-            break;
-          default: // If uueFocus is not set or is different, count it towards 'Understand' or handle as error
-            totalUnderstandScore += score;
-            understandQuestionsCount++;
-            break;
-        }
+        const score = latestAnswer ? latestAnswer.scoreAchieved : 0; // Default to 0 if never answered
+        totalUnderstandScore += score;
       }
+      const understandQuestionsCount = understandQuestions.length;
+      const rawUnderstandScore = understandQuestionsCount > 0 ? totalUnderstandScore / understandQuestionsCount : 0;
+      const newUnderstandScore = Math.round(rawUnderstandScore * 100); // Scale to 0-100 and round
+      
+      // Calculate Use score
+      let totalUseScore = 0;
+      for (const q of useQuestions) {
+        const latestAnswer = answersByQuestionId.get(q.id);
+        const score = latestAnswer ? latestAnswer.scoreAchieved : 0; // Default to 0 if never answered
+        totalUseScore += score;
+      }
+      const useQuestionsCount = useQuestions.length;
+      const rawUseScore = useQuestionsCount > 0 ? totalUseScore / useQuestionsCount : 0;
+      const newUseScore = Math.round(rawUseScore * 100); // Scale to 0-100 and round
+      
+      // Calculate Explore score
+      let totalExploreScore = 0;
+      for (const q of exploreQuestions) {
+        const latestAnswer = answersByQuestionId.get(q.id);
+        const score = latestAnswer ? latestAnswer.scoreAchieved : 0; // Default to 0 if never answered
+        totalExploreScore += score;
+      }
+      const exploreQuestionsCount = exploreQuestions.length;
+      const rawExploreScore = exploreQuestionsCount > 0 ? totalExploreScore / exploreQuestionsCount : 0;
+      const newExploreScore = Math.round(rawExploreScore * 100); // Scale to 0-100 and round
 
-      const newUnderstandScore = understandQuestionsCount > 0 ? (totalUnderstandScore / understandQuestionsCount) * 100 : 0;
-      const newUseScore = useQuestionsCount > 0 ? (totalUseScore / useQuestionsCount) * 100 : 0;
-      const newExploreScore = exploreQuestionsCount > 0 ? (totalExploreScore / exploreQuestionsCount) * 100 : 0;
-
-      // D3. Calculate QuestionSet.currentTotalMasteryScore
-      const newTotalMasteryScore =
+      // D3. Calculate QuestionSet.currentTotalMasteryScore using 40/40/20 weighted average
+      const newTotalMasteryScore = Math.round(
         newUnderstandScore * UNDERSTAND_WEIGHT +
         newUseScore * USE_WEIGHT +
-        newExploreScore * EXPLORE_WEIGHT;
+        newExploreScore * EXPLORE_WEIGHT
+      );
 
       // D4. Update QuestionSet Spaced Repetition Fields
       const newInterval = getIntervalForMastery(newTotalMasteryScore);

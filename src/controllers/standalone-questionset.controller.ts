@@ -99,6 +99,25 @@ export const getStandaloneQuestionSetQuestions = async (req: AuthRequest, res: R
       orderBy: {
         createdAt: 'asc',
       },
+      select: {
+        id: true,
+        text: true,
+        answer: true,
+        options: true,
+        questionType: true,
+        uueFocus: true,
+        currentMasteryScore: true,
+        lastAnswerCorrect: true,
+        timesAnsweredCorrectly: true,
+        timesAnsweredIncorrectly: true,
+        difficultyScore: true,
+        conceptTags: true,
+        totalMarksAvailable: true,
+        markingCriteria: true,
+        questionSetId: true,
+        createdAt: true,
+        updatedAt: true
+      },
     });
 
     res.status(200).json(questions);

@@ -1,5 +1,5 @@
 import { 
-  calculateQuestionSetNextReview, 
+  processQuestionSetReview, 
   getIntervalForMastery, 
   getDueQuestionSets,
   getPrioritizedQuestions,
@@ -7,40 +7,127 @@ import {
   USE_WEIGHT,
   EXPLORE_WEIGHT
 } from '../spacedRepetition.service';
-import { PrismaClient } from '@prisma/client';
+import {
+  PrismaClient,
+  Prisma,
+  Folder,
+  Question,
+  QuestionSet,
+  UserQuestionAnswer
+  // Removed QuestionType and UueFocus, will use string literals
+} from '@prisma/client'; 
 
-// Mock the PrismaClient
+// Explicit mock functions
+var mockQuestionFindUnique = jest.fn();
+var mockQuestionUpdate = jest.fn();
+var mockQuestionFindMany = jest.fn();
+var mockQuestionSetFindUnique = jest.fn();
+var mockQuestionSetUpdate = jest.fn();
+var mockQuestionSetFindMany = jest.fn();
+var mockUserQuestionAnswerCreate = jest.fn();
+var mockUserQuestionAnswerFindMany = jest.fn();
+var mockFolderFindUnique = jest.fn();
+var mockFolderUpdate = jest.fn();
+var mockUserStudySessionCreate = jest.fn();
+
 jest.mock('@prisma/client', () => {
-  const mockPrisma = {
-    questionSet: {
-      findUnique: jest.fn(),
-      update: jest.fn(),
-      findMany: jest.fn()
-    },
+  const actualPrisma = jest.requireActual('@prisma/client').Prisma;
+
+  // Define the mock transaction function first
+  const transactionMock = jest.fn().mockImplementation(async (callback) => {
+    const tx = {
+      question: {
+        findUnique: mockQuestionFindUnique,
+        update: mockQuestionUpdate,
+        findMany: mockQuestionFindMany,
+      },
+      questionSet: {
+        findUnique: mockQuestionSetFindUnique,
+        update: mockQuestionSetUpdate,
+        findMany: mockQuestionSetFindMany,
+      },
+      userQuestionAnswer: {
+        create: mockUserQuestionAnswerCreate,
+        findMany: mockUserQuestionAnswerFindMany,
+      },
+      userStudySession: {
+        create: mockUserStudySessionCreate,
+      },
+      folder: {
+        findUnique: mockFolderFindUnique,
+        update: mockFolderUpdate,
+      },
+    };
+    return await callback(tx);
+  });
+
+  // This is the mock PrismaClient instance that will be constructed
+  const mockPrismaClientInstance = {
+    $transaction: transactionMock,
     question: {
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      update: jest.fn()
+      findUnique: mockQuestionFindUnique,
+      update: mockQuestionUpdate,
+      findMany: mockQuestionFindMany,
+    },
+    questionSet: {
+      findUnique: mockQuestionSetFindUnique,
+      findMany: mockQuestionSetFindMany,
+      update: mockQuestionSetUpdate,
     },
     userQuestionAnswer: {
-      findMany: jest.fn(),
-      create: jest.fn()
+      create: mockUserQuestionAnswerCreate,
+      findMany: mockUserQuestionAnswerFindMany,
+    },
+    userStudySession: {
+      create: mockUserStudySessionCreate,
     },
     folder: {
-      findUnique: jest.fn()
-    }
+      findUnique: mockFolderFindUnique,
+      update: mockFolderUpdate,
+    },
+    // Ensure all models used by the service are mocked here
   };
-  return { 
-    PrismaClient: jest.fn(() => mockPrisma)
+
+  return {
+    PrismaClient: jest.fn().mockImplementation(() => mockPrismaClientInstance),
+    Prisma: {
+      // Provide real Prisma enums and unique values if they are used by the service
+      // For example, if the service uses Prisma.SortOrder or Prisma.JsonNull
+      ...actualPrisma, // Spreads all static properties from the real Prisma namespace
+      // You can override specific ones if needed, e.g., for JsonNull if it causes issues:
+      // JsonNull: 'JsonNullValue', // Or actualPrisma.JsonNull if it's safe
+    },
   };
 });
 
+let prisma: PrismaClient; 
+
 describe('Spaced Repetition Service', () => {
-  let prisma: any;
-  
   beforeEach(() => {
-    prisma = new PrismaClient();
-    jest.clearAllMocks();
+    prisma = new PrismaClient(); // This instantiates the mock PrismaClient
+
+    // Reset all top-level mock functions used by the PrismaClient mock and transactionMock
+    mockQuestionFindUnique.mockReset();
+    mockQuestionUpdate.mockReset();
+    mockQuestionFindMany.mockReset();
+
+    mockQuestionSetFindUnique.mockReset();
+    mockQuestionSetUpdate.mockReset();
+    mockQuestionSetFindMany.mockReset();
+
+    mockUserQuestionAnswerCreate.mockReset();
+    mockUserQuestionAnswerFindMany.mockReset();
+
+    mockFolderFindUnique.mockReset();
+    mockFolderUpdate.mockReset();
+    
+    // If transactionMock was exposed (e.g., on global), clear it:
+    // if ((global as any).transactionMockForTest) {
+    //   (global as any).transactionMockForTest.mockClear();
+    // }
+    // For now, resetting the composed mocks is the primary way to ensure test isolation for transaction contents.
+    // The transactionMock itself (the outer jest.fn()) will have its call history cleared if we re-obtain it or clear all mocks.
+    // jest.clearAllMocks(); // This would also clear transactionMock, but we prefer targeted resets.
   });
   
   describe('getIntervalForMastery', () => {
@@ -74,60 +161,212 @@ describe('Spaced Repetition Service', () => {
     });
   });
   
-  describe('calculateQuestionSetNextReview', () => {
+  describe('processQuestionSetReview', () => {
+    const mockUserId = 1;
+    const questionSetId = 1;
+    const mockSessionDuration = 300; // 5 minutes
+    const reviewTime = new Date('2025-01-15T10:00:00.000Z');
+
+    const UNDERSTAND_WEIGHT = 0.5;
+    const USE_WEIGHT = 0.3;
+    const EXPLORE_WEIGHT = 0.2;
+
+    const mockFolder: Folder = {
+      id: 1,
+      name: 'Test Folder',
+      userId: mockUserId,
+      description: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      // parentId: null, // Removed as it might not be a direct field or is optional
+      // isSystemFolder: false, // Removed as per lint error
+      // color: null, // Removed as per lint error
+      // lastOpenedAt: null, // Removed as per lint error
+      // itemCount: 0, // Removed as per lint error
+      // searchScore: null, // Removed as per lint error
+    };
+
+    const baseQuestionProps = {
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      answer: 'Sample Answer',
+      options: ['Option 1', 'Option 2'],
+      questionType: 'SINGLE_CHOICE', // Using string literal
+      difficulty: 0.5, // This was for V1, V2 uses totalMarksAvailable and scoreAchieved for difficulty assessment
+      lastReviewedAt: null,
+      nextReviewDate: null, // Prisma schema might use nextReviewAt on QuestionSet
+      reviewCount: 0,
+      totalTimeSpent: 0,
+      timesAnsweredCorrectly: 0,
+      timesAnsweredIncorrectly: 0,
+      markingCriteria: null, // Changed from Prisma.JsonNull to null
+      aiGenerated: false,
+      version: 1,
+      published: true,
+      authorId: null,
+      explanation: null,
+      subjectId: null,
+      topicId: null,
+      subTopicId: null,
+      source: null,
+      verified: false,
+      verifiedById: null,
+      verifiedAt: null,
+      lastMajorModificationAt: new Date(),
+      lastMinorModificationAt: new Date(),
+      tags: [], // This was for V1, V2 might use a different tagging system or none on Question directly
+      userQuestionProgressId: null,
+      // Added missing fields based on lint errors and common Question properties
+      conceptTags: [], // Assuming it's a string array, might be removed in V2
+      lastAnswerCorrect: null, // boolean or null
+      difficultyScore: 0.5, // number, might be removed in V2
+    };
+
+    const mockQuestionSet: QuestionSet & { questions: Question[] } = {
+      id: questionSetId,
+      name: 'Test Question Set',
+      // description: 'A set of questions for testing', // Removed as per lint error
+      understandScore: 60, // Added individual score
+      useScore: 50,        // Added individual score
+      exploreScore: 40,     // Added individual score
+      currentUUESetStage: 'Understand', // Added required field
+      currentTotalMasteryScore: 50,
+      currentForgottenPercentage: 0,
+      nextReviewAt: new Date('2023-01-01'),
+      currentIntervalDays: 4,
+      lastReviewedAt: new Date('2023-01-01'),
+      reviewCount: 3,
+      folderId: 1,
+      // userId: 1, // Removed as per lint error
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      masteryHistory: [], // Expects an array for JsonValue[]
+      forgettingCurveParams: null, // Can be null if the field is nullable JsonValue
+      questions: [
+        { 
+          ...baseQuestionProps,
+          id: 101, 
+          text: 'Question 1 for Understand',
+          uueFocus: 'Understand', // Using string literal
+          questionSetId: questionSetId,
+          currentMasteryScore: 0.5,
+          totalMarksAvailable: 1,
+        },
+        { 
+          ...baseQuestionProps,
+          id: 102, 
+          text: 'Question 2 for Use',
+          uueFocus: 'Use', // Using string literal
+          questionSetId: questionSetId,
+          currentMasteryScore: 0.3,
+          totalMarksAvailable: 1,
+        }
+      ]
+    };
+
+    const updatedMockQuestionSet: QuestionSet = {
+      ...mockQuestionSet, // Start with base values
+      currentTotalMasteryScore: 66.5, // Expected overall mastery
+      understandScore: 100, // Example updated UUE score
+      useScore: 0,        // Example updated UUE score
+      exploreScore: 50,     // Example updated UUE score
+      lastReviewedAt: reviewTime,
+      currentIntervalDays: getIntervalForMastery(66.5),
+      nextReviewAt: new Date(reviewTime.getTime() + getIntervalForMastery(66.5) * 24 * 60 * 60 * 1000),
+      reviewCount: mockQuestionSet.reviewCount + 1,
+    } as any as QuestionSet; // Double cast to satisfy stricter checks if needed
+
     it('should calculate new mastery scores and next review date', async () => {
-      // Mock data
-      const questionSetId = 1;
-      const mockQuestionSet = {
-        id: questionSetId,
-        name: 'Test Question Set',
-        understandScore: 60,
-        useScore: 50,
-        exploreScore: 40,
-        overallMasteryScore: 50,
-        forgettingScore: 80,
-        nextReviewAt: new Date('2023-01-01'),
-        currentIntervalDays: 4,
-        lastReviewedAt: new Date('2023-01-01'),
-        reviewCount: 3,
-        questions: [
-          { 
-            id: 101, 
-            text: 'Question 1',
-            uueFocus: 'Understand',
-            questionSetId: 1
-          },
-          { 
-            id: 102, 
-            text: 'Question 2',
-            uueFocus: 'Use',
-            questionSetId: 1
-          }
-        ]
-      };
-      
+      const sessionStartTime = new Date(); // Define sessionStartTime here
+
       // Setup mocks
-      prisma.questionSet.findUnique.mockResolvedValue(mockQuestionSet);
-      prisma.questionSet.update.mockResolvedValue({
-        ...mockQuestionSet,
-        understandScore: 70,
-        useScore: 60,
-        exploreScore: 50,
-        overallMasteryScore: 62, // (70*0.4 + 60*0.4 + 50*0.2)
-        reviewCount: 4
+      mockQuestionSetFindUnique.mockResolvedValue(mockQuestionSet); // Initial mock for QuestionSet findUnique
+      // Mock for individual question fetches within the service
+      mockQuestionFindUnique.mockImplementation(async (args: Prisma.QuestionFindUniqueArgs) => {
+        const questionId = args.where.id;
+        console.log(`[TEST MOCK REVISED] tx.question.findUnique called for ID: ${questionId}`);
+        const questionFromMockData = mockQuestionSet.questions.find(q => q.id === questionId);
+        if (questionFromMockData) {
+          // Ensure the returned mock question has all fields selected by the service
+          const mockedQuestion = {
+            id: questionFromMockData.id,
+            questionSetId: questionFromMockData.questionSetId,
+            uueFocus: questionFromMockData.uueFocus,
+            currentMasteryScore: questionFromMockData.currentMasteryScore,
+            totalMarksAvailable: questionFromMockData.totalMarksAvailable,
+            // Add any other fields that 'select' in service might need from Question
+          };
+          console.log(`[TEST MOCK REVISED] Found question:`, mockedQuestion);
+          return mockedQuestion;
+        }
+        console.log(`[TEST MOCK REVISED] Question ID ${questionId} not found in mockQuestionSet.questions`);
+        return null;
+      });
+
+      mockQuestionSetUpdate.mockResolvedValue({
+        ...mockQuestionSet, // Spreads the initial state of mockQuestionSet
+        uueCurrentScores: { // Updated UUE scores as per V2 schema assumption
+          Understand: 70,
+          Use: 60,
+          Explore: 50,
+        },
+        currentTotalMasteryScore: (70 * UNDERSTAND_WEIGHT + 60 * USE_WEIGHT + 50 * EXPLORE_WEIGHT), // Calculated
+        reviewCount: mockQuestionSet.reviewCount + 1, // Incremented
+        lastReviewedAt: sessionStartTime, // Should be updated by the service
+        nextReviewAt: expect.any(Date),   // Should be updated by the service
+        currentIntervalDays: expect.any(Number), // Should be updated by the service
       });
       
       // Mock user question answers
-      prisma.userQuestionAnswer.create.mockResolvedValue({
-        id: 1,
-        userId: 1,
-        questionId: 101,
-        userAnswer: 'Test answer',
-        isCorrect: true,
-        scoreAchieved: 100,
-        confidence: 0.8,
-        timeSpent: 150,
-        answeredAt: new Date()
+      // This mock will be called for each outcome. 
+      // It should reflect the data that would be created.
+      mockUserQuestionAnswerCreate.mockImplementation(async (args: Prisma.UserQuestionAnswerCreateArgs) => {
+        console.log('[TEST MOCK REVISED] tx.userQuestionAnswer.create called with data:', args.data);
+        const createdUQA = {
+          id: Math.floor(Math.random() * 10000 + 1),
+          answeredAt: new Date(),
+          userId: args.data.userId,
+          questionId: args.data.questionId,
+          questionSetId: args.data.questionSetId, // This is crucial
+          userAnswerText: args.data.userAnswerText,
+          scoreAchieved: args.data.scoreAchieved,
+          isCorrect: args.data.isCorrect,
+          confidence: args.data.confidence,
+          timeSpent: args.data.timeSpent,
+          // Ensure all required fields for UserQuestionAnswer are present
+        };
+        console.log('[TEST MOCK REVISED] Mock returning UQA:', createdUQA);
+        return createdUQA;
+      });
+
+      // Mock for the QuestionSet findUnique (this is also asserted by the test at line ~172)
+      // The service calls this to get the QuestionSet details for UUE calculation.
+      mockQuestionSetFindUnique.mockImplementation(async (args: Prisma.QuestionSetFindUniqueArgs) => {
+        const qsId = args.where.id;
+        console.log(`[TEST MOCK REVISED] tx.questionSet.findUnique called for ID: ${qsId}`);
+        if (qsId === mockQuestionSet.id) {
+          // The service includes questions with specific fields for UUE calculation
+          // include: { questions: { select: { id: true, uueFocus: true, currentMasteryScore: true, totalMarksAvailable: true } } }
+          const questionsForMock = mockQuestionSet.questions.map(q => ({
+            id: q.id,
+            uueFocus: q.uueFocus,
+            currentMasteryScore: q.currentMasteryScore,
+            totalMarksAvailable: q.totalMarksAvailable,
+          }));
+          const result = { ...mockQuestionSet, questions: questionsForMock };
+          console.log('[TEST MOCK REVISED] Found QuestionSet with questions:', result);
+          return result;
+        }
+        console.log(`[TEST MOCK REVISED] QuestionSet ID ${qsId} not found`);
+        return null;
+      });
+
+      // Mock for question updates (mastery score, times answered etc.)
+      mockQuestionUpdate.mockImplementation(async (args: Prisma.QuestionUpdateArgs) => {
+        console.log(`[TEST MOCK REVISED] tx.question.update called for ID ${args.where.id} with data:`, args.data);
+        // Find the original question to simulate update
+        const originalQuestion = mockQuestionSet.questions.find(q => q.id === args.where.id);
+        return { ...originalQuestion, ...args.data }; // Return updated question
       });
       
       // Test data
@@ -145,22 +384,74 @@ describe('Spaced Repetition Service', () => {
       };
       
       // Call the function
-      await calculateQuestionSetNextReview(questionSetId, reviewData);
+      // sessionStartTime is already defined earlier
+      const outcomes = reviewData.questionAnswers.map(qa => ({
+        questionId: qa.questionId,
+        scoreAchieved: qa.scoreAchieved / 100, // Normalize score from 0-100 to 0-1
+        userAnswerText: qa.userAnswerText,
+        timeSpentOnQuestion: qa.timeSpent
+      }));
+
+      (mockUserQuestionAnswerFindMany as jest.Mock).mockResolvedValue([]);
+
+      // Mock for QuestionSet.findUnique to handle different call patterns
+      (mockQuestionSetFindUnique as jest.Mock).mockImplementation(async (args: any) => {
+        console.log('[TEST MOCK IMPL] mockQuestionSetFindUnique called with args:', JSON.stringify(args, null, 2));
+        // This is the specific call made by calculateUUEAndTotalMastery within the transaction
+        if (args && args.include && args.include.questions && args.include.questions.select && 
+            args.include.questions.select.id && 
+            args.include.questions.select.uueFocus &&
+            args.include.questions.select.currentMasteryScore &&
+            args.include.questions.select.totalMarksAvailable) {
+          const selectedQuestions = mockQuestionSet.questions.map(q => ({
+            id: q.id,
+            uueFocus: q.uueFocus,
+            currentMasteryScore: q.currentMasteryScore,
+            totalMarksAvailable: q.totalMarksAvailable,
+          }));
+          console.log('[TEST MOCK IMPL] Returning QuestionSet with SELECTED questions for UUE calc');
+          return { ...mockQuestionSet, questions: selectedQuestions };
+        }
+        // This handles other calls, e.g., from updateQuestionSetReviewSchedule (via getQuestionSetWithFolder if it includes folder)
+        // or a general call without specific question select. It should return the full mockQuestionSet or one with folder if needed.
+        if (args && args.include && args.include.folder) {
+            console.log('[TEST MOCK IMPL] Returning QuestionSet with FOLDER');
+            return { ...mockQuestionSet, folder: mockFolder }; // Ensure mockFolder is defined if this path is hit
+        }
+        console.log('[TEST MOCK IMPL] Returning full mockQuestionSet (default case)');
+        return mockQuestionSet; 
+      });
+
+      // Mock for QuestionSet.update (used within transaction)
+      // Ensure updatedMockQuestionSet is defined in this test's scope
+      (mockQuestionSetUpdate as jest.Mock).mockResolvedValue(updatedMockQuestionSet as QuestionSet);
+
+      await processQuestionSetReview(reviewData.userId, outcomes, sessionStartTime, reviewData.timeSpent);
       
       // Verify the prisma calls
-      expect(prisma.questionSet.findUnique).toHaveBeenCalledWith({
+      // This assertion targets the call made by the service to get QuestionSet with specific question fields for UUE calculation
+      expect(mockQuestionSetFindUnique).toHaveBeenCalledWith({
         where: { id: questionSetId },
-        include: { questions: true }
+        include: { 
+          questions: { 
+            select: { 
+              id: true, 
+              uueFocus: true, 
+              currentMasteryScore: true, 
+              totalMarksAvailable: true 
+            } 
+          } 
+        }
       });
       
       // Check that update was called with correct parameters
-      expect(prisma.questionSet.update).toHaveBeenCalled();
-      const updateCall = prisma.questionSet.update.mock.calls[0][0];
+      expect(mockQuestionSetUpdate).toHaveBeenCalled();
+      const updateCall = mockQuestionSetUpdate.mock.calls[0][0];
       
       expect(updateCall.where).toEqual({ id: questionSetId });
-      expect(updateCall.data.understandScore).toBe(70);
-      expect(updateCall.data.useScore).toBe(60);
-      expect(updateCall.data.exploreScore).toBe(50);
+      expect(updateCall.data.uueCurrentScores.Understand).toBe(70);
+      expect(updateCall.data.uueCurrentScores.Use).toBe(60);
+      expect(updateCall.data.uueCurrentScores.Explore).toBe(50);
       expect(updateCall.data.reviewCount.increment).toBe(1);
       
       // Verify that nextReviewAt is a Date
@@ -244,12 +535,12 @@ describe('Spaced Repetition Service', () => {
       ];
       
       // Mock the prisma response - only include sets 1, 2, and 4 (not 3 which is due tomorrow)
-      prisma.questionSet.findMany.mockResolvedValue([
+      (mockQuestionSetFindMany as jest.Mock).mockResolvedValue([
         mockQuestionSets[0], // Set 1 (past due)
         mockQuestionSets[1], // Set 2 (due today)
         mockQuestionSets[3]  // Set 4 (never reviewed)
       ]);
-      
+
       // Call the function
       const dueQuestionSets = await getDueQuestionSets(userId);
       
@@ -344,7 +635,7 @@ describe('Spaced Repetition Service', () => {
       ];
       
       // Setup mocks
-      prisma.questionSet.findUnique.mockResolvedValue({
+      (mockQuestionSetFindUnique as jest.Mock).mockResolvedValue({
         ...questionSet,
         questions: questions.map(q => ({
           ...q,
@@ -358,16 +649,6 @@ describe('Spaced Repetition Service', () => {
           ] : []
         }))
       });
-      
-      // These mocks are no longer needed as we're including questions and userAnswers in the questionSet
-      // prisma.question.findMany.mockResolvedValue(questions);
-      // prisma.userQuestionAnswer.findMany.mockResolvedValue([
-      //   { questionId: 1, isCorrect: true, scoreAchieved: 100 },
-      //   { questionId: 1, isCorrect: true, scoreAchieved: 100 },
-      //   { questionId: 1, isCorrect: false, scoreAchieved: 0 },
-      //   { questionId: 2, isCorrect: false, scoreAchieved: 0 },
-      //   { questionId: 2, isCorrect: false, scoreAchieved: 0 }
-      // ]);
       
       // Call the function
       const prioritizedQuestions = await getPrioritizedQuestions(questionSetId, userId, 3);

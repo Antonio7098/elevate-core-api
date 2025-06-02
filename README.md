@@ -245,21 +245,98 @@ All question routes are protected and require authentication.
 
 -   **`POST /`** (within a question set, e.g., `/api/questionsets/:setId/questions`): Create a new question within a specific question set.
     -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
-    -   **Body:** `{ "text": "What is photosynthesis?", "answer": "The process by which green plants use sunlight, water, and carbon dioxide to create glucose and oxygen.", "questionType": "short-answer", "marksAvailable": 1, "uueFocus": "Understand", "conceptTags": ["biology", "plants"] }`
-    -   **Response:** The newly created question object.
--   **`GET /`** (within a question set): Get all questions within a specific question set.
+    -   **Body:**
+        ```json
+        {
+          "text": "What is the capital of France?",
+          "answer": "Paris",
+          "questionType": "short_answer", // e.g., 'multiple_choice', 'short_answer', 'true_false'
+          "options": ["Paris", "London", "Berlin", "Madrid"], // Primarily for 'multiple_choice' type
+          "uueFocus": "Understand", // Optional: 'Understand', 'Use', 'Explore'
+          "totalMarksAvailable": 2, // Optional, defaults to 1
+          "markingCriteria": [ // Optional, JSON array
+            {"criterion": "Correct city name", "marks": 1},
+            {"criterion": "Correct spelling", "marks": 1}
+          ]
+        }
+        ```
+    -   **Response:** The newly created question object, including `totalMarksAvailable` and `markingCriteria`.
+
+-   **`GET /`** (e.g., `/api/folders/:folderId/questionsets/:setId/questions`): Get all questions within a specific question set.
     -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
-    -   **Response:** An array of question objects.
--   **`GET /:id`**: Get a specific question by ID.
+    -   **Response:** An array of question objects. Each object will include `totalMarksAvailable` and `markingCriteria`.
+        ```json
+        [
+          {
+            "id": 1,
+            "text": "What is the capital of France?",
+            "answer": "Paris",
+            "questionType": "short_answer",
+            "options": [],
+            "uueFocus": "Understand",
+            "totalMarksAvailable": 2,
+            "markingCriteria": [
+              {"criterion": "Correct city name", "marks": 1},
+              {"criterion": "Correct spelling", "marks": 1}
+            ],
+            "questionSetId": 1,
+            "createdAt": "2023-10-01T10:00:00.000Z",
+            "updatedAt": "2023-10-01T10:00:00.000Z"
+          },
+          {
+            "id": 2,
+            "text": "What is 2 + 2?",
+            "answer": "4",
+            "questionType": "short_answer",
+            "options": [],
+            "uueFocus": "Understand",
+            "totalMarksAvailable": 1,
+            "markingCriteria": null,
+            "questionSetId": 1,
+            "createdAt": "2023-10-01T10:05:00.000Z",
+            "updatedAt": "2023-10-01T10:05:00.000Z"
+          }
+        ]
+        ```
+
+-   **`GET /:id`**: Get a specific question by its ID.
     -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
-    -   **Response:** The question object if it belongs to the user.
--   **`PUT /:id`**: Update a specific question.
+    -   **Response:** The question object.
+        ```json
+        {
+          "id": 1,
+          "text": "What is the capital of France?",
+          "answer": "Paris",
+          "questionType": "short_answer",
+          "options": ["Paris", "London", "Berlin", "Madrid"], // Will be null or empty if not applicable
+          "uueFocus": "Understand",
+          "totalMarksAvailable": 2,
+          "markingCriteria": [
+            {"criterion": "Correct city name", "marks": 1},
+            {"criterion": "Correct spelling", "marks": 1}
+          ],
+          "questionSetId": 1,
+          "createdAt": "2023-10-01T10:00:00.000Z",
+          "updatedAt": "2023-10-01T10:00:00.000Z"
+        }
+        ```
+
+-   **`PUT /:id`**: Update an existing question.
     -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
-    -   **Body:** Fields to update (e.g., `text`, `answer`, `marksAvailable`).
-    -   **Response:** The updated question object.
--   **`DELETE /:id`**: Delete a specific question.
+    -   **Body:** (Provide only the fields to update)
+        ```json
+        {
+          "text": "What is the official language of France?",
+          "answer": "French",
+          "totalMarksAvailable": 1,
+          "markingCriteria": [{"criterion": "Correct language", "marks": 1}]
+        }
+        ```
+    -   **Response:** The updated question object, including any changed fields like `totalMarksAvailable` and `markingCriteria`.
+
+-   **`DELETE /:id`**: Delete a question.
     -   **Headers:** `Authorization: Bearer <YOUR_JWT_TOKEN>`
-    -   **Response:** Success message.
+    -   **Response:** Success message (e.g., 204 No Content).
 
 ### Reviews & Spaced Repetition (`/api/reviews`)
 

@@ -55,6 +55,25 @@ export const getQuestionsBySetId = async (req: AuthRequest, res: Response, next:
       //     take: 5 // Include the 5 most recent answers for context
       //   }
       // },
+      select: {
+        id: true,
+        text: true,
+        answer: true,
+        options: true,
+        questionType: true,
+        uueFocus: true,
+        currentMasteryScore: true,
+        lastAnswerCorrect: true,
+        timesAnsweredCorrectly: true,
+        timesAnsweredIncorrectly: true,
+        difficultyScore: true,
+        conceptTags: true,
+        totalMarksAvailable: true,
+        markingCriteria: true,
+        questionSetId: true,
+        createdAt: true,
+        updatedAt: true
+      },
       orderBy: {
         // Temporarily using only createdAt until Prisma types are updated
         createdAt: 'asc'
@@ -120,6 +139,25 @@ export const getQuestionsBySet = async (req: AuthRequest, res: Response, next: N
       //     take: 5 // Include the 5 most recent answers for context
       //   }
       // },
+      select: {
+        id: true,
+        text: true,
+        answer: true,
+        options: true,
+        questionType: true,
+        uueFocus: true,
+        currentMasteryScore: true,
+        lastAnswerCorrect: true,
+        timesAnsweredCorrectly: true,
+        timesAnsweredIncorrectly: true,
+        difficultyScore: true,
+        conceptTags: true,
+        totalMarksAvailable: true,
+        markingCriteria: true,
+        questionSetId: true,
+        createdAt: true,
+        updatedAt: true
+      },
       orderBy: {
         // Temporarily using only createdAt until Prisma types are updated
         createdAt: 'asc'
@@ -136,38 +174,46 @@ export const getQuestionsBySet = async (req: AuthRequest, res: Response, next: N
 
 export const createQuestion = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   const { folderId, setId } = req.params;
-  const userId = req.user!.userId;
-  const { text, answer, options, questionType } = req.body;
+  const { text, answer, options, questionType, uueFocus, totalMarksAvailable, markingCriteria } = req.body;
+  const userId = req.user?.userId;
+
+  if (!userId) {
+    res.status(401).json({ message: 'User not authenticated.' });
+    return;
+  }
 
   try {
-    // 1. Verify folder ownership and existence
-    const folder = await prisma.folder.findUnique({
-      where: { id: parseInt(folderId, 10) },
+    // Verify folder ownership
+    const folder = await prisma.folder.findFirst({
+      where: { id: parseInt(folderId), userId },
     });
 
-    if (!folder || folder.userId !== userId) {
+    if (!folder) {
       res.status(404).json({ message: 'Folder not found or access denied.' });
       return;
     }
 
-    // 2. Verify question set existence and ensure it belongs to the folder
-    const questionSet = await prisma.questionSet.findUnique({
-      where: { id: parseInt(setId, 10) },
+    // Verify question set exists and belongs to the folder
+    const questionSet = await prisma.questionSet.findFirst({
+      where: { id: parseInt(setId), folderId: folder.id },
     });
 
-    if (!questionSet || questionSet.folderId !== folder.id) {
-      res.status(404).json({ message: 'Question set not found in this folder or access denied.' });
+    if (!questionSet) {
+      res.status(404).json({ message: 'Question set not found in this folder.' });
       return;
     }
 
-    // 3. Create the new question
+    // Create the new question
     const newQuestion = await prisma.question.create({
       data: {
         text,
         answer,
-        options: options || [],
+        options: Array.isArray(options) ? options : [],
         questionType,
-        questionSetId: parseInt(setId, 10),
+        uueFocus: uueFocus || 'Understand',
+        totalMarksAvailable: totalMarksAvailable || 1,
+        markingCriteria: markingCriteria || null,
+        questionSetId: questionSet.id,
       },
     });
 
