@@ -188,12 +188,17 @@ export const generateQuestionsFromSource = async (req: AuthRequest, res: Respons
       return;
     }
 
-    const folder = await prisma.folder.findFirst({
-      where: { id: folderId, userId },
+    const folder = await prisma.folder.findUnique({
+      where: { id: folderId },
     });
 
     if (!folder) {
-      res.status(404).json({ message: 'Folder not found or not owned by user' });
+      res.status(404).json({ message: 'Folder not found' });
+      return;
+    }
+
+    if (folder.userId !== userId) {
+      res.status(403).json({ message: 'User does not have access to this folder' });
       return;
     }
 
@@ -295,8 +300,11 @@ export const generateQuestionsFromSource = async (req: AuthRequest, res: Respons
  */
 export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { message, questionSetId, folderId, conversation } = req.body;
+    const { message, context, folderId: reqBodyFolderId, conversation } = req.body;
     const userId = req.user?.userId;
+    const questionSetIdFromContext = context?.questionSetId;
+    // Use folderId from context if available, otherwise from req.body directly
+    const folderId = context?.folderId || reqBodyFolderId;
     
     if (!userId) {
       res.status(401).json({ message: 'User not authenticated' });
@@ -327,11 +335,11 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
     let folderInfo = null;
     
     // If a specific question set is requested
-    if (questionSetId) {
+    if (questionSetIdFromContext) {
       // Find the question set and verify ownership
       const questionSet = await prisma.questionSet.findFirst({
         where: {
-          id: questionSetId,
+          id: questionSetIdFromContext,
           folder: {
             userId
           }
@@ -553,8 +561,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
         if (process.env.NODE_ENV !== 'test') { console.error('Error from AI service:', aiError); }
         // Fall back to simulation if AI service fails
         const context: ChatContext = {};
-        if (questionSetId) context.questionSetId = questionSetId;
-        if (folderId) context.folderId = folderId;
+        if (questionSetIdFromContext) context.questionSetId = questionSetIdFromContext;
+        if (folderId) context.folderId = folderId; // folderId is already correctly derived
         
         aiResponse = await simulateAIChatResponse(message, context);
       }
@@ -562,8 +570,8 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
       // Fall back to simulation if AI service is not available
       // console.log('AI service not available, using simulation');
       const context: ChatContext = {};
-      if (questionSetId) context.questionSetId = questionSetId;
-      if (folderId) context.folderId = folderId;
+      if (questionSetIdFromContext) context.questionSetId = questionSetIdFromContext;
+      if (folderId) context.folderId = folderId; // folderId is already correctly derived
       
       aiResponse = await simulateAIChatResponse(message, context);
     }

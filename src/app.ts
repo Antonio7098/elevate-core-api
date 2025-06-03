@@ -8,7 +8,6 @@ import userRouter from './routes/user.routes';
 import folderRouter from './routes/folder.routes';
 import aiRouter from './routes/ai.routes';
 import reviewRouter from './routes/review.routes';
-import evaluationRouter from './routes/evaluation.routes';
 import standaloneQuestionSetRouter from './routes/standalone-questionset.routes';
 import standaloneQuestionRouter from './routes/standalone-question.routes';
 import dashboardRouter from './routes/dashboard.routes';
@@ -30,7 +29,6 @@ app.use('/api/users', userRouter);
 app.use('/api/folders', folderRouter);
 app.use('/api/ai', aiRouter); // Note: /api/ai is used twice, ensure this is intended or consolidate
 app.use('/api/reviews', reviewRouter);
-app.use('/api/ai', evaluationRouter); // Second use of /api/ai
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/todays-tasks', todaysTasksRoutes);
 app.use('/api/stats', statsRouter);

@@ -33,6 +33,11 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
       return;
     }
 
+    if (!questionId || typeof userAnswer === 'undefined') {
+      res.status(400).json({ message: 'Missing required fields: questionId and userAnswer are required.' });
+      return;
+    }
+
     const question = await prisma.question.findFirst({
       where: {
         id: questionId,
@@ -66,7 +71,7 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
           score: null,
           feedback: 'AI evaluation is currently unavailable. Your answer has been recorded and will be evaluated later.',
           pendingEvaluation: true,
-          marksAvailable: question.marksAvailable || 1,
+          marksAvailable: question.totalMarksAvailable || 1,
           scoreAchieved: 0,
         },
         message: 'AI evaluation service unavailable. Answer recorded for later evaluation.',
@@ -86,7 +91,7 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
       const userAnswerTrimmed = userAnswer.trim().toLowerCase();
       const correctAnswerTrimmed = (question.answer || '').trim().toLowerCase();
       const isCorrect = userAnswerTrimmed === correctAnswerTrimmed;
-      const marksAvailable = question.marksAvailable || 1;
+      const marksAvailable = question.totalMarksAvailable || 1;
       const scoreAchieved = isCorrect ? marksAvailable : 0;
       scoreForSr = isCorrect ? 5 : 1; // Max score for correct, min for incorrect
 
@@ -114,7 +119,7 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
     } else {
       // AI Evaluation Path
       try {
-        const marksAvailable = question.marksAvailable || 1;
+        const marksAvailable = question.totalMarksAvailable || 1;
         // Construct the payload for the AI service, conforming to EvaluateAnswerRequest.
         const aiServicePayload: EvaluateAnswerRequest = {
           questionContext: {
@@ -160,10 +165,10 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
           else scoreForSr = 5;
 
           evaluationResult = {
-            isCorrect: evalData.isCorrect, // This can be boolean or 'partially_correct', 'incorrect'
-            score: evalData.score, // Normalized 0-1
-            feedback: evalData.feedback,
-            correctedAnswer: evalData.correctedAnswer,
+            isCorrect: evalData.isCorrect,
+            score: evalData.score,
+            feedback: evalData.feedback || (evalData.isCorrect === true ? 'Correct!' : 'Further review may be needed.'),
+            correctedAnswer: evalData.correctedAnswer || question.answer, // Default to original answer if AI doesn't provide one
             marksAvailable: marksAvailable,
             scoreAchieved: scoreAchieved,
           };
@@ -196,7 +201,7 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
               score: null,
               feedback: aiResult.evaluation?.feedback || 'AI evaluation was inconclusive. Your answer has been recorded.',
               pendingEvaluation: true,
-              marksAvailable: question.marksAvailable || 1,
+              marksAvailable: question.totalMarksAvailable || 1,
               scoreAchieved: 0,
             },
              message: 'AI evaluation inconclusive. Answer recorded for potential manual review.'
@@ -220,7 +225,7 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
             score: null,
             feedback: 'AI evaluation service failed. Your answer has been recorded.',
             pendingEvaluation: true,
-            marksAvailable: question.marksAvailable || 1,
+            marksAvailable: question.totalMarksAvailable || 1,
             scoreAchieved: 0,
           },
         };
