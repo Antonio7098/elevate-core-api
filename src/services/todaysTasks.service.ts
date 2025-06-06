@@ -119,7 +119,7 @@ export const getPrioritizedQuestionsFromSet = async (
     };
   }>;
   
-  const questions: QuestionWithSelectedAnswers[] = await prisma.question.findMany({
+  const questions = await prisma.question.findMany({
     where: {
       questionSetId,
       uueFocus: targetUUEFocus,
@@ -142,6 +142,8 @@ export const getPrioritizedQuestionsFromSet = async (
       timesAnsweredIncorrectly: true,
       totalMarksAvailable: true,
       markingCriteria: true,
+      difficultyScore: true,
+      conceptTags: true,
       userAnswers: { 
         where: { userId },
         select: { scoreAchieved: true, answeredAt: true },
@@ -181,12 +183,14 @@ export const getPrioritizedQuestionsFromSet = async (
     })
     .sort((a, b) => b.calculatedPriority - a.calculatedPriority); // Sort descending by priority
 
-  const questionsWithContext: QuestionWithContext[] = prioritized.map(q => ({
-    ...q, // Spread the enriched question object (which should have all Question fields)
+  const questionsWithContext: QuestionWithContext[] = prioritized.map(({ calculatedPriority, ...rest }) => ({
+    ...rest,
+    conceptTags: rest.conceptTags ?? [],
+    difficultyScore: rest.difficultyScore ?? 0,
     questionSetId,
     questionSetName,
-    selectedForUUEFocus: targetUUEFocus, // This is valid for QuestionWithContext
-  }));
+    selectedForUUEFocus: targetUUEFocus,
+}));
 
   return fetchAll ? questionsWithContext : questionsWithContext[0];
 };

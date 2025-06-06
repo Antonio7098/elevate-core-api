@@ -132,7 +132,7 @@ export const getReviewQuestions = async (req: AuthRequest, res: Response, next: 
         options: q.options,
         uueFocus: q.uueFocus,
         conceptTags: q.conceptTags,
-        marksAvailable: q.marksAvailable,
+        totalMarksAvailable: q.totalMarksAvailable,
         priorityScore: q.priorityScore
       }))
     });

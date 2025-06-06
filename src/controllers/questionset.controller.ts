@@ -149,6 +149,7 @@ export const createQuestionSet = async (req: AuthRequest, res: Response, next: N
       data: {
         name,
         folderId: parseInt(folderId),
+        nextReviewAt: new Date(), // Set nextReviewAt to today by default
       },
     });
 
