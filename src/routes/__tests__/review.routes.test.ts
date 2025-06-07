@@ -347,7 +347,72 @@ describe('Review Routes', () => {
     });
   });
 
-  describe('GET /api/reviews/stats', () => {
+  describe('GET /api/reviews/question-set/:id', () => {
+  it('should require authentication', async () => {
+    const response = await request(app)
+      .get(`/api/reviews/question-set/${questionSetId}`);
+    expect(response.status).toBe(401);
+  });
+
+  it('should return 403 or 404 if user does not own the question set', async () => {
+    // Create a second user and question set
+    const otherUser = await prisma.user.create({
+      data: {
+        email: 'other-review@example.com',
+        password: 'hashedpassword456'
+      }
+    });
+    const otherFolder = await prisma.folder.create({
+      data: {
+        name: 'Other Review Folder',
+        description: 'A folder for unauthorized access test',
+        userId: otherUser.id
+      }
+    });
+    const otherQuestionSet = await prisma.questionSet.create({
+      data: {
+        name: 'Other Review Question Set',
+        folderId: otherFolder.id
+      }
+    });
+    const secret = process.env.JWT_SECRET || 'your-secret-key';
+    const otherAuthToken = jwt.sign({ userId: otherUser.id }, secret, { expiresIn: '1h' });
+
+    // Try to access the main user's question set with other user's token
+    const forbiddenResponse = await request(app)
+      .get(`/api/reviews/question-set/${questionSetId}`)
+      .set('Authorization', `Bearer ${otherAuthToken}`);
+    expect([403, 404]).toContain(forbiddenResponse.status);
+
+    // Clean up
+    await prisma.questionSet.delete({ where: { id: otherQuestionSet.id } });
+    await prisma.folder.delete({ where: { id: otherFolder.id } });
+    await prisma.user.delete({ where: { id: otherUser.id } });
+  });
+
+  it('should return 200 and prioritized questions for a valid request', async () => {
+    const response = await request(app)
+      .get(`/api/reviews/question-set/${questionSetId}`)
+      .set('Authorization', `Bearer ${authToken}`);
+    expect(response.status).toBe(200);
+    expect(Array.isArray(response.body.questions) || Array.isArray(response.body)).toBe(true);
+    // Accept either { questions: [...] } or just an array for flexibility
+    const questions = Array.isArray(response.body.questions) ? response.body.questions : response.body;
+    expect(questions.length).toBeGreaterThan(0);
+    for (const q of questions) {
+      expect(q).toHaveProperty('id');
+      expect(q).toHaveProperty('text');
+      expect(q).toHaveProperty('questionType');
+      expect(q).toHaveProperty('options');
+      expect(q).toHaveProperty('uueFocus');
+      expect(q).toHaveProperty('conceptTags');
+      expect(q).toHaveProperty('totalMarksAvailable');
+      expect(q).toHaveProperty('priorityScore');
+    }
+  });
+});
+
+describe('GET /api/reviews/stats', () => {
     it('should return review statistics', async () => {
       const response = await request(app)
         .get('/api/reviews/stats')
