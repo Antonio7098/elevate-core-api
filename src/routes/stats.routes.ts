@@ -6,6 +6,28 @@ const router = Router();
 
 /**
  * @swagger
+ * /reviews/stats:
+ *   get:
+ *     summary: Get overall study statistics for the authenticated user.
+ *     tags: [Stats, Reviews]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved overall statistics.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OverallStats'
+ *       401:
+ *         description: User not authenticated.
+ *       404:
+ *         description: User not found.
+ */
+router.get('/reviews/stats', protect, statsController.getOverallStats);
+
+/**
+ * @swagger
  * /stats/questionsets/{setId}/details:
  *   get:
  *     summary: Get mastery history and spaced repetition details for a specific question set.
@@ -110,4 +132,29 @@ router.get('/questionsets/:setId/details', protect, statsController.getQuestionS
  */
 router.get('/folders/:folderId/details', protect, statsController.getFolderStatsDetails);
 
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     OverallStats:
+ *       type: object
+ *       properties:
+ *         masteryScore: { type: number, description: "Overall average mastery score (0-100)" }
+ *         understandScore: { type: number, description: "Overall average Understand Score (0-100)" }
+ *         useScore: { type: number, description: "Overall average Use Score (0-100)" }
+ *         exploreScore: { type: number, description: "Overall average Explore Score (0-100)" }
+ *         totalSets: { type: integer, description: "Total number of question sets" }
+ *         masteredSets: { type: integer, description: "Number of sets with mastery >= 90%" }
+ *         inProgressSets: { type: integer, description: "Number of sets with 0% < mastery < 90%" }
+ *         notStartedSets: { type: integer, description: "Number of sets with 0% mastery" }
+ *         dueSets: { type: integer, description: "Number of sets currently due for review" }
+ *         masteryHistory:
+ *           type: array
+ *           items:
+ *             type: object
+ *             properties:
+ *               timestamp: { type: string, format: date-time }
+ *               score: { type: number }
+ *           description: "Aggregated mastery history (currently returns empty array)"
+ */
 export default router;
