@@ -59,7 +59,7 @@ export const processQuestionSetReview = async (
   }>,
   sessionStartTime: Date,
   sessionDurationSeconds: number
-): Promise<QuestionSet> => {
+): Promise<QuestionSet[]> => {
   // Create a deep copy of the outcomes to prevent external mutations or unexpected shared references
   const outcomes = originalOutcomes.map(o => ({ ...o })); // Shallow copy of each object, deep enough for primitive properties
 
@@ -203,51 +203,39 @@ export const processQuestionSetReview = async (
         }
       }
 
-      // D2. Calculate U-U-E Scores for the Set
-      // Group all questions in the set by their U-U-E focus
-      const understandQuestions = questionsInSet.filter(q => q.uueFocus === 'Understand' || !q.uueFocus); // Default to Understand if not set
+      // D2. Calculate U-U-E Scores for the Set (New Logic)
+      const calculateCategoryScore = (questionsInCategory: typeof questionsInSet) => {
+        let sumOfLatestScores = 0;
+        let sumOfTotalMarks = 0;
+        for (const q of questionsInCategory) {
+          const answer = answersByQuestionId.get(q.id);
+          const latestScore = answer ? answer.scoreAchieved : 0; // scoreAchieved is 0-1
+          sumOfLatestScores += latestScore;
+          sumOfTotalMarks += q.totalMarksAvailable || 1; // Default to 1 if not set
+        }
+        const rawScore = sumOfTotalMarks > 0 ? sumOfLatestScores / sumOfTotalMarks : 0;
+        return Math.round(rawScore * 100); // Scale to 0-100 and round
+      };
+
+      const understandQuestions = questionsInSet.filter(q => q.uueFocus === 'Understand' || !q.uueFocus);
       const useQuestions = questionsInSet.filter(q => q.uueFocus === 'Use');
       const exploreQuestions = questionsInSet.filter(q => q.uueFocus === 'Explore');
-      
-      // Calculate Understand score
-      let totalUnderstandScore = 0;
-      for (const q of understandQuestions) {
-        // Use currentMasteryScore from the question, which was updated earlier in the transaction
-        const score = q.currentMasteryScore || 0; 
-        totalUnderstandScore += score;
-      }
-      const understandQuestionsCount = understandQuestions.length;
-      const rawUnderstandScore = understandQuestionsCount > 0 ? totalUnderstandScore / understandQuestionsCount : 0;
-      const newUnderstandScore = Math.round(rawUnderstandScore * 100); // Scale to 0-100 and round
-      
-      // Calculate Use score
-      let totalUseScore = 0;
-      for (const q of useQuestions) {
-        // Use currentMasteryScore from the question, which was updated earlier in the transaction
-        const score = q.currentMasteryScore || 0; 
-        totalUseScore += score;
-      }
-      const useQuestionsCount = useQuestions.length;
-      const rawUseScore = useQuestionsCount > 0 ? totalUseScore / useQuestionsCount : 0;
-      const newUseScore = Math.round(rawUseScore * 100); // Scale to 0-100 and round
-      
-      // Calculate Explore score
-      let totalExploreScore = 0;
-      for (const q of exploreQuestions) {
-        // Use currentMasteryScore from the question, which was updated earlier in the transaction
-        const score = q.currentMasteryScore || 0; 
-        totalExploreScore += score;
-      }
-      const exploreQuestionsCount = exploreQuestions.length;
-      const rawExploreScore = exploreQuestionsCount > 0 ? totalExploreScore / exploreQuestionsCount : 0;
-      const newExploreScore = Math.round(rawExploreScore * 100); // Scale to 0-100 and round
 
-      // D3. Calculate QuestionSet.currentTotalMasteryScore using 40/40/20 weighted average
-      const newTotalMasteryScore = Math.round(
-        newUnderstandScore * UNDERSTAND_WEIGHT +
-        newUseScore * USE_WEIGHT +
-        newExploreScore * EXPLORE_WEIGHT
-      );
+      const newUnderstandScore = calculateCategoryScore(understandQuestions);
+      const newUseScore = calculateCategoryScore(useQuestions);
+      const newExploreScore = calculateCategoryScore(exploreQuestions);
+
+      // D3. Calculate NEW QuestionSet.currentTotalMasteryScore (Direct Aggregation)
+      let sumOfAllLatestScoresAchieved = 0;
+      let sumOfAllTotalMarksAvailable = 0;
+      for (const q of questionsInSet) {
+        const answer = answersByQuestionId.get(q.id);
+        const latestScore = answer ? answer.scoreAchieved : 0; // scoreAchieved is 0-1
+        sumOfAllLatestScoresAchieved += latestScore;
+        sumOfAllTotalMarksAvailable += q.totalMarksAvailable || 1; // Default to 1 if not set
+      }
+      const rawTotalMasteryScore = sumOfAllTotalMarksAvailable > 0 ? sumOfAllLatestScoresAchieved / sumOfAllTotalMarksAvailable : 0;
+      const newTotalMasteryScore = Math.round(rawTotalMasteryScore * 100);
 
       // D4. Update QuestionSet Spaced Repetition Fields
       const newInterval = getIntervalForMastery(newTotalMasteryScore);
@@ -340,16 +328,22 @@ export const processQuestionSetReview = async (
       throw new Error('No question sets were updated during review processing.');
     }
     
-    // Get the updated QuestionSet to return
-    const updatedQuestionSet = await tx.questionSet.findUnique({
-      where: { id: affectedQuestionSetIds[0] }
+    // Get all updated QuestionSets to return
+    const updatedQuestionSets = await tx.questionSet.findMany({
+      where: {
+        id: { in: affectedQuestionSetIds }
+      },
+      include: {
+        folder: true // Include folder as it's often useful for the frontend
+      }
     });
-    
-    if (!updatedQuestionSet) {
-      throw new Error(`Failed to retrieve updated QuestionSet with ID ${affectedQuestionSetIds[0]}.`);
+
+    if (updatedQuestionSets.length !== affectedQuestionSetIds.length) {
+      console.warn('Mismatch between affectedQuestionSetIds count and fetched updatedQuestionSets count');
+      // Potentially throw an error or handle as appropriate if this mismatch is critical
     }
     
-    return updatedQuestionSet;
+    return updatedQuestionSets;
   });
 };
 

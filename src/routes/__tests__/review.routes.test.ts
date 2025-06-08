@@ -1,6 +1,7 @@
 import request from 'supertest';
 import { PrismaClient, Question, QuestionSet, Folder, User } from '@prisma/client';
 import { FrontendReviewSubmission } from '../../controllers/review.controller';
+import { getIntervalForMastery } from '../../services/spacedRepetition.service';
 import app from '../../app';
 import jwt from 'jsonwebtoken';
 
@@ -77,42 +78,49 @@ describe('Review Routes', () => {
     });
     questionSetId = questionSet.id;
 
-    // Create test questions with different mastery levels
-    const questions = await Promise.all([
-      // Question due for review (mastery 2, reviewed yesterday)
-      prisma.question.create({
+    // Create test questions with different uueFocus and totalMarksAvailable
+    const questionData = [
+      {
+        text: 'What is spaced repetition? (Understand)',
+        answer: 'A learning technique that incorporates increasing intervals of time between reviews of previously learned material.',
+        options: ['A learning technique', 'A memorization method', 'A scheduling system'],
+        questionType: 'multiple-choice',
+        uueFocus: 'Understand',
+        totalMarksAvailable: 1,
+      },
+      {
+        text: 'How do you apply SR? (Use)',
+        answer: 'By reviewing material at systematic intervals.',
+        options: ['Option A', 'Option B', 'Option C'],
+        questionType: 'multiple-choice',
+        uueFocus: 'Use',
+        totalMarksAvailable: 2,
+      },
+      {
+        text: 'Explore SR variations. (Explore)',
+        answer: 'E.g., Leitner system, SuperMemo.',
+        options: ['Option X', 'Option Y', 'Option Z'],
+        questionType: 'multiple-choice',
+        uueFocus: 'Explore',
+        totalMarksAvailable: 1,
+      },
+    ];
+
+    const createdQuestions = await Promise.all(
+      questionData.map(q => prisma.question.create({
         data: {
-          text: 'What is spaced repetition?',
-          answer: 'A learning technique that incorporates increasing intervals of time between reviews of previously learned material.',
-          options: ['A learning technique', 'A memorization method', 'A scheduling system'],
-          questionType: 'multiple-choice',
-          questionSetId: questionSet.id
+          ...q,
+          questionSetId: questionSet.id,
         }
-      }),
-      // Question not due for review (mastery 3, reviewed tomorrow)
-      prisma.question.create({
-        data: {
-          text: 'What is the forgetting curve?',
-          answer: 'A hypothesis that describes the decrease in ability to retain memory over time.',
-          options: ['A graph showing memory decay', 'A learning theory', 'A cognitive bias'],
-          questionType: 'multiple-choice',
-          questionSetId: questionSet.id
-        }
-      }),
-      // Question never reviewed (mastery 0, null nextReviewAt)
-      prisma.question.create({
-        data: {
-          text: 'What is the spacing effect?',
-          answer: 'The phenomenon whereby learning is greater when studying is spread out over time.',
-          options: ['A learning principle', 'A memory technique', 'A cognitive phenomenon'],
-          questionType: 'multiple-choice',
-          questionSetId: questionSet.id
-        }
-      })
-    ]);
+      }))
+    );
 
     // Save the ID of the first question for testing the review submission
-    questionId = questions[0].id;
+    questionId = createdQuestions[0].id; // This is the 'Understand' question
+
+    // Original code for reference, now replaced by the above structured creation
+    // const questions = await Promise.all([
+
 
     // Generate JWT token for authentication
     const secret = process.env.JWT_SECRET || 'your-secret-key';
@@ -230,8 +238,37 @@ describe('Review Routes', () => {
         .send(reviewData);
 
       expect(response.status).toBe(200);
-      // Only check status for now to isolate auth issue
-      // expect(response.body.message).toBe('Review submitted successfully');
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBeGreaterThan(0);
+      const updatedQuestionSetResponse = response.body[0]; // Assuming the first set is the one we're targeting for detailed checks
+      expect(updatedQuestionSetResponse.id).toBe(questionSetId);
+
+      // Q1 (Understand, totalMarks: 1) answered with score 5/5 (normalized 1.0)
+      // Q2 (Use, totalMarks: 2) not answered (score 0)
+      // Q3 (Explore, totalMarks: 1) not answered (score 0)
+
+      const expectedUnderstandScore = Math.round((1.0 / 1) * 100); // 100
+      const expectedUseScore = Math.round((0 / 2) * 100);          // 0
+      const expectedExploreScore = Math.round((0 / 1) * 100);       // 0
+      const expectedTotalMasteryScore = Math.round(((1.0 + 0 + 0) / (1 + 2 + 1)) * 100); // 25
+
+      expect(updatedQuestionSetResponse.understandScore).toBe(expectedUnderstandScore);
+      expect(updatedQuestionSetResponse.useScore).toBe(expectedUseScore);
+      expect(updatedQuestionSetResponse.exploreScore).toBe(expectedExploreScore);
+      expect(updatedQuestionSetResponse.currentTotalMasteryScore).toBe(expectedTotalMasteryScore);
+
+      expect(updatedQuestionSetResponse).toHaveProperty('lastReviewedAt');
+      const lastReviewedDate = new Date(updatedQuestionSetResponse.lastReviewedAt);
+      expect(lastReviewedDate.getTime()).toBeLessThanOrEqual(new Date().getTime()); // Should be recent
+
+      const expectedIntervalDays = getIntervalForMastery(expectedTotalMasteryScore);
+      expect(updatedQuestionSetResponse.currentIntervalDays).toBe(expectedIntervalDays);
+
+      const expectedNextReviewDate = new Date(lastReviewedDate);
+      expectedNextReviewDate.setDate(lastReviewedDate.getDate() + expectedIntervalDays);
+      expect(new Date(updatedQuestionSetResponse.nextReviewAt).toISOString().split('T')[0]).toBe(expectedNextReviewDate.toISOString().split('T')[0]);
+      
+      expect(updatedQuestionSetResponse.reviewCount).toBe((initialQuestionSet.reviewCount || 0) + 1);
     });
 
     it('should submit a review and update QuestionSet scores for an incorrect answer', async () => {
@@ -259,20 +296,37 @@ describe('Review Routes', () => {
         .send(reviewData);
 
       expect(response.status).toBe(200);
-      expect(response.body.id).toBe(questionSetId);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBeGreaterThan(0);
+      const updatedQuestionSetResponse = response.body[0]; // Assuming the first set is the one we're targeting for detailed checks
+      expect(updatedQuestionSetResponse.id).toBe(questionSetId);
 
-      // For an incorrect answer, understandScore should ideally decrease or stay same (if already 0)
-      // Using a less strict check as exact decrease logic might be complex
-      expect(response.body.understandScore).toBeLessThanOrEqual(initialQuestionSet.understandScore || 50); // Assuming 50 was a higher starting point or default
-      expect(response.body.currentTotalMasteryScore).toBeLessThanOrEqual(initialQuestionSet.currentTotalMasteryScore || 50);
+      // Q1 (Understand, totalMarks: 1) answered with score 0/5 (normalized 0.0)
+      // Q2 (Use, totalMarks: 2) not answered (score 0)
+      // Q3 (Explore, totalMarks: 1) not answered (score 0)
 
-      expect(response.body).toHaveProperty('lastReviewedAt');
-      expect(response.body).toHaveProperty('currentIntervalDays');
-      expect(response.body.nextReviewAt).not.toBeNull();
-      if (initialQuestionSet.nextReviewAt) {
-        expect(new Date(response.body.nextReviewAt).getTime()).not.toBe(new Date(initialQuestionSet.nextReviewAt).getTime());
-      }
-      expect(response.body.reviewCount).toBe((initialQuestionSet.reviewCount || 0) + 1);
+      const expectedUnderstandScore = Math.round((0.0 / 1) * 100); // 0
+      const expectedUseScore = Math.round((0 / 2) * 100);          // 0
+      const expectedExploreScore = Math.round((0 / 1) * 100);       // 0
+      const expectedTotalMasteryScore = Math.round(((0.0 + 0 + 0) / (1 + 2 + 1)) * 100); // 0
+
+      expect(updatedQuestionSetResponse.understandScore).toBe(expectedUnderstandScore);
+      expect(updatedQuestionSetResponse.useScore).toBe(expectedUseScore);
+      expect(updatedQuestionSetResponse.exploreScore).toBe(expectedExploreScore);
+      expect(updatedQuestionSetResponse.currentTotalMasteryScore).toBe(expectedTotalMasteryScore);
+
+      expect(updatedQuestionSetResponse).toHaveProperty('lastReviewedAt');
+      const lastReviewedDate = new Date(updatedQuestionSetResponse.lastReviewedAt);
+      expect(lastReviewedDate.getTime()).toBeLessThanOrEqual(new Date().getTime());
+
+      const expectedIntervalDays = getIntervalForMastery(expectedTotalMasteryScore);
+      expect(updatedQuestionSetResponse.currentIntervalDays).toBe(expectedIntervalDays);
+
+      const expectedNextReviewDate = new Date(lastReviewedDate);
+      expectedNextReviewDate.setDate(lastReviewedDate.getDate() + expectedIntervalDays);
+      expect(new Date(updatedQuestionSetResponse.nextReviewAt).toISOString().split('T')[0]).toBe(expectedNextReviewDate.toISOString().split('T')[0]);
+
+      expect(updatedQuestionSetResponse.reviewCount).toBe((initialQuestionSet.reviewCount || 0) + 1);
     });
 
     it('should require authentication', async () => {

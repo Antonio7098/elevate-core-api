@@ -19,6 +19,9 @@ import {
 
 // Declare mock function variables in the outer scope
 var mockQuestionFindUnique: jest.Mock;
+
+// Mock user ID for testing
+const mockUserId = 1;
 var mockQuestionUpdate: jest.Mock;
 var mockQuestionFindMany: jest.Mock;
 var mockQuestionSetFindUnique: jest.Mock;
@@ -207,14 +210,15 @@ describe('Spaced Repetition Service', () => {
       questionType: 'SINGLE_CHOICE',
       options: [],
       difficultyScore: 0.5,
-      conceptTags: [],
-      explanation: null,
-      timesAnswered: 0,
       timesAnsweredCorrectly: 0,
-      lastAnsweredAt: null,
+      timesAnsweredIncorrectly: 0,
+      markingCriteria: [],
+      conceptTags: [],
       lastAnswerCorrect: null,
       createdAt: new Date(),
       updatedAt: new Date(),
+      createdBy: mockUserId,
+      isActive: true,
     } as Question);
 
     mockUserStudySessionCreate.mockResolvedValue({
@@ -290,6 +294,8 @@ describe('Spaced Repetition Service', () => {
       name: 'Test Folder',
       userId: mockUserId,
       description: null,
+      currentMasteryScore: 0,
+      masteryHistory: [],
       createdAt: new Date(),
       updatedAt: new Date(),
       // parentId: null, // Removed as it might not be a direct field or is optional
