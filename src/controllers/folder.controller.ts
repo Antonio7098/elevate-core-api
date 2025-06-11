@@ -6,24 +6,39 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 export const createFolder = async (req: AuthRequest, res: Response): Promise<void> => {
-  const { name, description } = req.body;
+  const { name, description, parentId } = req.body;
   const userId = req.user?.userId;
 
   if (!userId) {
-    // This should ideally not happen if 'protect' middleware is working correctly
     res.status(401).json({ message: 'User not authenticated' });
     return;
   }
 
   try {
-    const newFolder = await prisma.folder.create({
-      data: {
-        name,
-        description,
-        userId,
-      },
+    let parentFolder = null;
+    if (parentId !== undefined && parentId !== null) {
+      parentFolder = await prisma.folder.findFirst({
+        where: { id: parentId, userId },
+      });
+      if (!parentFolder) {
+        res.status(400).json({ message: 'Parent folder not found or access denied' });
+        return;
+      }
+    }
+    const createData: any = {
+      name,
+      description,
+      userId
+    };
+
+    if (parentId) {
+      createData.parent = { connect: { id: parentId } };
+    }
+
+    const folder = await prisma.folder.create({
+      data: createData
     });
-    res.status(201).json(newFolder);
+    res.status(201).json(folder);
   } catch (error) {
     console.error('--- Create Folder Error ---');
     if (error instanceof Error) {
@@ -34,30 +49,42 @@ export const createFolder = async (req: AuthRequest, res: Response): Promise<voi
     }
     console.error('Error object (stringified):', JSON.stringify(error, null, 2));
     console.error('--- End Create Folder Error ---');
-    // Check for specific Prisma errors if needed, e.g., unique constraint violation
     res.status(500).json({ message: 'Failed to create folder' });
   }
 };
+
+// Helper to build a nested folder tree from a flat array
+function buildFolderTree(folders: any[]): any[] {
+  const idToNode: Record<number, any> = {};
+  const roots: any[] = [];
+  folders.forEach(folder => {
+    idToNode[folder.id] = { ...folder, children: [] };
+  });
+  folders.forEach(folder => {
+    if (folder.parentId && idToNode[folder.parentId]) {
+      idToNode[folder.parentId].children.push(idToNode[folder.id]);
+    } else {
+      roots.push(idToNode[folder.id]);
+    }
+  });
+  return roots;
+}
 
 export const getFolders = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.userId;
 
   if (!userId) {
-    // This should ideally not happen if 'protect' middleware is working correctly
     res.status(401).json({ message: 'User not authenticated' });
     return;
   }
 
   try {
     const folders = await prisma.folder.findMany({
-      where: {
-        userId,
-      },
-      orderBy: {
-        updatedAt: 'desc', // Optional: order by most recently updated
-      },
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
     });
-    res.status(200).json(folders);
+    const tree = buildFolderTree(folders);
+    res.status(200).json(tree);
   } catch (error) {
     console.error('--- Get Folders Error ---');
     if (error instanceof Error) {
@@ -92,6 +119,9 @@ export const getFolderById = async (req: AuthRequest, res: Response): Promise<vo
         id: parseInt(folderId),
         userId: userId, // Ensure the folder belongs to the authenticated user
       },
+      include: {
+        children: true // Include the children of the folder
+      }
     });
 
     if (!folder) {
@@ -117,7 +147,7 @@ export const getFolderById = async (req: AuthRequest, res: Response): Promise<vo
 export const updateFolder = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.userId;
   const { id: folderId } = req.params;
-  const { name, description } = req.body;
+  const { name, description, parentId } = req.body;
 
   if (!userId) {
     res.status(401).json({ message: 'User not authenticated' });
@@ -130,15 +160,41 @@ export const updateFolder = async (req: AuthRequest, res: Response): Promise<voi
   }
 
   // Construct the data object for Prisma update
-  // Only include fields that are actually provided in the request body
-  const dataToUpdate: { name?: string; description?: string | null } = {};
+  const dataToUpdate: { name?: string; description?: string | null; parent?: { connect: { id: number } } | { disconnect: true } } = {};
   if (name !== undefined) {
     dataToUpdate.name = name;
   }
   if (description !== undefined) {
-    // If description is explicitly passed as null, it will be set to null.
-    // If description is an empty string, it will be set to an empty string.
     dataToUpdate.description = description;
+  }
+  if (parentId !== undefined) {
+    if (parentId === null) {
+      dataToUpdate.parent = { disconnect: true };
+    } else {
+      // Prevent a folder from becoming its own parent
+      if (parseInt(folderId) === parentId) {
+        res.status(400).json({ message: 'A folder cannot be its own parent' });
+        return;
+      }
+      // Check if the parent folder exists and belongs to the user
+      const parentFolder = await prisma.folder.findFirst({
+        where: { id: parentId, userId },
+      });
+      if (!parentFolder) {
+        res.status(400).json({ message: 'Parent folder not found or access denied' });
+        return;
+      }
+      // Prevent cycles by checking if the parent is a descendant of the current folder
+      let currentParent = await prisma.folder.findUnique({ where: { id: parentId } }) as { id: number; parentId: number | null } | null;
+      while (currentParent?.parentId) {
+        if (currentParent.parentId === parseInt(folderId)) {
+          res.status(400).json({ message: 'Cannot create a cycle in folder hierarchy' });
+          return;
+        }
+        currentParent = await prisma.folder.findUnique({ where: { id: currentParent.parentId } }) as { id: number; parentId: number | null } | null;
+      }
+      dataToUpdate.parent = { connect: { id: parentId } };
+    }
   }
 
   if (Object.keys(dataToUpdate).length === 0) {
@@ -164,7 +220,6 @@ export const updateFolder = async (req: AuthRequest, res: Response): Promise<voi
     const updatedFolder = await prisma.folder.update({
       where: {
         id: parseInt(folderId),
-        // No need to repeat userId here as we've already confirmed ownership
       },
       data: dataToUpdate,
     });
@@ -180,7 +235,6 @@ export const updateFolder = async (req: AuthRequest, res: Response): Promise<voi
     }
     console.error('Error object (stringified):', JSON.stringify(error, null, 2));
     console.error('--- End Update Folder Error ---');
-    // Handle specific Prisma errors, e.g., P2025 (Record to update not found - though our check should prevent this)
     res.status(500).json({ message: 'Failed to update folder' });
   }
 };

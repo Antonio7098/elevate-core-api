@@ -53,6 +53,10 @@ export const validateFolderUpdate = [
     .isString()
     .withMessage('Description, if provided and not null, must be a string')
     .trim(), // Allow empty string for description
+  body('parentId')
+    .optional({ nullable: true })
+    .isInt({ gt: 0 })
+    .withMessage('Parent ID, if provided, must be a positive integer'),
   handleValidationErrors, // Reuse existing error handler
 ];
 
@@ -246,3 +250,81 @@ export const validateQuestionSetUpdate = [
     .trim(),
   handleValidationErrors,
 ];
+
+export const validateNoteCreate = (req: Request, res: Response, next: NextFunction): void => {
+  const { title, content, plainText, folderId, questionSetId } = req.body;
+
+  // Validate title
+  if (!title || typeof title !== 'string' || title.trim().length === 0) {
+    res.status(400).json({ message: 'Title is required and must be a non-empty string' });
+    return;
+  }
+
+  // Validate content
+  if (!content || typeof content !== 'string') {
+    res.status(400).json({ message: 'Content is required and must be a string' });
+    return;
+  }
+
+  // Validate plainText
+  if (!plainText || typeof plainText !== 'string') {
+    res.status(400).json({ message: 'Plain text is required and must be a string' });
+    return;
+  }
+
+  // Validate folderId if provided
+  if (folderId !== undefined && (isNaN(Number(folderId)) || Number(folderId) <= 0)) {
+    res.status(400).json({ message: 'Folder ID must be a positive number' });
+    return;
+  }
+
+  // Validate questionSetId if provided
+  if (questionSetId !== undefined && (isNaN(Number(questionSetId)) || Number(questionSetId) <= 0)) {
+    res.status(400).json({ message: 'Question Set ID must be a positive number' });
+    return;
+  }
+
+  // Ensure at least one of folderId or questionSetId is provided
+  if (folderId === undefined && questionSetId === undefined) {
+    res.status(400).json({ message: 'Either folderId or questionSetId must be provided' });
+    return;
+  }
+
+  next();
+};
+
+export const validateNoteUpdate = (req: Request, res: Response, next: NextFunction): void => {
+  const { title, content, plainText, folderId, questionSetId } = req.body;
+
+  // Validate title if provided
+  if (title !== undefined && (typeof title !== 'string' || title.trim().length === 0)) {
+    res.status(400).json({ message: 'Title must be a non-empty string' });
+    return;
+  }
+
+  // Validate content if provided
+  if (content !== undefined && typeof content !== 'string') {
+    res.status(400).json({ message: 'Content must be a string' });
+    return;
+  }
+
+  // Validate plainText if provided
+  if (plainText !== undefined && typeof plainText !== 'string') {
+    res.status(400).json({ message: 'Plain text must be a string' });
+    return;
+  }
+
+  // Validate folderId if provided
+  if (folderId !== undefined && (isNaN(Number(folderId)) || Number(folderId) <= 0)) {
+    res.status(400).json({ message: 'Folder ID must be a positive number' });
+    return;
+  }
+
+  // Validate questionSetId if provided
+  if (questionSetId !== undefined && (isNaN(Number(questionSetId)) || Number(questionSetId) <= 0)) {
+    res.status(400).json({ message: 'Question Set ID must be a positive number' });
+    return;
+  }
+
+  next();
+};

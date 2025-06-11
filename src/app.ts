@@ -13,6 +13,7 @@ import standaloneQuestionRouter from './routes/standalone-question.routes';
 import dashboardRouter from './routes/dashboard.routes';
 import todaysTasksRoutes from './routes/todaysTasks.routes';
 import statsRouter from './routes/stats.routes';
+import noteRouter from './routes/note.routes';
 
 // Load environment variables
 dotenv.config();
@@ -32,6 +33,7 @@ app.use('/api/reviews', reviewRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/todays-tasks', todaysTasksRoutes);
 app.use('/api/stats', statsRouter);
+app.use('/api/notes', noteRouter);
 
 // Additional standalone routes for direct access
 app.use('/api/questionsets', standaloneQuestionSetRouter);
@@ -45,4 +47,5 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   res.status(500).json({ message: 'Something broke!', error: err.message });
 });
 
+export { app };
 export default app;

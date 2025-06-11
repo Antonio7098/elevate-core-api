@@ -120,6 +120,28 @@ describe('Folder Routes API', () => {
       expect(response.body).toHaveProperty('errors');
       expect(response.body.errors[0]).toHaveProperty('msg', 'Folder name must be a string');
     });
+
+    it('should create a new folder with a parent folder', async () => {
+      const parentFolder = await prisma.folder.create({
+        data: { name: 'Parent Folder', userId: testUser.id },
+      });
+
+      const folderData = {
+        name: 'New Child Folder',
+        description: 'A child folder',
+        parentId: parentFolder.id,
+      };
+
+      const response = await request(app)
+        .post('/api/folders')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send(folderData);
+
+      expect(response.status).toBe(201);
+      expect(response.body).toHaveProperty('id');
+      expect(response.body).toHaveProperty('name', folderData.name);
+      expect(response.body).toHaveProperty('parentId', parentFolder.id);
+    });
   });
 
   describe('GET /api/folders', () => {
@@ -174,6 +196,29 @@ describe('Folder Routes API', () => {
 
       expect(response.status).toBe(401);
       expect(response.body).toHaveProperty('message', 'No token, authorization denied');
+    });
+
+    it('should return folders in a nested tree structure', async () => {
+      // Create a parent folder
+      const parentFolder = await prisma.folder.create({
+        data: { name: 'Parent Folder', userId: testUser.id },
+      });
+
+      // Create a child folder
+      const childFolder = await prisma.folder.create({
+        data: { name: 'Child Folder', userId: testUser.id, parent: { connect: { id: parentFolder.id } } } as any,
+      });
+
+      const response = await request(app)
+        .get('/api/folders')
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBe(1); // Only the parent folder should be at the root
+      expect(response.body[0].name).toBe('Parent Folder');
+      expect(response.body[0].children.length).toBe(1);
+      expect(response.body[0].children[0].name).toBe('Child Folder');
     });
   });
 
@@ -423,6 +468,42 @@ describe('Folder Routes API', () => {
         .send({ name: 'New Name' });
       expect(response.status).toBe(401);
       expect(response.body).toHaveProperty('message', 'No token, authorization denied');
+    });
+
+    it('should update a folder to have a parent folder', async () => {
+      const folder = await prisma.folder.create({
+        data: { name: 'Test Folder', userId: testUser.id },
+      });
+
+      const parentFolder = await prisma.folder.create({
+        data: { name: 'Parent Folder', userId: testUser.id },
+      });
+
+      const updates = { parentId: parentFolder.id };
+
+      const response = await request(app)
+        .put(`/api/folders/${folder.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send(updates);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('parentId', parentFolder.id);
+    });
+
+    it('should prevent a folder from becoming its own parent', async () => {
+      const folder = await prisma.folder.create({
+        data: { name: 'Test Folder', userId: testUser.id },
+      });
+
+      const updates = { parentId: folder.id };
+
+      const response = await request(app)
+        .put(`/api/folders/${folder.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send(updates);
+
+      expect(response.status).toBe(400);
+      expect(response.body).toHaveProperty('message', 'A folder cannot be its own parent');
     });
   });
 

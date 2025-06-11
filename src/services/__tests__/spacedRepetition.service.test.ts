@@ -756,54 +756,54 @@ describe('Spaced Repetition Service', () => {
         understandScore: 70,
         useScore: 60,
         exploreScore: 50,
-        // No overallMasteryScore here, as it's not directly on QuestionSet model in schema
+        currentUUESetStage: 'Understand',
         questions: [
           { 
-            id: 1, 
-            text: 'Question 1 (Understand)', 
+            id: 101, 
+            text: 'Question 1 for Understand', 
             answer: 'Answer 1',
             questionType: 'SINGLE_CHOICE',
             options: ['Option A', 'Option B', 'Answer 1', 'Option D'],
             uueFocus: 'Understand',
             difficultyScore: 0.7,
-            lastAnswerCorrect: true,
+            lastAnswerCorrect: false,
             conceptTags: ['concept1', 'concept2'],
             questionSetId: questionSetId,
-            currentMasteryScore: 0.8, // Example mastery
+            currentMasteryScore: 0.8,
             totalMarksAvailable: 1,
-            timesAnsweredCorrectly: 4,
-            timesAnsweredIncorrectly: 1,
+            timesAnsweredCorrectly: 0,
+            timesAnsweredIncorrectly: 0,
             userAnswers: []
           },
           { 
-            id: 2, 
-            text: 'Question 2 (Use)', 
+            id: 102, 
+            text: 'Question 2 for Use', 
             answer: 'Answer 2',
             questionType: 'SHORT_ANSWER',
             options: [],
             uueFocus: 'Use',
-            difficultyScore: 0.9, // Reverted to assumed original
+            difficultyScore: 0.9,
             lastAnswerCorrect: false,
             conceptTags: ['concept3'],
             questionSetId: questionSetId,
-            currentMasteryScore: 0.5, // Example mastery
+            currentMasteryScore: 0.7,
             totalMarksAvailable: 1,
-            timesAnsweredCorrectly: 2,
-            timesAnsweredIncorrectly: 3,
+            timesAnsweredCorrectly: 0,
+            timesAnsweredIncorrectly: 0,
             userAnswers: []
           },
           { 
-            id: 3, 
-            text: 'Question 3 (Explore)', 
+            id: 103, 
+            text: 'Question 3 for Explore', 
             answer: 'Answer 3',
             questionType: 'SINGLE_CHOICE',
             options: ['Option A', 'Answer 3', 'Option C', 'Option D'],
             uueFocus: 'Explore',
-            difficultyScore: 0.3, // Reverted to assumed original
-            lastAnswerCorrect: null, // Never answered
+            difficultyScore: 0.3,
+            lastAnswerCorrect: null,
             conceptTags: ['concept3', 'concept4'],
             questionSetId: questionSetId,
-            currentMasteryScore: 0.1, // Example mastery, or null if never answered
+            currentMasteryScore: 0.1,
             totalMarksAvailable: 1,
             timesAnsweredCorrectly: 0,
             timesAnsweredIncorrectly: 0,
@@ -822,9 +822,9 @@ describe('Spaced Repetition Service', () => {
           questions: {
             include: {
               userAnswers: {
-                where: { userId: userId }, // userId is 1 in this test
+                where: { userId: userId },
                 orderBy: { answeredAt: 'desc' },
-                take: 5 // Service uses 5
+                take: 5
               }
             }
           }

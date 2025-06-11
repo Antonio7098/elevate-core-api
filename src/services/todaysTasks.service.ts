@@ -112,9 +112,14 @@ export const getPrioritizedQuestionsFromSet = async (
       timesAnsweredIncorrectly: true;
       totalMarksAvailable: true;
       markingCriteria: true;
+      conceptTags: true;
+      difficultyScore: true;
+      selfMark: true;
+      autoMark: true;
+      aiGenerated: true;
+      inCat: true;
       userAnswers: {
         select: { scoreAchieved: true; answeredAt: true };
-        // orderBy and take are runtime modifiers, not part of the payload type structure here
       };
     };
   }>;
@@ -183,14 +188,21 @@ export const getPrioritizedQuestionsFromSet = async (
     })
     .sort((a, b) => b.calculatedPriority - a.calculatedPriority); // Sort descending by priority
 
-  const questionsWithContext: QuestionWithContext[] = prioritized.map(({ calculatedPriority, ...rest }) => ({
-    ...rest,
-    conceptTags: rest.conceptTags ?? [],
-    difficultyScore: rest.difficultyScore ?? 0,
-    questionSetId,
-    questionSetName,
-    selectedForUUEFocus: targetUUEFocus,
-}));
+  const questionsWithContext: QuestionWithContext[] = prioritized.map(({ calculatedPriority, ...rest }) => {
+    const q = rest as QuestionWithSelectedAnswers;
+    return {
+      ...q,
+      conceptTags: q.conceptTags ?? [],
+      difficultyScore: q.difficultyScore ?? 0,
+      questionSetId,
+      questionSetName,
+      selectedForUUEFocus: targetUUEFocus,
+      selfMark: q.selfMark ?? false,
+      autoMark: q.autoMark ?? false,
+      aiGenerated: q.aiGenerated ?? false,
+      inCat: q.inCat ?? null
+    };
+  });
 
   return fetchAll ? questionsWithContext : questionsWithContext[0];
 };

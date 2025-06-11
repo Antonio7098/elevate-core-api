@@ -4,10 +4,14 @@ import { Question, QuestionSet } from '@prisma/client';
  * Represents a Question augmented with context about its parent QuestionSet
  * and the UUE focus for which it was selected in the current session.
  */
-export interface QuestionWithContext extends Question {
+export interface QuestionWithContext extends Omit<Question, 'selfMark' | 'autoMark' | 'aiGenerated' | 'inCat'> {
   questionSetId: number;
   questionSetName: string;
   selectedForUUEFocus?: string; // The UUE focus this question is intended for in the session
+  selfMark?: boolean | null;
+  autoMark?: boolean | null;
+  aiGenerated?: boolean | null;
+  inCat?: string | null;
 }
 
 /**

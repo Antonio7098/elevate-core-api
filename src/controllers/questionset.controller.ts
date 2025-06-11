@@ -8,9 +8,9 @@ const prisma = new PrismaClient();
  * Get all question sets within a folder
  * GET /api/folders/:folderId/questionsets
  */
-export const getQuestionSetsByFolder = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
-  const { folderId } = req.params;
+export const getQuestionSetsByFolder = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.userId;
+  const { folderId } = req.params;
 
   if (!userId) {
     res.status(401).json({ message: 'User not authenticated' });
@@ -23,11 +23,11 @@ export const getQuestionSetsByFolder = async (req: AuthRequest, res: Response, n
   }
 
   try {
-    // First verify the folder exists and belongs to the user
-    const folder = await prisma.folder.findUnique({
+    // First, verify the folder exists and belongs to the user
+    const folder = await prisma.folder.findFirst({
       where: {
         id: parseInt(folderId),
-        userId: userId,
+        userId,
       },
     });
 
@@ -36,10 +36,17 @@ export const getQuestionSetsByFolder = async (req: AuthRequest, res: Response, n
       return;
     }
 
-    // Get all question sets for this folder
     const questionSets = await prisma.questionSet.findMany({
       where: {
         folderId: parseInt(folderId),
+      },
+      include: {
+        questions: true,
+        notes: {
+          orderBy: {
+            updatedAt: 'desc',
+          },
+        },
       },
       orderBy: {
         updatedAt: 'desc',
@@ -48,7 +55,7 @@ export const getQuestionSetsByFolder = async (req: AuthRequest, res: Response, n
 
     res.status(200).json(questionSets);
   } catch (error) {
-    console.error('--- Get Question Sets Error ---');
+    console.error('--- Get Question Sets By Folder Error ---');
     if (error instanceof Error) {
       console.error('Message:', error.message);
       console.error('Stack:', error.stack);
@@ -56,8 +63,8 @@ export const getQuestionSetsByFolder = async (req: AuthRequest, res: Response, n
       console.error('Error object (raw):', error);
     }
     console.error('Error object (stringified):', JSON.stringify(error, null, 2));
-    console.error('--- End Get Question Sets Error ---');
-    next(error);
+    console.error('--- End Get Question Sets By Folder Error ---');
+    res.status(500).json({ message: 'Failed to retrieve question sets' });
   }
 };
 
@@ -65,28 +72,32 @@ export const getQuestionSetsByFolder = async (req: AuthRequest, res: Response, n
  * Get a specific question set by ID
  * GET /api/folders/:folderId/questionsets/:id
  */
-export const getQuestionSetById = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
-  const { folderId, id: setId } = req.params;
+export const getQuestionSetById = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.userId;
+  const { id: setId } = req.params;
 
   if (!userId) {
     res.status(401).json({ message: 'User not authenticated' });
     return;
   }
 
-  if (!folderId || isNaN(parseInt(folderId)) || !setId || isNaN(parseInt(setId))) {
-    res.status(400).json({ message: 'Invalid folder ID or question set ID provided' });
+  if (!setId || isNaN(parseInt(setId))) {
+    res.status(400).json({ message: 'Invalid question set ID provided' });
     return;
   }
 
   try {
-    // Find the question set and verify ownership in a single query
     const questionSet = await prisma.questionSet.findFirst({
       where: {
         id: parseInt(setId),
-        folderId: parseInt(folderId),
-        folder: {
-          userId: userId,
+        folder: { userId },
+      },
+      include: {
+        questions: true,
+        notes: {
+          orderBy: {
+            updatedAt: 'desc',
+          },
         },
       },
     });
@@ -107,7 +118,7 @@ export const getQuestionSetById = async (req: AuthRequest, res: Response, next: 
     }
     console.error('Error object (stringified):', JSON.stringify(error, null, 2));
     console.error('--- End Get Question Set By ID Error ---');
-    next(error);
+    res.status(500).json({ message: 'Failed to retrieve question set' });
   }
 };
 
