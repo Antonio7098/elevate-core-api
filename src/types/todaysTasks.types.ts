@@ -1,17 +1,60 @@
-import { Question, QuestionSet } from '@prisma/client';
-
 /**
  * Represents a Question augmented with context about its parent QuestionSet
  * and the UUE focus for which it was selected in the current session.
  */
-export interface QuestionWithContext extends Omit<Question, 'selfMark' | 'autoMark' | 'aiGenerated' | 'inCat'> {
+export interface QuestionWithContext {
+  id: number;
+  answer: string | null;
   questionSetId: number;
+  createdAt: Date;
+  updatedAt: Date;
+  options: string[];
+  questionType: string;
+  text: string;
+  conceptTags: string[];
+  lastAnswerCorrect: boolean | null;
+  uueFocus: string;
+  totalMarksAvailable: number;
+  markingCriteria: any | null;
+  currentMasteryScore: number | null;
+  difficultyScore: number | null;
+  timesAnsweredCorrectly: number;
+  timesAnsweredIncorrectly: number;
+  selfMark: boolean | null;
+  autoMark: boolean | null;
+  aiGenerated: boolean | null;
+  inCat: string | null;
+  imageUrls: string[];
   questionSetName: string;
-  selectedForUUEFocus?: string; // The UUE focus this question is intended for in the session
-  selfMark?: boolean | null;
-  autoMark?: boolean | null;
-  aiGenerated?: boolean | null;
-  inCat?: string | null;
+  selectedForUUEFocus?: string;
+}
+
+/**
+ * Represents a Question with selected answers and additional fields
+ */
+export interface QuestionWithSelectedAnswers {
+  id: number;
+  answer: string | null;
+  questionSetId: number;
+  createdAt: Date;
+  updatedAt: Date;
+  options: string[];
+  questionType: string;
+  text: string;
+  conceptTags: string[];
+  lastAnswerCorrect: boolean | null;
+  uueFocus: string;
+  totalMarksAvailable: number;
+  markingCriteria: any | null;
+  currentMasteryScore: number | null;
+  difficultyScore: number | null;
+  timesAnsweredCorrectly: number;
+  timesAnsweredIncorrectly: number;
+  selfMark: boolean;
+  autoMark: boolean;
+  aiGenerated: boolean;
+  inCat: string | null;
+  imageUrls: string[];
 }
 
 /**
@@ -28,7 +71,10 @@ export interface TodaysTasksResponse {
 /**
  * A leaner type for QuestionSet when fetching due sets, containing only essential fields.
  */
-export type DueQuestionSet = Pick<
-  QuestionSet,
-  'id' | 'name' | 'currentUUESetStage' | 'currentTotalMasteryScore' | 'nextReviewAt'
->;
+export interface DueQuestionSet {
+  id: number;
+  name: string;
+  currentUUESetStage: string;
+  currentTotalMasteryScore: number;
+  nextReviewAt: Date | null;
+}

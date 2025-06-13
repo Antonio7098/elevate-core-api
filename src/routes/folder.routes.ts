@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { protect } from '../middleware/auth.middleware';
 import { validateFolderCreate, validateFolderUpdate } from '../middleware/validation';
 import { createFolder, getFolders, getFolderById, updateFolder, deleteFolder } from '../controllers/folder.controller.ts'; 
+import { getAllQuestionsInFolder, getAllNotesInFolder } from '../controllers/recursiveFolder.controller';
 import questionsetRouter from './questionset.routes';
 
 const router = Router();
@@ -21,6 +22,12 @@ router.put('/:id', protect, ...validateFolderUpdate, updateFolder);
 
 // DELETE /api/folders/:id - Delete a folder by ID
 router.delete('/:id', protect, deleteFolder);
+
+// GET /api/folders/:folderId/all-questions - Get all questions in folder tree
+router.get('/:folderId/all-questions', protect, getAllQuestionsInFolder);
+
+// GET /api/folders/:folderId/all-notes - Get all notes in folder tree
+router.get('/:folderId/all-notes', protect, getAllNotesInFolder);
 
 // Mount the questionset router for paths like /api/folders/:folderId/questionsets
 router.use('/:folderId/questionsets', questionsetRouter);

@@ -75,6 +75,24 @@ const testFolders = [
   }
 ];
 
+// New sample data for Insight Catalysts
+const testInsightCatalysts = [
+  {
+    type: 'note',
+    text: 'This is an insight catalyst linked to a note.',
+    explanation: 'Explanation for the note insight catalyst.',
+    imageUrls: ['https://example.com/image1.jpg'],
+    noteId: null // Will be set dynamically
+  },
+  {
+    type: 'question',
+    text: 'This is an insight catalyst linked to a question.',
+    explanation: 'Explanation for the question insight catalyst.',
+    imageUrls: ['https://example.com/image2.jpg'],
+    questionId: null // Will be set dynamically
+  }
+];
+
 async function createTestUser(): Promise<void> {
   try {
     // Check if user already exists
@@ -192,6 +210,21 @@ async function createTestUser(): Promise<void> {
       });
     }
 
+    // Create Insight Catalysts for the user
+    for (const catalystData of testInsightCatalysts) {
+      await prisma.insightCatalyst.create({
+        data: {
+          type: catalystData.type,
+          text: catalystData.text,
+          explanation: catalystData.explanation,
+          imageUrls: catalystData.imageUrls,
+          userId: user.id,
+          noteId: catalystData.noteId,
+          questionId: catalystData.questionId
+        }
+      });
+    }
+
     // Fetch and print the created structure
     const createdUser = await prisma.user.findUnique({
       where: { email: 'test@example.com' },
@@ -203,7 +236,8 @@ async function createTestUser(): Promise<void> {
               include: { questions: true }
             }
           }
-        }
+        },
+        insightCatalysts: true
       }
     });
 
@@ -225,6 +259,10 @@ async function createTestUser(): Promise<void> {
           console.log(`    - ${qs.name} (ID: ${qs.id})`);
           console.log(`      Questions: ${qs.questions.length}`);
         }
+      }
+      console.log('\nCreated Insight Catalysts:');
+      for (const catalyst of (createdUser as any).insightCatalysts) {
+        console.log(`- Type: ${catalyst.type}, Text: ${catalyst.text}, ID: ${catalyst.id}`);
       }
     }
   } catch (error) {

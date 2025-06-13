@@ -1,9 +1,9 @@
 import prisma from '../lib/prisma';
-import { QuestionSet, Question, Prisma } from '@prisma/client';
 import { 
   QuestionWithContext, 
   TodaysTasksResponse, 
-  DueQuestionSet 
+  DueQuestionSet,
+  QuestionWithSelectedAnswers
 } from '../types/todaysTasks.types';
 
 const UUE_STAGES = ['Understand', 'Use', 'Explore'];
@@ -47,10 +47,6 @@ export const getDueSetsForUser = async (userId: number): Promise<DueQuestionSet[
       nextReviewAt: {
         lte: today,
       },
-      // Optionally, filter out sets that have no questions, though this might be better handled elsewhere
-      // questions: {
-      //   some: {},
-      // },
     },
     select: {
       id: true,
@@ -59,13 +55,10 @@ export const getDueSetsForUser = async (userId: number): Promise<DueQuestionSet[
       currentTotalMasteryScore: true,
       nextReviewAt: true,
     },
-    // orderBy: { // Initial ordering can be done here or later
-    //   nextReviewAt: 'asc',
-    // },
   });
 
   // Ensure currentUUESetStage has a default if null/undefined from DB
-  return dueSets.map(qs => ({
+  return dueSets.map((qs: { currentUUESetStage: string | null } & DueQuestionSet) => ({
     ...qs,
     currentUUESetStage: qs.currentUUESetStage || 'Understand',
   }));
@@ -85,45 +78,6 @@ export const getPrioritizedQuestionsFromSet = async (
   fetchAll: boolean = false,
   questionSetName: string
 ): Promise<QuestionWithContext | QuestionWithContext[] | null> => {
-  // TODO: Implement detailed prioritization logic
-  // 1. Fetch questions matching questionSetId and targetUUEFocus, not in excludeQuestionIds
-  // 2. Include UserQuestionAnswer data for prioritization (last 5 answers, times correct/incorrect)
-  // 3. Prioritization criteria:
-  //    a. Most recently answered incorrectly
-  //    b. Lowest performance on last attempt (if available)
-  //    c. Higher difficultyScore
-  //    d. Older questions (less recently reviewed within this set/focus)
-  //    e. New questions (never answered)
-  // 4. If fetchAll, return all sorted. If !fetchAll, return the top one.
-  // 5. Format as QuestionWithContext or QuestionWithContext[]
-  type QuestionWithSelectedAnswers = Prisma.QuestionGetPayload<{
-    select: {
-      id: true;
-      text: true;
-      answer: true;
-      uueFocus: true;
-      questionType: true;
-      currentMasteryScore: true;
-      createdAt: true;
-      updatedAt: true;
-      options: true;
-      lastAnswerCorrect: true;
-      timesAnsweredCorrectly: true;
-      timesAnsweredIncorrectly: true;
-      totalMarksAvailable: true;
-      markingCriteria: true;
-      conceptTags: true;
-      difficultyScore: true;
-      selfMark: true;
-      autoMark: true;
-      aiGenerated: true;
-      inCat: true;
-      userAnswers: {
-        select: { scoreAchieved: true; answeredAt: true };
-      };
-    };
-  }>;
-  
   const questions = await prisma.question.findMany({
     where: {
       questionSetId,
@@ -149,6 +103,11 @@ export const getPrioritizedQuestionsFromSet = async (
       markingCriteria: true,
       difficultyScore: true,
       conceptTags: true,
+      imageUrls: true,
+      selfMark: true,
+      autoMark: true,
+      aiGenerated: true,
+      inCat: true,
       userAnswers: { 
         where: { userId },
         select: { scoreAchieved: true, answeredAt: true },
@@ -167,8 +126,33 @@ export const getPrioritizedQuestionsFromSet = async (
   }
 
   // Prioritization Logic
+  type PrioritizedQuestion = {
+    id: number;
+    text: string;
+    answer: string | null;
+    uueFocus: string;
+    questionType: string;
+    currentMasteryScore: number | null;
+    createdAt: Date;
+    updatedAt: Date;
+    options: string[];
+    lastAnswerCorrect: boolean | null;
+    timesAnsweredCorrectly: number;
+    timesAnsweredIncorrectly: number;
+    totalMarksAvailable: number;
+    markingCriteria: any | null;
+    difficultyScore: number | null;
+    conceptTags: string[];
+    imageUrls: string[];
+    selfMark: boolean;
+    autoMark: boolean;
+    aiGenerated: boolean;
+    inCat: string | null;
+    userAnswers: { scoreAchieved: number; answeredAt: Date }[];
+  };
+
   const prioritized = questions
-    .map(q => {
+    .map((q: PrioritizedQuestion) => {
       const lastAnswer = q.userAnswers.length > 0 ? q.userAnswers[0] : null;
       let priority = 0; // Higher is better priority
 
@@ -180,16 +164,13 @@ export const getPrioritizedQuestionsFromSet = async (
       } else {
         priority += 200; // New question, high priority
       }
-      // priority += (q.difficultyScore || 3) * 10; // Difficulty (default to 3 if null) - Field removed
       
-      // Add a small factor for age if needed, e.g., based on q.createdAt or lastAnswer.answeredAt
-      // For now, this is a basic prioritization
       return { ...q, calculatedPriority: priority };
     })
-    .sort((a, b) => b.calculatedPriority - a.calculatedPriority); // Sort descending by priority
+    .sort((a: { calculatedPriority: number }, b: { calculatedPriority: number }) => b.calculatedPriority - a.calculatedPriority); // Sort descending by priority
 
-  const questionsWithContext: QuestionWithContext[] = prioritized.map(({ calculatedPriority, ...rest }) => {
-    const q = rest as QuestionWithSelectedAnswers;
+  const questionsWithContext: QuestionWithContext[] = prioritized.map(({ calculatedPriority, ...rest }: PrioritizedQuestion & { calculatedPriority: number }) => {
+    const q = rest as unknown as QuestionWithSelectedAnswers;
     return {
       ...q,
       conceptTags: q.conceptTags ?? [],
@@ -200,13 +181,13 @@ export const getPrioritizedQuestionsFromSet = async (
       selfMark: q.selfMark ?? false,
       autoMark: q.autoMark ?? false,
       aiGenerated: q.aiGenerated ?? false,
-      inCat: q.inCat ?? null
+      inCat: q.inCat ?? null,
+      imageUrls: q.imageUrls ?? []
     };
   });
 
   return fetchAll ? questionsWithContext : questionsWithContext[0];
 };
-
 
 // Main service function - Skeleton
 export const generateTodaysTasksForUser = async (
@@ -250,7 +231,7 @@ export const generateTodaysTasksForUser = async (
   const criticalDueSets: DueQuestionSet[] = [];
   const regularDueSets: DueQuestionSet[] = [];
 
-  allDueSets.forEach(qs => {
+  allDueSets.forEach((qs: DueQuestionSet) => {
     if (qs.nextReviewAt && qs.nextReviewAt < threeDaysAgo) {
       criticalDueSets.push(qs);
     } else {

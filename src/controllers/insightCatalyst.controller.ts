@@ -1,8 +1,8 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
-import { PrismaClient } from '@prisma/client';
+import { InsightCatalystService } from '../services/insightCatalyst.service';
 
-const prisma = new PrismaClient();
+const insightCatalystService = new InsightCatalystService();
 
 export const createInsightCatalyst = async (req: AuthRequest, res: Response): Promise<void> => {
   const { type, text, explanation, imageUrls, noteId, questionId } = req.body;
@@ -16,10 +16,8 @@ export const createInsightCatalyst = async (req: AuthRequest, res: Response): Pr
   try {
     // Verify note ownership if noteId is provided
     if (noteId) {
-      const note = await prisma.note.findFirst({
-        where: { id: noteId, userId },
-      });
-      if (!note) {
+      const hasAccess = await insightCatalystService.verifyNoteOwnership(noteId, userId);
+      if (!hasAccess) {
         res.status(404).json({ message: 'Note not found or access denied' });
         return;
       }
@@ -27,28 +25,21 @@ export const createInsightCatalyst = async (req: AuthRequest, res: Response): Pr
 
     // Verify question ownership if questionId is provided
     if (questionId) {
-      const question = await prisma.question.findFirst({
-        where: { 
-          id: questionId,
-          questionSet: { folder: { userId } }
-        },
-      });
-      if (!question) {
+      const hasAccess = await insightCatalystService.verifyQuestionOwnership(questionId, userId);
+      if (!hasAccess) {
         res.status(404).json({ message: 'Question not found or access denied' });
         return;
       }
     }
 
-    const newInsightCatalyst = await prisma.insightCatalyst.create({
-      data: {
-        type,
-        text,
-        explanation,
-        imageUrls,
-        userId,
-        noteId: noteId || null,
-        questionId: questionId || null,
-      },
+    const newInsightCatalyst = await insightCatalystService.createInsightCatalyst({
+      type,
+      text,
+      explanation,
+      imageUrls,
+      userId,
+      noteId: noteId || undefined,
+      questionId: questionId || undefined,
     });
 
     res.status(201).json(newInsightCatalyst);
@@ -76,22 +67,12 @@ export const getInsightCatalysts = async (req: AuthRequest, res: Response): Prom
   }
 
   try {
-    const where: any = { userId };
+    const filters = {
+      noteId: noteId ? parseInt(noteId as string) : undefined,
+      questionId: questionId ? parseInt(questionId as string) : undefined,
+    };
 
-    if (noteId) {
-      where.noteId = parseInt(noteId as string);
-    }
-    if (questionId) {
-      where.questionId = parseInt(questionId as string);
-    }
-
-    const insightCatalysts = await prisma.insightCatalyst.findMany({
-      where,
-      orderBy: {
-        updatedAt: 'desc',
-      },
-    });
-
+    const insightCatalysts = await insightCatalystService.getInsightCatalysts(userId, filters);
     res.status(200).json(insightCatalysts);
   } catch (error) {
     console.error('--- Get Insight Catalysts Error ---');
@@ -122,12 +103,7 @@ export const getInsightCatalystById = async (req: AuthRequest, res: Response): P
   }
 
   try {
-    const insightCatalyst = await prisma.insightCatalyst.findFirst({
-      where: {
-        id: parseInt(catalystId),
-        userId,
-      },
-    });
+    const insightCatalyst = await insightCatalystService.getInsightCatalystById(parseInt(catalystId), userId);
 
     if (!insightCatalyst) {
       res.status(404).json({ message: 'Insight catalyst not found or access denied' });
@@ -165,25 +141,10 @@ export const updateInsightCatalyst = async (req: AuthRequest, res: Response): Pr
   }
 
   try {
-    // First, verify the insight catalyst exists and belongs to the user
-    const existingCatalyst = await prisma.insightCatalyst.findFirst({
-      where: {
-        id: parseInt(catalystId),
-        userId,
-      },
-    });
-
-    if (!existingCatalyst) {
-      res.status(404).json({ message: 'Insight catalyst not found or access denied' });
-      return;
-    }
-
     // Verify note ownership if noteId is provided
     if (noteId) {
-      const note = await prisma.note.findFirst({
-        where: { id: noteId, userId },
-      });
-      if (!note) {
+      const hasAccess = await insightCatalystService.verifyNoteOwnership(noteId, userId);
+      if (!hasAccess) {
         res.status(404).json({ message: 'Note not found or access denied' });
         return;
       }
@@ -191,29 +152,25 @@ export const updateInsightCatalyst = async (req: AuthRequest, res: Response): Pr
 
     // Verify question ownership if questionId is provided
     if (questionId) {
-      const question = await prisma.question.findFirst({
-        where: { 
-          id: questionId,
-          questionSet: { folder: { userId } }
-        },
-      });
-      if (!question) {
+      const hasAccess = await insightCatalystService.verifyQuestionOwnership(questionId, userId);
+      if (!hasAccess) {
         res.status(404).json({ message: 'Question not found or access denied' });
         return;
       }
     }
 
-    const updatedCatalyst = await prisma.insightCatalyst.update({
-      where: { id: parseInt(catalystId) },
-      data: {
+    const updatedCatalyst = await insightCatalystService.updateInsightCatalyst(
+      parseInt(catalystId),
+      userId,
+      {
         type,
         text,
         explanation,
         imageUrls,
-        noteId: noteId || null,
-        questionId: questionId || null,
-      },
-    });
+        noteId: noteId || undefined,
+        questionId: questionId || undefined,
+      }
+    );
 
     res.status(200).json(updatedCatalyst);
   } catch (error) {
@@ -221,6 +178,10 @@ export const updateInsightCatalyst = async (req: AuthRequest, res: Response): Pr
     if (error instanceof Error) {
       console.error('Message:', error.message);
       console.error('Stack:', error.stack);
+      if (error.message === 'Insight catalyst not found or access denied') {
+        res.status(404).json({ message: error.message });
+        return;
+      }
     } else {
       console.error('Error object (raw):', error);
     }
@@ -245,29 +206,17 @@ export const deleteInsightCatalyst = async (req: AuthRequest, res: Response): Pr
   }
 
   try {
-    // First, verify the insight catalyst exists and belongs to the user
-    const catalystToDelete = await prisma.insightCatalyst.findFirst({
-      where: {
-        id: parseInt(catalystId),
-        userId,
-      },
-    });
-
-    if (!catalystToDelete) {
-      res.status(404).json({ message: 'Insight catalyst not found or access denied' });
-      return;
-    }
-
-    await prisma.insightCatalyst.delete({
-      where: { id: parseInt(catalystId) },
-    });
-
+    await insightCatalystService.deleteInsightCatalyst(parseInt(catalystId), userId);
     res.status(204).send();
   } catch (error) {
     console.error('--- Delete Insight Catalyst Error ---');
     if (error instanceof Error) {
       console.error('Message:', error.message);
       console.error('Stack:', error.stack);
+      if (error.message === 'Insight catalyst not found or access denied') {
+        res.status(404).json({ message: error.message });
+        return;
+      }
     } else {
       console.error('Error object (raw):', error);
     }

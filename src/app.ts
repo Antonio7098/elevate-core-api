@@ -14,6 +14,7 @@ import dashboardRouter from './routes/dashboard.routes';
 import todaysTasksRoutes from './routes/todaysTasks.routes';
 import statsRouter from './routes/stats.routes';
 import noteRouter from './routes/note.routes';
+import insightCatalystRouter from './routes/insightCatalyst.routes';
 
 // Load environment variables
 dotenv.config();
@@ -34,6 +35,7 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/todays-tasks', todaysTasksRoutes);
 app.use('/api/stats', statsRouter);
 app.use('/api/notes', noteRouter);
+app.use('/api/insight-catalysts', insightCatalystRouter);
 
 // Additional standalone routes for direct access
 app.use('/api/questionsets', standaloneQuestionSetRouter);
