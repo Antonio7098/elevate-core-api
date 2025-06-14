@@ -261,8 +261,8 @@ export const validateNoteCreate = (req: Request, res: Response, next: NextFuncti
   }
 
   // Validate content
-  if (!content || typeof content !== 'string') {
-    res.status(400).json({ message: 'Content is required and must be a string' });
+  if (!content || typeof content !== 'object') {
+    res.status(400).json({ message: 'Content is required and must be a valid JSON object' });
     return;
   }
 
@@ -303,8 +303,8 @@ export const validateNoteUpdate = (req: Request, res: Response, next: NextFuncti
   }
 
   // Validate content if provided
-  if (content !== undefined && typeof content !== 'string') {
-    res.status(400).json({ message: 'Content must be a string' });
+  if (content !== undefined && typeof content !== 'object') {
+    res.status(400).json({ message: 'Content must be a valid JSON object' });
     return;
   }
 
