@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient, Question, Prisma, QuestionSet } from '@prisma/client';
+import { PrismaClient, Question, Prisma, QuestionSet, Folder } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth.middleware';
 import {
   getDueQuestionSets,
@@ -12,6 +12,22 @@ import {
   USE_WEIGHT,        // Kept if used elsewhere
   EXPLORE_WEIGHT     // Kept if used elsewhere
 } from '../services/spacedRepetition.service';
+import { processAdvancedReview } from '../services/advancedSpacedRepetition.service';
+
+// Extend Express Request type to include user
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id: number;
+  };
+}
+
+// Extend QuestionSet type to include new fields
+interface ExtendedQuestionSet extends QuestionSet {
+  srStage: number;
+  easeFactor: number;
+  lapses: number;
+  folder: Folder;
+}
 
 const prisma = new PrismaClient();
 
@@ -192,97 +208,59 @@ interface UserQuestionAnswerData {
  * Submit a review for a question set
  * POST /api/reviews
  */
-export const submitReview = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
-  const sessionStartTime = new Date(); // Capture session start time
+export const submitReview = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { questionSetId } = req.params;
+  const userId = req.user?.id;
+  const { outcomes, sessionStartTime, sessionDurationSeconds } = req.body;
+
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
   try {
-    if (process.env.NODE_ENV !== 'test') { console.log('SUBMIT_REVIEW_START: Content-Type:', req.headers['content-type']); }
-    if (process.env.NODE_ENV !== 'test') { console.log('SUBMIT_REVIEW_START: Request Body:', JSON.stringify(req.body, null, 2)); }
-    const userId = req.user?.userId;
-
-    if (!userId) {
-      console.error('SUBMIT_REVIEW_ERROR: User not authenticated');
-      res.status(401).json({ message: 'User not authenticated' });
-      return;
-    }
-
-    const { questionSetId: rawQuestionSetId, outcomes: rawOutcomes, sessionDurationSeconds } = req.body as FrontendReviewSubmission;
-
-    // Validate payload
-    if (!rawQuestionSetId || !rawOutcomes || !Array.isArray(rawOutcomes) || typeof sessionDurationSeconds !== 'number') {
-      console.error('SUBMIT_REVIEW_ERROR: Invalid payload structure - missing fields');
-      res.status(400).json({ message: 'Invalid payload: questionSetId, outcomes array, and sessionDurationSeconds are required.' });
-      return;
-    }
-
-    const questionSetId = parseInt(rawQuestionSetId);
-    if (isNaN(questionSetId)) {
-      console.error('SUBMIT_REVIEW_ERROR: Invalid questionSetId format');
-      res.status(400).json({ message: 'Invalid questionSetId format. Must be a number.' });
-      return;
-    }
-
-    if (rawOutcomes.length === 0) {
-      console.error('SUBMIT_REVIEW_ERROR: Outcomes array cannot be empty');
-      res.status(400).json({ message: 'Outcomes array cannot be empty.' });
-      return;
-    }
-
-    const processedOutcomes = rawOutcomes.map(outcome => {
-      const qId = parseInt(outcome.questionId);
-      if (isNaN(qId)) {
-        // This error will be caught by the catch block below
-        throw new Error(`Invalid questionId in outcomes: ${outcome.questionId}. Must be a number.`);
+    const questionSet = await prisma.questionSet.findUnique({
+      where: { id: parseInt(questionSetId) },
+      include: {
+        folder: true
       }
-
-      const scoreAchievedRaw = outcome.scoreAchieved;
-      if (typeof scoreAchievedRaw !== 'number' || scoreAchievedRaw < 0 || scoreAchievedRaw > 5) {
-        // This error will be caught by the catch block below
-        throw new Error(`Invalid scoreAchieved in outcomes: ${scoreAchievedRaw} for QID ${qId}. Must be a number between 0 and 5.`);
-      }
-      // Normalize score from 0-5 (frontend) to 0-1 (service)
-      const normalizedScore = scoreAchievedRaw / 5;
-      
-      return {
-        questionId: qId,
-        scoreAchieved: normalizedScore,
-        userAnswerText: outcome.userAnswerText,
-        timeSpentOnQuestion: outcome.timeSpentOnQuestion, // This is optional in FrontendReviewOutcome
-      };
     });
 
-    const updatedQuestionSet = await processQuestionSetReview(
-      userId,
-      processedOutcomes,
-      sessionStartTime, 
-      sessionDurationSeconds 
-    );
-
-    // Return the updated QuestionSet directly as per service layer's return
-    res.status(200).json(updatedQuestionSet);
-
-  } catch (error) {
-    if (process.env.NODE_ENV !== 'test') { console.error('====== DETAILED ERROR IN SUBMIT REVIEW ======', error); } // Outer log for any error
-    if (error instanceof Error) {
-      if (process.env.NODE_ENV !== 'test') { console.error('Error Name:', error.name); }         // Detailed log for Error instances
-      if (process.env.NODE_ENV !== 'test') { console.error('Error Message:', error.message); }   // Detailed log
-      if (process.env.NODE_ENV !== 'test') { console.error('Error Stack:', error.stack); }       // Detailed log
-
-      // Specific error handling based on message content
-      if (error.message.startsWith('Invalid questionId') || error.message.startsWith('Invalid scoreAchieved')) {
-        res.status(400).json({ message: error.message });
-        return;
-      } else if (error.message.includes('not found during review processing') || error.message.includes('QuestionSet with ID')) { // Catch service layer 'not found' for questions or question sets
-        res.status(404).json({ message: error.message }); 
-        return;
-      } else {
-        // For other Error instances, pass to the global error handler
-        next(error);
-      }
-    } else {
-      // Handle cases where the thrown object is not an Error instance
-      console.error('Non-Error object thrown in submitReview:', error);
-      next(error); 
+    if (!questionSet) {
+      res.status(404).json({ error: 'Question set not found' });
+      return;
     }
+
+    // Type assertion after null check
+    const extendedQuestionSet = questionSet as unknown as ExtendedQuestionSet;
+
+    if (extendedQuestionSet.folder.userId !== userId) {
+      res.status(403).json({ error: 'Access denied' });
+      return;
+    }
+
+    const updatedQuestionSet = await processAdvancedReview(
+      userId,
+      parseInt(questionSetId),
+      outcomes,
+      new Date(sessionStartTime),
+      sessionDurationSeconds
+    ) as unknown as ExtendedQuestionSet;
+
+    res.json({
+      questionSet: {
+        id: updatedQuestionSet.id,
+        name: updatedQuestionSet.name,
+        currentStage: updatedQuestionSet.srStage,
+        currentInterval: updatedQuestionSet.currentIntervalDays,
+        easeFactor: updatedQuestionSet.easeFactor,
+        lapses: updatedQuestionSet.lapses,
+        nextReviewAt: updatedQuestionSet.nextReviewAt
+      }
+    });
+  } catch (error) {
+    console.error('Error submitting review:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -308,5 +286,58 @@ export const getReviewStats = async (req: AuthRequest, res: Response, next: Next
   } catch (error) {
     console.error('Error getting review stats:', error);
     next(error);
+  }
+};
+
+export const startReview = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { questionSetId } = req.params;
+  const userId = req.user?.id;
+
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  try {
+    const questionSet = await prisma.questionSet.findUnique({
+      where: { id: parseInt(questionSetId) },
+      include: {
+        folder: true
+      }
+    });
+
+    if (!questionSet) {
+      res.status(404).json({ error: 'Question set not found' });
+      return;
+    }
+
+    // Type assertion after null check
+    const extendedQuestionSet = questionSet as unknown as ExtendedQuestionSet;
+
+    if (extendedQuestionSet.folder.userId !== userId) {
+      res.status(403).json({ error: 'Access denied' });
+      return;
+    }
+
+    const questions = await getPrioritizedQuestions(
+      parseInt(questionSetId),
+      userId,
+      10
+    );
+
+    res.json({
+      questionSet: {
+        id: extendedQuestionSet.id,
+        name: extendedQuestionSet.name,
+        currentStage: extendedQuestionSet.srStage,
+        currentInterval: extendedQuestionSet.currentIntervalDays,
+        easeFactor: extendedQuestionSet.easeFactor,
+        lapses: extendedQuestionSet.lapses
+      },
+      questions
+    });
+  } catch (error) {
+    console.error('Error starting review:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
