@@ -16,6 +16,6 @@ router.post('/generate-questions-from-source', validateGenerateFromSource, gener
 router.post('/chat', validateChatWithAI, chatWithAI);
 
 // POST /api/ai/evaluate-answer - Evaluate a user's answer to a question using AI
-router.post('/evaluate-answer', evaluateAnswer);
+router.post('/evaluate-answer', protect, evaluateAnswer);
 
 export default router;

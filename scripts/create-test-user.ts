@@ -113,9 +113,19 @@ async function main() {
   const physicsNote = await prisma.note.create({
     data: {
       title: 'Newtonian Physics Concepts',
-      // Simulate React Quill Delta JSON format
-      content: { "ops": [{ "insert": "Newton's First Law: An object at rest stays at rest and an object in motion stays in motion with the same speed and in the same direction unless acted upon by an unbalanced force.\n" }, { "attributes": { "block-id": "uuid-law-1" }, "insert": "\n" }, { "insert": "Newton's Second Law: F = ma.\n" }] },
-      plainText: "Newton's First Law... F = ma.",
+      content: {
+        blocks: [
+          {
+            type: 'paragraph',
+            content: "Newton's First Law: An object at rest stays at rest and an object in motion stays in motion with the same speed and in the same direction unless acted upon by an unbalanced force."
+          },
+          {
+            type: 'paragraph',
+            content: "Newton's Second Law: F = ma."
+          }
+        ]
+      },
+      plainText: "Newton's First Law: An object at rest stays at rest and an object in motion stays in motion with the same speed and in the same direction unless acted upon by an unbalanced force.\nNewton's Second Law: F = ma.",
       userId: user.id,
       folderId: physicsFolder.id,
     },
