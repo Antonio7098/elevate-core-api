@@ -6,6 +6,8 @@
  * between the Core API and the Python AI Service.
  */
 
+import { CognitiveApproach, ExplanationStyle, InteractionStyle } from '@prisma/client';
+
 // Common types
 
 /**
@@ -14,9 +16,9 @@
 export interface AIServiceBaseResponse {
   success: boolean;
   metadata?: {
-    processingTime: string;
-    model: string;
-    [key: string]: any;
+    processingTime?: string;
+    model?: string;
+    tokensUsed?: number;
   };
 }
 
@@ -43,6 +45,12 @@ export interface GenerateQuestionsRequest {
   difficulty?: 'easy' | 'medium' | 'hard';
   topics?: string[];
   language?: string;
+  context?: {
+    learningStyles?: CognitiveApproach[];
+    preferredAiTone?: ExplanationStyle;
+    preferredAiVerbosity?: InteractionStyle;
+    primaryGoal?: string;
+  };
 }
 
 /**
@@ -57,8 +65,8 @@ export interface GeneratedQuestion {
   uueFocus?: 'Understand' | 'Use' | 'Explore';
   difficulty?: string | number;
   topics?: string[];
-  totalMarksAvailable?: number; // NEW: Total marks available for this question (1-5)
-  markingCriteria?: string[] | string; // NEW: Criteria for marking/grading the answer
+  totalMarksAvailable?: number;
+  markingCriteria?: string[] | string;
 }
 
 /**
@@ -82,6 +90,7 @@ export interface GenerateQuestionsResponse extends AIServiceBaseResponse {
 export interface ConversationMessage {
   role: 'user' | 'assistant';
   content: string;
+  timestamp?: string;
 }
 
 /**
@@ -129,8 +138,10 @@ export interface ChatContext {
   };
   
   // Learning preferences
-  userLevel?: 'beginner' | 'intermediate' | 'advanced';
-  preferredLearningStyle?: 'visual' | 'auditory' | 'reading' | 'kinesthetic';
+  learningStyles?: CognitiveApproach[];
+  preferredAiTone?: ExplanationStyle;
+  preferredAiVerbosity?: InteractionStyle;
+  primaryGoal?: string;
 }
 
 /**
@@ -188,9 +199,6 @@ export function isChatResponse(response: AIServiceBaseResponse): response is Cha
 
 // Answer Evaluation Types
 
-/**
- * Request to evaluate a user's answer to a question
- */
 export interface EvaluateAnswerRequest {
   questionContext: {
     questionId: string | number;
@@ -207,9 +215,6 @@ export interface EvaluateAnswerRequest {
   };
 }
 
-/**
- * Response from the answer evaluation endpoint
- */
 export interface EvaluateAnswerResponse extends AIServiceBaseResponse {
   success: true;
   evaluation: {
@@ -225,9 +230,6 @@ export interface EvaluateAnswerResponse extends AIServiceBaseResponse {
   };
 }
 
-/**
- * Type guard to check if a response is a successful answer evaluation response
- */
 export function isEvaluateAnswerResponse(
   response: AIServiceBaseResponse
 ): response is EvaluateAnswerResponse {

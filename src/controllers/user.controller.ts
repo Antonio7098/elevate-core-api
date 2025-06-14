@@ -1,11 +1,10 @@
 // src/controllers/user.controller.ts
-import { Response } from 'express';
-import { AuthRequest } from '../middleware/auth.middleware';
+import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-export const getMyProfile = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getMyProfile = async (req: Request, res: Response): Promise<void> => {
   // We can access req.user because our 'protect' middleware added it
   if (!req.user || typeof req.user.userId !== 'number') {
     res.status(400).json({ message: 'User ID not found in token' });

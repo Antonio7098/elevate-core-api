@@ -8,21 +8,14 @@ import {
   getUpcomingReviews
 } from '../services/reviewScheduling.service';
 
-// Extend Express Request type to include user
-interface AuthenticatedRequest extends Request {
-  user?: {
-    id: number;
-  };
-}
-
 const prisma = new PrismaClient();
 
 /**
  * Schedule a new review
  * POST /api/reviews/schedule
  */
-export const scheduleNewReview = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  const userId = req.user?.id;
+export const scheduleNewReview = async (req: Request, res: Response): Promise<void> => {
+  const userId = req.user?.userId;
   const { questionSetId, reviewDate, type } = req.body;
 
   if (!userId) {
@@ -53,8 +46,8 @@ export const scheduleNewReview = async (req: AuthenticatedRequest, res: Response
  * Get all scheduled reviews for a user
  * GET /api/reviews/scheduled
  */
-export const getScheduledReviewsList = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  const userId = req.user?.id;
+export const getScheduledReviewsList = async (req: Request, res: Response): Promise<void> => {
+  const userId = req.user?.userId;
   const { status } = req.query;
 
   if (!userId) {
@@ -79,8 +72,8 @@ export const getScheduledReviewsList = async (req: AuthenticatedRequest, res: Re
  * Update a scheduled review
  * PUT /api/reviews/scheduled/:id
  */
-export const updateScheduledReviewById = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  const userId = req.user?.id;
+export const updateScheduledReviewById = async (req: Request, res: Response): Promise<void> => {
+  const userId = req.user?.userId;
   const { id } = req.params;
   const { reviewDate, status, type } = req.body;
 
@@ -115,8 +108,8 @@ export const updateScheduledReviewById = async (req: AuthenticatedRequest, res: 
  * Cancel a scheduled review
  * DELETE /api/reviews/scheduled/:id
  */
-export const cancelScheduledReviewById = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  const userId = req.user?.id;
+export const cancelScheduledReviewById = async (req: Request, res: Response): Promise<void> => {
+  const userId = req.user?.userId;
   const { id } = req.params;
 
   if (!userId) {
@@ -141,8 +134,8 @@ export const cancelScheduledReviewById = async (req: AuthenticatedRequest, res: 
  * Get upcoming reviews for a user
  * GET /api/reviews/upcoming
  */
-export const getUpcomingReviewsList = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  const userId = req.user?.id;
+export const getUpcomingReviewsList = async (req: Request, res: Response): Promise<void> => {
+  const userId = req.user?.userId;
   const { days } = req.query;
 
   if (!userId) {

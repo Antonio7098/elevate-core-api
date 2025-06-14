@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { protect } from '../middleware/auth.middleware';
 import {
   startReview,

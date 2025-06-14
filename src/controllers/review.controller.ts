@@ -1,25 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
 import { PrismaClient, Question, Prisma, QuestionSet, Folder } from '@prisma/client';
-import { AuthRequest } from '../middleware/auth.middleware';
 import {
   getDueQuestionSets,
   getPrioritizedQuestions,
   getUserProgressSummary,
-  processQuestionSetReview, // Added
-  // calculateQuestionSetNextReview, // Removed
-  // updateQuestionPerformance, // Removed
-  UNDERSTAND_WEIGHT, // Kept if used elsewhere, otherwise can be removed if submitReview was only consumer
-  USE_WEIGHT,        // Kept if used elsewhere
-  EXPLORE_WEIGHT     // Kept if used elsewhere
+  processQuestionSetReview,
+  UNDERSTAND_WEIGHT,
+  USE_WEIGHT,
+  EXPLORE_WEIGHT
 } from '../services/spacedRepetition.service';
 import { processAdvancedReview } from '../services/advancedSpacedRepetition.service';
-
-// Extend Express Request type to include user
-interface AuthenticatedRequest extends Request {
-  user?: {
-    id: number;
-  };
-}
 
 // Extend QuestionSet type to include new fields
 interface ExtendedQuestionSet extends QuestionSet {
@@ -51,7 +41,7 @@ export interface PrioritizedQuestion extends Question {
  * Get question sets due for review today
  * GET /api/reviews/today
  */
-export const getTodayReviews = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+export const getTodayReviews = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   if (process.env.NODE_ENV !== 'test') { console.log(`🔍 [Reviews] GET /api/reviews/today called`); }
   if (process.env.NODE_ENV !== 'test') { console.log(`🔍 [Reviews] Request headers:`, req.headers); }
   if (process.env.NODE_ENV !== 'test') { console.log(`🔍 [Reviews] Auth header: ${req.headers.authorization || 'None'}`); }
@@ -107,7 +97,7 @@ export const getTodayReviews = async (req: AuthRequest, res: Response, next: Nex
  * Get questions for a specific review session
  * GET /api/questionsets/:id/review-questions
  */
-export const getReviewQuestions = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+export const getReviewQuestions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
     const questionSetId = parseInt(req.params.id);
@@ -208,9 +198,9 @@ interface UserQuestionAnswerData {
  * Submit a review for a question set
  * POST /api/reviews
  */
-export const submitReview = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+export const submitReview = async (req: Request, res: Response): Promise<void> => {
   const { questionSetId } = req.params;
-  const userId = req.user?.id;
+  const userId = req.user?.userId;
   const { outcomes, sessionStartTime, sessionDurationSeconds } = req.body;
 
   if (!userId) {
@@ -240,11 +230,9 @@ export const submitReview = async (req: AuthenticatedRequest, res: Response): Pr
     }
 
     const updatedQuestionSet = await processAdvancedReview(
-      userId,
       parseInt(questionSetId),
-      outcomes,
-      new Date(sessionStartTime),
-      sessionDurationSeconds
+      userId,
+      outcomes
     ) as unknown as ExtendedQuestionSet;
 
     res.json({
@@ -268,7 +256,7 @@ export const submitReview = async (req: AuthenticatedRequest, res: Response): Pr
  * Get review statistics for a user
  * GET /api/reviews/stats
  */
-export const getReviewStats = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+export const getReviewStats = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.userId;
     
@@ -289,9 +277,9 @@ export const getReviewStats = async (req: AuthRequest, res: Response, next: Next
   }
 };
 
-export const startReview = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+export const startReview = async (req: Request, res: Response): Promise<void> => {
   const { questionSetId } = req.params;
-  const userId = req.user?.id;
+  const userId = req.user?.userId;
 
   if (!userId) {
     res.status(401).json({ error: 'Unauthorized' });

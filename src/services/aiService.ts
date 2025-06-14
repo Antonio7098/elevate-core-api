@@ -7,9 +7,7 @@
 
 import axios, { AxiosError, AxiosInstance } from 'axios';
 import dotenv from 'dotenv';
-
-// Load environment variables
-dotenv.config();
+import { UserMemoryService } from './userMemory.service';
 import {
   AIServiceBaseResponse,
   AIServiceErrorResponse,
@@ -19,15 +17,18 @@ import {
   ChatResponse,
   EvaluateAnswerRequest,
   EvaluateAnswerResponse,
-  isErrorResponse
+  isErrorResponse,
+  isGenerateQuestionsResponse
 } from '../types/ai-service.types';
+import { config } from '../config';
+import { logger } from '../utils/logger';
 
 /**
  * AI Service class for communicating with the Python AI Service
  */
 export class AIService {
   private client: AxiosInstance;
-  private baseUrl: string;
+  private readonly baseUrl: string;
   private apiKey: string;
   private apiVersion: string;
 
@@ -38,7 +39,7 @@ export class AIService {
     // Ensure environment variables are loaded
     dotenv.config();
     
-    this.baseUrl = process.env.AI_SERVICE_BASE_URL || 'http://localhost:8000';
+    this.baseUrl = config.aiService.url;
     this.apiKey = process.env.AI_SERVICE_API_KEY || '';
     this.apiVersion = process.env.AI_SERVICE_API_VERSION || 'v1';
     
@@ -64,29 +65,50 @@ export class AIService {
    * @returns A promise that resolves to the generated questions
    * @throws Error if the request fails or the AI service returns an error
    */
-  async generateQuestions(request: GenerateQuestionsRequest): Promise<GenerateQuestionsResponse> {
+  async generateQuestions(request: GenerateQuestionsRequest, userId?: number): Promise<GenerateQuestionsResponse> {
     try {
-      console.log('[AIService] Generating questions with request:', JSON.stringify(request));
+      // Get user preferences if userId is provided
+      let userPreferences;
+      if (userId) {
+        const userMemory = await UserMemoryService.getUserMemory(userId);
+        if (userMemory) {
+          userPreferences = {
+            cognitiveApproach: userMemory.cognitiveApproach,
+            explanationStyles: userMemory.explanationStyles,
+            interactionStyle: userMemory.interactionStyle,
+            primaryGoal: userMemory.primaryGoal
+          };
+        }
+      }
+
+      // Add user preferences to context if available
+      const requestWithContext = {
+        ...request,
+        context: {
+          ...request.context,
+          ...userPreferences
+        }
+      };
+
+      logger.info('Generating questions with context:', {
+        request: requestWithContext,
+        userId
+      });
+
       const response = await this.client.post<GenerateQuestionsResponse | AIServiceErrorResponse>(
         '/generate-questions',
-        request
+        requestWithContext
       );
 
       const data = response.data;
 
       if (isErrorResponse(data)) {
-        throw new Error(`AI Service Error: ${data.error.code} - ${data.error.message}`);
+        throw new Error(data.error.message);
       }
 
       return data;
     } catch (error) {
-      if (error instanceof AxiosError) {
-        if (error.response?.data && typeof error.response.data === 'object' && 'error' in error.response.data) {
-          const errorData = error.response.data as AIServiceErrorResponse;
-          throw new Error(`AI Service Error: ${errorData.error.code} - ${errorData.error.message}`);
-        }
-        throw new Error(`Network Error: ${error.message}`);
-      }
+      logger.error('Error generating questions:', error);
       throw error;
     }
   }
@@ -98,8 +120,36 @@ export class AIService {
    * @returns A promise that resolves to the AI's response
    * @throws Error if the request fails or the AI service returns an error
    */
-  async chat(request: ChatRequest): Promise<ChatResponse> {
+  async chat(request: ChatRequest, userId?: number): Promise<ChatResponse> {
     try {
+      // Get user preferences if userId is provided
+      let userPreferences;
+      if (userId) {
+        const userMemory = await UserMemoryService.getUserMemory(userId);
+        if (userMemory) {
+          userPreferences = {
+            cognitiveApproach: userMemory.cognitiveApproach,
+            explanationStyles: userMemory.explanationStyles,
+            interactionStyle: userMemory.interactionStyle,
+            primaryGoal: userMemory.primaryGoal
+          };
+        }
+      }
+
+      // Add user preferences to context if available
+      const requestWithContext = {
+        ...request,
+        context: {
+          ...request.context,
+          ...userPreferences
+        }
+      };
+
+      logger.info('Chatting with AI with context:', {
+        request: requestWithContext,
+        userId
+      });
+
       // Add detailed logging for the chat request
       console.log('\n==== AI SERVICE: REQUEST LOGGING START ====');
       console.log(`Message: "${request.message?.substring(0, 50)}${request.message?.length > 50 ? '...' : ''}"`); 
@@ -143,6 +193,20 @@ export class AIService {
             });
           }
         }
+
+        // Log user preferences
+        if (request.context.learningStyles) {
+          console.log('\nUser Learning Styles:', request.context.learningStyles);
+        }
+        if (request.context.preferredAiTone) {
+          console.log('Preferred AI Tone:', request.context.preferredAiTone);
+        }
+        if (request.context.preferredAiVerbosity) {
+          console.log('Preferred AI Verbosity:', request.context.preferredAiVerbosity);
+        }
+        if (request.context.primaryGoal) {
+          console.log('Primary Goal:', request.context.primaryGoal);
+        }
         
         // Log summary if available
         if (request.context.summary) {
@@ -154,7 +218,7 @@ export class AIService {
       }
       
       // Log the full request object (but truncate large arrays)
-      const logRequest = { ...request };
+      const logRequest = { ...requestWithContext };
       if (logRequest.context?.questionSets && logRequest.context.questionSets.length > 0) {
         // For each question set, limit the number of questions logged
         logRequest.context.questionSets = logRequest.context.questionSets.map(qs => {
@@ -179,24 +243,18 @@ export class AIService {
       // Make the actual request to the Python service
       const response = await this.client.post<ChatResponse | AIServiceErrorResponse>(
         '/chat',
-        request
+        requestWithContext
       );
 
       const data = response.data;
 
       if (isErrorResponse(data)) {
-        throw new Error(`AI Service Error: ${data.error.code} - ${data.error.message}`);
+        throw new Error(data.error.message);
       }
 
       return data;
     } catch (error) {
-      if (error instanceof AxiosError) {
-        if (error.response?.data && typeof error.response.data === 'object' && 'error' in error.response.data) {
-          const errorData = error.response.data as AIServiceErrorResponse;
-          throw new Error(`AI Service Error: ${errorData.error.code} - ${errorData.error.message}`);
-        }
-        throw new Error(`Network Error: ${error.message}`);
-      }
+      logger.error('Error chatting with AI:', error);
       throw error;
     }
   }

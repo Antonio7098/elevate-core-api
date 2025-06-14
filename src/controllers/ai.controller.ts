@@ -358,7 +358,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
       questionSets.push({
         id: questionSet.id,
         name: questionSet.name,
-        folderName: questionSet.folder.name,
+        folderName: questionSet.folder?.name || 'Uncategorized',
         totalQuestions: questionSet.questions.length,
         createdAt: questionSet.createdAt.toISOString(),
         questions: questionSet.questions.map((q: any) => ({

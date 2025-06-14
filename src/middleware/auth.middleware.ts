@@ -11,6 +11,7 @@ export const protect = async (req: Request, res: Response, next: NextFunction): 
   // console.log('🔑 [Auth] All Request Headers:', JSON.stringify(req.headers, null, 2)); // Log all headers
   // console.log(`🔒 [Auth] Protecting route: ${req.method} ${req.originalUrl}`);
   const authHeader = req.headers['authorization'];
+  const testUserIdHeader = req.headers['x-test-user-id'];
   // console.log(`🔑 [Auth] Authorization header value: ${authHeader}`);
   // console.log(`🔑 [Auth] Type of authHeader: ${typeof authHeader}`);
   if (typeof authHeader === 'string') {
@@ -26,9 +27,12 @@ export const protect = async (req: Request, res: Response, next: NextFunction): 
     
     // Special handling for test token in development environment
     if (process.env.NODE_ENV !== 'production' && token === 'test123') {
-      // console.log(`🧪 [Auth] Using test token in development environment`);
-      // Use a default test user ID (1) for development
-      (req as AuthRequest).user = { userId: 1 };
+      // Allow test user ID override via header
+      if (testUserIdHeader && typeof testUserIdHeader === 'string' && !isNaN(Number(testUserIdHeader))) {
+        (req as AuthRequest).user = { userId: Number(testUserIdHeader) };
+      } else {
+        (req as AuthRequest).user = { userId: 1 };
+      }
       next();
       return;
     }

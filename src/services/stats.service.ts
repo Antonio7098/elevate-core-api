@@ -34,6 +34,10 @@ export const fetchQuestionSetStatsDetails = async (
     throw createError(404, `QuestionSet with ID ${questionSetId} not found.`);
   }
 
+  if (!questionSet.folder) {
+    throw createError(404, `QuestionSet with ID ${questionSetId} has no associated folder.`);
+  }
+
   if (questionSet.folder.userId !== userId) {
     throw createError(403, 'User does not have access to this QuestionSet.');
   }
