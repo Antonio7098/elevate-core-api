@@ -72,6 +72,7 @@ function buildFolderTree(folders: any[]): any[] {
 
 export const getFolders = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.userId;
+  const parentId = req.query.parentId ? parseInt(req.query.parentId as string) : undefined;
 
   if (!userId) {
     res.status(401).json({ message: 'User not authenticated' });
@@ -79,12 +80,22 @@ export const getFolders = async (req: AuthRequest, res: Response): Promise<void>
   }
 
   try {
-    const folders = await prisma.folder.findMany({
-      where: { userId },
-      orderBy: { updatedAt: 'desc' },
-    });
-    const tree = buildFolderTree(folders);
-    res.status(200).json(tree);
+    if (parentId !== undefined) {
+      // Return only folders with this parentId
+      const folders = await prisma.folder.findMany({
+        where: { userId, parentId },
+        orderBy: { updatedAt: 'desc' },
+      });
+      res.status(200).json(folders);
+    } else {
+      // Return the full tree as before
+      const folders = await prisma.folder.findMany({
+        where: { userId },
+        orderBy: { updatedAt: 'desc' },
+      });
+      const tree = buildFolderTree(folders);
+      res.status(200).json(tree);
+    }
   } catch (error) {
     console.error('--- Get Folders Error ---');
     if (error instanceof Error) {
@@ -288,5 +299,48 @@ export const deleteFolder = async (req: AuthRequest, res: Response): Promise<voi
     console.error('--- End Delete Folder Error ---');
     // Handle specific Prisma errors, e.g., P2025 (Record to delete not found - our check should prevent this)
     res.status(500).json({ message: 'Failed to delete folder' });
+  }
+};
+
+export const pinFolder = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.userId;
+  const { folderId } = req.params;
+  const { isPinned } = req.body;
+
+  if (!userId) {
+    res.status(401).json({ message: 'User not authenticated' });
+    return;
+  }
+  if (!folderId || isNaN(parseInt(folderId))) {
+    res.status(400).json({ message: 'Invalid folder ID provided' });
+    return;
+  }
+  if (typeof isPinned !== 'boolean') {
+    res.status(400).json({ message: 'isPinned must be a boolean' });
+    return;
+  }
+  try {
+    // Verify folder ownership
+    const folder = await prisma.folder.findFirst({
+      where: { id: parseInt(folderId), userId },
+    });
+    if (!folder) {
+      res.status(404).json({ message: 'Folder not found or access denied' });
+      return;
+    }
+    const updated = await prisma.folder.update({
+      where: { id: parseInt(folderId) },
+      data: { isPinned },
+    });
+    res.status(200).json(updated);
+  } catch (error) {
+    console.error('--- Pin Folder Error ---');
+    if (error instanceof Error) {
+      console.error('Message:', error.message);
+      console.error('Stack:', error.stack);
+    } else {
+      console.error('Error object (raw):', error);
+    }
+    res.status(500).json({ message: 'Failed to update pin status' });
   }
 };

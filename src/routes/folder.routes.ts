@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import { protect } from '../middleware/auth.middleware';
 import { validateFolderCreate, validateFolderUpdate } from '../middleware/validation';
-import { createFolder, getFolders, getFolderById, updateFolder, deleteFolder } from '../controllers/folder.controller.ts'; 
+import { createFolder, getFolders, getFolderById, updateFolder, deleteFolder, pinFolder } from '../controllers/folder.controller.ts'; 
 import { getAllQuestionsInFolder, getAllNotesInFolder } from '../controllers/recursiveFolder.controller';
 import questionsetRouter from './questionset.routes';
 
@@ -31,5 +31,8 @@ router.get('/:folderId/all-notes', protect, getAllNotesInFolder);
 
 // Mount the questionset router for paths like /api/folders/:folderId/questionsets
 router.use('/:folderId/questionsets', questionsetRouter);
+
+// PUT /api/folders/:folderId/pin - Pin/unpin a folder
+router.put('/:folderId/pin', protect, pinFolder);
 
 export default router;

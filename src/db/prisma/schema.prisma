@@ -38,6 +38,7 @@ model Folder {
   notes               Note[]
   parent              Folder?       @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children            Folder[]      @relation("FolderHierarchy")
+  isPinned            Boolean       @default(false)
 
   @@index([userId])
   @@index([parentId])
@@ -69,6 +70,7 @@ model QuestionSet {
   questions                  Question[]
   folder                     Folder               @relation(fields: [folderId], references: [id], onDelete: Cascade)
   userAnswers                UserQuestionAnswer[]
+  isPinned                   Boolean              @default(false)
 
   @@index([folderId])
   @@index([nextReviewAt])

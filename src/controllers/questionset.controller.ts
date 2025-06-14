@@ -312,3 +312,50 @@ export const deleteQuestionSet = async (req: AuthRequest, res: Response, next: N
     next(error);
   }
 };
+
+/**
+ * Pin a question set
+ * PUT /api/folders/:folderId/questionsets/:id/pin
+ */
+export const pinQuestionSet = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.userId;
+  const { setId } = req.params;
+  const { isPinned } = req.body;
+
+  if (!userId) {
+    res.status(401).json({ message: 'User not authenticated' });
+    return;
+  }
+  if (!setId || isNaN(parseInt(setId))) {
+    res.status(400).json({ message: 'Invalid question set ID provided' });
+    return;
+  }
+  if (typeof isPinned !== 'boolean') {
+    res.status(400).json({ message: 'isPinned must be a boolean' });
+    return;
+  }
+  try {
+    // Verify question set ownership
+    const questionSet = await prisma.questionSet.findFirst({
+      where: { id: parseInt(setId), folder: { userId } },
+    });
+    if (!questionSet) {
+      res.status(404).json({ message: 'Question set not found or access denied' });
+      return;
+    }
+    const updated = await prisma.questionSet.update({
+      where: { id: parseInt(setId) },
+      data: { isPinned },
+    });
+    res.status(200).json(updated);
+  } catch (error) {
+    console.error('--- Pin QuestionSet Error ---');
+    if (error instanceof Error) {
+      console.error('Message:', error.message);
+      console.error('Stack:', error.stack);
+    } else {
+      console.error('Error object (raw):', error);
+    }
+    res.status(500).json({ message: 'Failed to update pin status' });
+  }
+};

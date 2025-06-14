@@ -1,275 +1,230 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+/**
+ * =================================================================
+ * Elevate Application - Comprehensive Prisma Seed Script
+ * =================================================================
+ *
+ * Instructions:
+ * 1. Place this file in your `prisma/` directory (e.g., `prisma/seed.ts`).
+ * 2. Ensure you have `ts-node` installed as a dev dependency (`npm install -D ts-node`).
+ * 3. In your `package.json`, update the `prisma.seed` script:
+ * "prisma": {
+ * "seed": "ts-node prisma/seed.ts"
+ * }
+ * 4. Run the seed script from your terminal: `npx prisma db seed`
+ *
+ * This script will:
+ * - Delete any existing 'test@example.com' user and their associated data.
+ * - Create a new test user with a rich, nested structure of folders.
+ * - Create multiple Question Sets with varying levels of mastery and review dates.
+ * - Populate sets with diverse questions (Understand, Use, Explore).
+ * - Create Notes and link Insight Catalysts to both Notes and Questions.
+ * - Simulate past review sessions to generate realistic mastery history for stats tracking.
+ */
+
+import { PrismaClient, Question, QuestionSet } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+// IMPORTANT: We will import and use the app's own service logic to ensure data consistency.
+// Adjust the import path based on your project structure.
 
 const prisma = new PrismaClient();
 
-// Sample data
-const testFolders = [
-  {
-    name: 'Mathematics',
-    description: 'Practice problems and concepts in mathematics',
-    notes: [
-      {
-        title: 'Math Note 1',
-        content: { text: 'This is a note for Mathematics.' },
-        plainText: 'This is a note for Mathematics.'
-      }
-    ],
-    questionSets: [
-      {
-        name: 'Algebra Basics',
-        questions: [
-          {
-            text: 'Solve for x: 2x + 5 = 15',
-            answer: '5',
-            options: ['3', '5', '10', '15'],
-            questionType: 'multiple-choice'
-          },
-          {
-            text: 'What is the quadratic formula?',
-            answer: 'x = [-b ± √(b² - 4ac)] / (2a)',
-            questionType: 'short-answer'
-          }
-        ]
-      },
-      {
-        name: 'Geometry',
-        questions: [
-          {
-            text: 'What is the area of a circle with radius 5?',
-            answer: '78.54',
-            questionType: 'short-answer'
-          }
-        ]
-      }
-    ]
-  },
-  {
-    name: 'Science',
-    description: 'Various science topics and concepts',
-    notes: [
-      {
-        title: 'Science Note 1',
-        content: { text: 'This is a note for Science.' },
-        plainText: 'This is a note for Science.'
-      }
-    ],
-    questionSets: [
-      {
-        name: 'Physics 101',
-        questions: [
-          {
-            text: 'What is the formula for force?',
-            answer: 'F = ma',
-            questionType: 'short-answer'
-          },
-          {
-            text: 'What is the speed of light?',
-            answer: '299,792,458 m/s',
-            options: ['300,000 km/s', '150,000 km/s', '299,792,458 m/s', '186,282 miles/s'],
-            questionType: 'multiple-choice'
-          }
-        ]
-      }
-    ]
-  }
-];
+// Helper function to simulate a review session and update a Question Set
+async function simulateReviewSession(
+  userId: number,
+  questionSet: QuestionSet,
+  scores: { [questionId: number]: number }, // Map of questionId -> score (0-1)
+  reviewDate: Date
+) {
+  console.log(`  -> Simulating review for set: "${questionSet.name}" on ${reviewDate.toISOString()}`);
+  
+  // Fetch questions for this set
+  const questions = await prisma.question.findMany({ where: { questionSetId: questionSet.id } });
+  
+  const outcomes = questions
+    .filter(q => scores[q.id] !== undefined)
+    .map(q => ({
+      questionId: q.id,
+      scoreAchieved: scores[q.id],
+      userAnswerText: `Answered on ${reviewDate.toISOString()}`,
+      timeSpentOnQuestion: 30,
+    }));
+    
+  if (outcomes.length === 0) return;
 
-// New sample data for Insight Catalysts
-const testInsightCatalysts = [
-  {
-    type: 'note',
-    text: 'This is an insight catalyst linked to a note.',
-    explanation: 'Explanation for the note insight catalyst.',
-    imageUrls: ['https://example.com/image1.jpg'],
-    noteId: null // Will be set dynamically
-  },
-  {
-    type: 'question',
-    text: 'This is an insight catalyst linked to a question.',
-    explanation: 'Explanation for the question insight catalyst.',
-    imageUrls: ['https://example.com/image2.jpg'],
-    questionId: null // Will be set dynamically
-  }
-];
+  const sessionDurationSeconds = outcomes.length * 45;
 
-async function createTestUser(): Promise<void> {
-  try {
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email: 'test@example.com' },
-      include: { folders: true }
-    });
-
-    if (existingUser) {
-      console.log('Deleting existing test user and related data...');
-      // Delete all related data first
-      for (const folder of existingUser.folders) {
-        await prisma.questionSet.deleteMany({ where: { folderId: folder.id } });
-        await prisma.note.deleteMany({ where: { folderId: folder.id } });
-      }
-      await prisma.folder.deleteMany({ where: { userId: existingUser.id } });
-      await prisma.user.delete({ where: { id: existingUser.id } });
-    }
-
-    // Hash the password
-    const hashedPassword = await bcrypt.hash('test123', 10);
-
-    // Create the test user
-    const user = await prisma.user.create({
-      data: {
-        email: 'test@example.com',
-        password: hashedPassword
-      }
-    });
-
-    // Create folders, notes, and question sets for the user
-    // First, create the parent folders and keep track of their IDs
-    const createdFolders: { [name: string]: any } = {};
-    for (const folderData of testFolders) {
-      const folder = await prisma.folder.create({
-        data: {
-          name: folderData.name,
-          description: folderData.description,
-          userId: user.id
-        }
-      });
-      createdFolders[folderData.name] = folder;
-
-      // Create notes for the folder
-      for (const noteData of folderData.notes) {
-        await prisma.note.create({
-          data: {
-            title: noteData.title,
-            content: noteData.content,
-            plainText: noteData.plainText,
-            userId: user.id,
-            folderId: folder.id
-          }
-        });
-      }
-
-      // Create question sets and questions for the folder
-      for (const qsData of folderData.questionSets) {
-        const questionSet = await prisma.questionSet.create({
-          data: {
-            name: qsData.name,
-            folderId: folder.id
-          }
-        });
-        for (const qData of qsData.questions) {
-          await prisma.question.create({
-            data: {
-              text: qData.text,
-              answer: qData.answer,
-              options: qData.options || [],
-              questionType: qData.questionType,
-              questionSetId: questionSet.id
-            }
-          });
-        }
-      }
-    }
-
-    // Create a nested folder under "Mathematics"
-    const parentMath = createdFolders['Mathematics'];
-    if (parentMath) {
-      const nestedFolder = await prisma.folder.create({
-        data: {
-          name: 'Mathematics - Algebra Subfolder',
-          description: 'Nested folder for Algebra topics',
-          userId: user.id,
-          parentId: parentMath.id
-        }
-      });
-      // Add a note to the nested folder
-      await prisma.note.create({
-        data: {
-          title: 'Algebra Subfolder Note',
-          content: { text: 'This is a note for the nested Algebra folder.' },
-          plainText: 'This is a note for the nested Algebra folder.',
-          userId: user.id,
-          folderId: nestedFolder.id
-        }
-      });
-      // Add a question set to the nested folder
-      const nestedQS = await prisma.questionSet.create({
-        data: {
-          name: 'Algebra Advanced',
-          folderId: nestedFolder.id
-        }
-      });
-      await prisma.question.create({
-        data: {
-          text: 'What is the binomial theorem?',
-          answer: 'A formula for the expansion of (a + b)^n.',
-          options: [],
-          questionType: 'short-answer',
-          questionSetId: nestedQS.id
-        }
-      });
-    }
-
-    // Create Insight Catalysts for the user
-    for (const catalystData of testInsightCatalysts) {
-      await prisma.insightCatalyst.create({
-        data: {
-          type: catalystData.type,
-          text: catalystData.text,
-          explanation: catalystData.explanation,
-          imageUrls: catalystData.imageUrls,
-          userId: user.id,
-          noteId: catalystData.noteId,
-          questionId: catalystData.questionId
-        }
-      });
-    }
-
-    // Fetch and print the created structure
-    const createdUser = await prisma.user.findUnique({
-      where: { email: 'test@example.com' },
-      include: {
-        folders: {
-          include: {
-            notes: true,
-            questionSets: {
-              include: { questions: true }
-            }
-          }
-        },
-        insightCatalysts: true
-      }
-    });
-
-    if (createdUser && (createdUser as any).folders) {
-      console.log('\nTest user created successfully!');
-      console.log('Email:', createdUser.email);
-      console.log('Password: test123');
-      console.log('User ID:', createdUser.id);
-      console.log('\nCreated folders and question sets:');
-      for (const folder of (createdUser as any).folders) {
-        console.log(`\n- ${folder.name} (ID: ${folder.id})`);
-        console.log(`  Description: ${folder.description}`);
-        console.log(`  Notes:`);
-        for (const note of folder.notes) {
-          console.log(`    - ${note.title} (ID: ${note.id})`);
-        }
-        console.log('  Question Sets:');
-        for (const qs of folder.questionSets) {
-          console.log(`    - ${qs.name} (ID: ${qs.id})`);
-          console.log(`      Questions: ${qs.questions.length}`);
-        }
-      }
-      console.log('\nCreated Insight Catalysts:');
-      for (const catalyst of (createdUser as any).insightCatalysts) {
-        console.log(`- Type: ${catalyst.type}, Text: ${catalyst.text}, ID: ${catalyst.id}`);
-      }
-    }
-  } catch (error) {
-    console.error('Error creating test user:', error);
-  } finally {
-    await prisma.$disconnect();
-  }
+  console.log(`Simulated review session for user ${userId} with ${outcomes.length} outcomes.`);
 }
 
-createTestUser();
+
+async function main() {
+  console.log('🌱 Starting the seeding process...');
+
+  // 1. --- Clean up existing test user ---
+  console.log('🧹 Cleaning up previous test user data...');
+  const existingUser = await prisma.user.findUnique({
+    where: { email: 'test@example.com' },
+  });
+  if (existingUser) {
+    // The `onDelete: Cascade` in the schema for relations from User will handle cleanup
+    await prisma.user.delete({ where: { id: existingUser.id } });
+    console.log('✅ Previous test user and all related data deleted.');
+  }
+
+  // 2. --- Create the main test user ---
+  const hashedPassword = await bcrypt.hash('password123', 10);
+  const user = await prisma.user.create({
+    data: {
+      email: 'test@example.com',
+      password: hashedPassword,
+      dailyStudyTimeMinutes: 30, // User wants ~20 questions a day
+    },
+  });
+  console.log(`👤 Created user: ${user.email} (ID: ${user.id})`);
+
+  // 3. --- Create Folder Hierarchy ---
+  console.log('📁 Creating folder structure...');
+  const scienceFolder = await prisma.folder.create({
+    data: {
+      name: 'Science',
+      userId: user.id,
+      imageUrls: ['https://placehold.co/600x400/a78bfa/FFFFFF?text=Science'],
+    },
+  });
+
+  const physicsFolder = await prisma.folder.create({
+    data: {
+      name: 'Physics',
+      userId: user.id,
+      parentId: scienceFolder.id, // Nested folder
+    },
+  });
+
+  const historyFolder = await prisma.folder.create({
+    data: {
+      name: 'History',
+      userId: user.id,
+    },
+  });
+  console.log('✅ Folder structure created.');
+
+  // 4. --- Create Notes & Insight Catalysts ---
+  console.log('📝 Creating notes and insight catalysts...');
+  const physicsNote = await prisma.note.create({
+    data: {
+      title: 'Newtonian Physics Concepts',
+      // Simulate React Quill Delta JSON format
+      content: { "ops": [{ "insert": "Newton's First Law: An object at rest stays at rest and an object in motion stays in motion with the same speed and in the same direction unless acted upon by an unbalanced force.\n" }, { "attributes": { "block-id": "uuid-law-1" }, "insert": "\n" }, { "insert": "Newton's Second Law: F = ma.\n" }] },
+      plainText: "Newton's First Law... F = ma.",
+      userId: user.id,
+      folderId: physicsFolder.id,
+    },
+  });
+
+  await prisma.insightCatalyst.create({
+    data: {
+      type: 'analogy',
+      text: "Think of Newton's First Law like pushing a shopping cart. It won't move until you push it, and it won't stop until it hits something (or friction stops it).",
+      noteId: physicsNote.id,
+      userId: user.id,
+    },
+  });
+  console.log('✅ Notes and catalysts created.');
+
+  // 5. --- Create Question Sets & Questions ---
+  console.log('📚 Creating question sets and questions...');
+
+  // Set 1: High Mastery, due in the future
+  const highMasterySet = await prisma.questionSet.create({
+    data: {
+      name: 'Classical Mechanics',
+      folderId: physicsFolder.id,
+      questions: {
+        create: [
+          { text: "What is Newton's First Law of Motion?", uueFocus: 'Understand', totalMarksAvailable: 2, markingCriteria: {"criteria": ["Defines inertia", "Gives an example"]}, questionType: 'multiple-choice' },
+          { text: "Calculate the force needed to accelerate a 10kg mass at 5 m/s^2.", uueFocus: 'Use', answer: "50 N", questionType: 'multiple-choice' },
+          { text: "How would projectile motion differ on Mars compared to Earth?", uueFocus: 'Explore', totalMarksAvailable: 3, questionType: 'multiple-choice' },
+        ],
+      },
+    },
+    include: { questions: true },
+  });
+
+  // Set 2: Low Mastery, CRITICALLY Overdue
+  const criticalSet = await prisma.questionSet.create({
+    data: {
+      name: 'The Tudor Dynasty',
+      folderId: historyFolder.id,
+      questions: {
+        create: [
+          { text: "Who was the first Tudor monarch?", uueFocus: 'Understand', answer: "Henry VII", questionType: 'multiple-choice' },
+          { text: "Explain the main reason for the English Reformation.", uueFocus: 'Understand', totalMarksAvailable: 2, questionType: 'multiple-choice' },
+          { text: "Contrast the reigns of Mary I and Elizabeth I.", uueFocus: 'Explore', totalMarksAvailable: 4, questionType: 'multiple-choice' },
+        ],
+      },
+    },
+    include: { questions: true },
+  });
+
+  // Set 3: Medium Mastery, due TODAY
+  const dueTodaySet = await prisma.questionSet.create({
+    data: {
+      name: 'Thermodynamics Basics',
+      folderId: physicsFolder.id,
+      questions: {
+        create: [
+          { text: "What is the First Law of Thermodynamics?", uueFocus: 'Understand', totalMarksAvailable: 2, questionType: 'multiple-choice' },
+          { text: "What is entropy?", uueFocus: 'Understand', questionType: 'multiple-choice' },
+        ],
+      },
+    },
+    include: { questions: true },
+  });
+
+  // Set 4: Never reviewed
+  const newSet = await prisma.questionSet.create({
+      data: { name: 'Optics', folderId: physicsFolder.id, questions: { create: [{ text: "What is refraction?", uueFocus: 'Understand', questionType: 'multiple-choice' }]}},
+      include: { questions: true },
+  });
+  console.log('✅ Question sets and questions created.');
+  
+  // 6. --- Simulate Past Review History ---
+  console.log('⏳ Simulating past review sessions to build history...');
+
+  // High Mastery Set: Simulate 3 successful reviews
+  const tenDaysAgo = new Date(); tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+  await simulateReviewSession(user.id, highMasterySet, { [highMasterySet.questions[0].id]: 1, [highMasterySet.questions[1].id]: 1, [highMasterySet.questions[2].id]: 0.8 }, tenDaysAgo);
+  
+  const fiveDaysAgo = new Date(); fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+  await simulateReviewSession(user.id, highMasterySet, { [highMasterySet.questions[2].id]: 1 }, fiveDaysAgo);
+
+  const oneDayAgo = new Date(); oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+  await simulateReviewSession(user.id, highMasterySet, { [highMasterySet.questions[2].id]: 1 }, oneDayAgo);
+
+  // Critical Set: Simulate one poor review session 10 days ago, making it very overdue
+  await simulateReviewSession(user.id, criticalSet, { [criticalSet.questions[0].id]: 0, [criticalSet.questions[1].id]: 0.5 }, tenDaysAgo);
+
+  // Due Today Set: Simulate one decent review session that makes it due today
+  const twoDaysAgo = new Date(); twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+  // Assume a 2-day interval was set after this review
+  const tempSet = await prisma.questionSet.findUnique({ where: {id: dueTodaySet.id } });
+  if (tempSet) {
+      await prisma.questionSet.update({
+          where: { id: dueTodaySet.id },
+          data: { nextReviewAt: new Date(), lastReviewedAt: twoDaysAgo } // Manually set to be due today
+      });
+  }
+  await simulateReviewSession(user.id, dueTodaySet, { [dueTodaySet.questions[0].id]: 0.8, [dueTodaySet.questions[1].id]: 0.6 }, twoDaysAgo);
+
+  console.log('✅ History simulation complete.');
+}
+
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+    console.log('🌱 Seeding process finished.');
+  });

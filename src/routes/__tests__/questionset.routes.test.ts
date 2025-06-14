@@ -115,4 +115,49 @@ describe('Question Set Routes', () => {
       expect(response.body[0].notes[0]).toHaveProperty('title', 'Test Note');
     });
   });
+
+  describe('PUT /api/folders/:folderId/questionsets/:setId/pin', () => {
+    it('should pin a question set', async () => {
+      const response = await request(app)
+        .put(`/api/folders/${testFolder.id}/questionsets/${testQuestionSet.id}/pin`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ isPinned: true });
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('id', testQuestionSet.id);
+      expect(response.body).toHaveProperty('isPinned', true);
+    });
+
+    it('should unpin a question set', async () => {
+      const response = await request(app)
+        .put(`/api/folders/${testFolder.id}/questionsets/${testQuestionSet.id}/pin`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ isPinned: false });
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('id', testQuestionSet.id);
+      expect(response.body).toHaveProperty('isPinned', false);
+    });
+
+    it('should return 401 without auth token', async () => {
+      const response = await request(app)
+        .put(`/api/folders/${testFolder.id}/questionsets/${testQuestionSet.id}/pin`)
+        .send({ isPinned: true });
+      expect(response.status).toBe(401);
+    });
+
+    it('should return 404 for non-existent question set', async () => {
+      const response = await request(app)
+        .put(`/api/folders/${testFolder.id}/questionsets/99999/pin`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ isPinned: true });
+      expect(response.status).toBe(404);
+    });
+
+    it('should return 400 for invalid isPinned value', async () => {
+      const response = await request(app)
+        .put(`/api/folders/${testFolder.id}/questionsets/${testQuestionSet.id}/pin`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ isPinned: 'notabool' });
+      expect(response.status).toBe(400);
+    });
+  });
 }); 

@@ -151,7 +151,7 @@ export const getNoteById = async (req: AuthRequest, res: Response): Promise<void
 export const updateNote = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.userId;
   const { id: noteId } = req.params;
-  const { title, content, plainText, folderId, questionSetId } = req.body;
+  let { title, content, plainText, folderId, questionSetId } = req.body;
 
   if (!userId) {
     res.status(401).json({ message: 'User not authenticated' });
@@ -177,8 +177,9 @@ export const updateNote = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
-    // Verify folder ownership if folderId is provided
+    // Convert folderId to number if present
     if (folderId) {
+      folderId = Number(folderId);
       const folder = await prisma.folder.findFirst({
         where: { id: folderId, userId },
       });
@@ -188,8 +189,9 @@ export const updateNote = async (req: AuthRequest, res: Response): Promise<void>
       }
     }
 
-    // Verify question set ownership if questionSetId is provided
+    // Convert questionSetId to number if present
     if (questionSetId) {
+      questionSetId = Number(questionSetId);
       const questionSet = await prisma.questionSet.findFirst({
         where: { 
           id: questionSetId,

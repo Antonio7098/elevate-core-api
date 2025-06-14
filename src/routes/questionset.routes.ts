@@ -6,7 +6,8 @@ import {
   getQuestionSetById, 
   createQuestionSet, 
   updateQuestionSet, 
-  deleteQuestionSet 
+  deleteQuestionSet, 
+  pinQuestionSet 
 } from '../controllers/questionset.controller';
 import { validateQuestionSetCreate, validateQuestionSetUpdate } from '../middleware/validation';
 
@@ -29,6 +30,9 @@ router.put('/:id', validateQuestionSetUpdate, updateQuestionSet);
 
 // DELETE /api/folders/:folderId/questionsets/:id - Delete a question set
 router.delete('/:id', deleteQuestionSet);
+
+// PUT /api/folders/:folderId/questionsets/:setId/pin - Pin/unpin a question set
+router.put('/:setId/pin', pinQuestionSet);
 
 // Mount the questionRouter for paths like /api/folders/:folderId/questionsets/:setId/questions
 router.use('/:setId/questions', questionRouter);
