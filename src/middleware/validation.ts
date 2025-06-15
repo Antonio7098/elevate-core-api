@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { check, param, body, validationResult } from 'express-validator';
+import { QuestionScope, QuestionTone } from '../types/aiGeneration.types';
 
 const handleValidationErrors = (req: Request, res: Response, next: NextFunction) => {
   const errors = validationResult(req);
@@ -145,27 +146,6 @@ export const validateQuestionUpdate = [
   handleValidationErrors,
 ];
 
-export const validateGenerateFromSource = [
-  check('sourceText')
-    .notEmpty()
-    .withMessage('Source text cannot be empty')
-    .isString()
-    .withMessage('Source text must be a string')
-    .trim(),
-  check('folderId')
-    .notEmpty()
-    .withMessage('Folder ID is required')
-    .isInt({ gt: 0 })
-    .withMessage('Folder ID must be a positive integer')
-    .toInt(),
-  check('questionCount')
-    .optional()
-    .isInt({ min: 1, max: 20 })
-    .withMessage('Question count must be between 1 and 20')
-    .toInt(),
-  handleValidationErrors,
-];
-
 export const validateChatWithAI = [
   check('message')
     .notEmpty()
@@ -251,6 +231,27 @@ export const validateQuestionSetUpdate = [
   handleValidationErrors,
 ];
 
+export const validateGenerateFromSource = [
+  check('sourceId')
+    .isString()
+    .withMessage('Source ID must be a string')
+    .notEmpty()
+    .withMessage('Source ID cannot be empty')
+    .trim(),
+  check('questionScope')
+    .isIn(Object.values(QuestionScope))
+    .withMessage(`Question scope must be one of: ${Object.values(QuestionScope).join(', ')}`),
+  check('questionTone')
+    .isIn(Object.values(QuestionTone))
+    .withMessage(`Question tone must be one of: ${Object.values(QuestionTone).join(', ')}`),
+  check('questionCount')
+    .optional()
+    .isInt({ min: 1, max: 20 })
+    .withMessage('Question count, if provided, must be an integer between 1 and 20')
+    .toInt(),
+  handleValidationErrors,
+];
+
 export const validateNoteCreate = (req: Request, res: Response, next: NextFunction): void => {
   const { title, content, plainText, folderId, questionSetId } = req.body;
 
@@ -326,5 +327,19 @@ export const validateNoteUpdate = (req: Request, res: Response, next: NextFuncti
     return;
   }
 
+  next();
+};
+
+export const validateGenerateNote = (req: Request, res: Response, next: NextFunction): void => {
+  const { sourceId, userId, noteStyle, sourceFidelity } = req.body;
+  if (!sourceId || !userId || !noteStyle || !sourceFidelity) {
+    res.status(400).json({ message: 'Missing required fields' });
+    return;
+  }
+  // Validate types or enums if defined
+  if (typeof sourceId !== 'string' || typeof userId !== 'number' || typeof noteStyle !== 'string' || typeof sourceFidelity !== 'string') {
+    res.status(400).json({ message: 'Invalid field types' });
+    return;
+  }
   next();
 };

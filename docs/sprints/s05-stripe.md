@@ -7,7 +7,7 @@
 
 ---
 
-## I. Planned Tasks & To-Do List
+## I. Planned Tasks & To-Do List 
 
 *Instructions for the agent: This sprint involves integrating a third-party service (Stripe). Ensure all secret keys are handled via environment variables.*
 

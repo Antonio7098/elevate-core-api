@@ -67,12 +67,14 @@ describe('AI Routes Integration Tests', () => {
   let user1Folder: any;
   let user2Folder: any;
   let user1QuestionSet: any;
+  let user1Note: any;
 
   // Setup test data before all tests
   beforeAll(async () => {
     // Clear existing test data
     await prisma.question.deleteMany();
     await prisma.questionSet.deleteMany();
+    await prisma.note.deleteMany();
     await prisma.folder.deleteMany();
     await prisma.user.deleteMany();
 
@@ -118,6 +120,17 @@ describe('AI Routes Integration Tests', () => {
       },
     });
 
+    // Create a note for user1
+    user1Note = await prisma.note.create({
+      data: {
+        title: 'AI Test Note - User 1',
+        content: 'This is a test source text for AI question generation. It contains information about testing and AI.',
+        plainText: 'This is a test source text for AI question generation. It contains information about testing and AI.',
+        userId: user1.id,
+        folderId: user1Folder.id, // Optional: link to folder
+      },
+    });
+
     // Create a question set for user1
     user1QuestionSet = await prisma.questionSet.create({
       data: {
@@ -152,6 +165,7 @@ describe('AI Routes Integration Tests', () => {
   afterAll(async () => {
     await prisma.question.deleteMany();
     await prisma.questionSet.deleteMany();
+    await prisma.note.deleteMany();
     await prisma.folder.deleteMany();
     await prisma.user.deleteMany();
     await prisma.$disconnect();
@@ -159,15 +173,15 @@ describe('AI Routes Integration Tests', () => {
 
   describe('POST /api/ai/generate-from-source', () => {
     it('should generate questions from source text and create a question set', async () => {
-      const sourceText = 'This is a test source text for AI question generation. It contains information about testing and AI.';
-      
       const res = await request(app)
         .post('/api/ai/generate-from-source')
         .set('Authorization', `Bearer ${user1Token}`)
         .send({
-          sourceText,
-          folderId: user1Folder.id,
-          questionCount: 3
+          sourceId: user1Note.id, // Use the ID of the created note
+          questionScope: 'lesson_summary', // Add questionScope
+          questionTone: 'neutral', // Add questionTone
+          questionCount: 3 // Explicitly request 3 questions
+          // folderId is no longer sent directly for this endpoint
         });
 
       // Check response status and structure
@@ -175,12 +189,12 @@ describe('AI Routes Integration Tests', () => {
       expect(res.body).toHaveProperty('questionSet');
       expect(res.body.questionSet).toHaveProperty('id');
       expect(res.body.questionSet).toHaveProperty('name');
-      expect(res.body.questionSet).toHaveProperty('folderId', user1Folder.id);
+      // folderId is no longer asserted here as it's not set by this specific controller logic
       
       // Check that questions were created
       expect(res.body.questionSet).toHaveProperty('questions');
       expect(Array.isArray(res.body.questionSet.questions)).toBe(true);
-      expect(res.body.questionSet.questions.length).toEqual(3);
+      expect(res.body.questionSet.questions.length).toEqual(3); // Ensure this matches the requested questionCount
     });
   });
 

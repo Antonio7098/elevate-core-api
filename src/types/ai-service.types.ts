@@ -7,6 +7,7 @@
  */
 
 import { CognitiveApproach, ExplanationStyle, InteractionStyle } from '@prisma/client';
+import { GenerateQuestionRequest, QuestionScope, QuestionTone } from './aiGeneration.types';
 
 // Common types
 
@@ -34,24 +35,6 @@ export interface AIServiceErrorResponse extends AIServiceBaseResponse {
 }
 
 // Question Generation Types
-
-/**
- * Request to generate questions from source text
- */
-export interface GenerateQuestionsRequest {
-  sourceText: string;
-  questionCount: number;
-  questionTypes?: Array<'multiple-choice' | 'true-false' | 'short-answer'>;
-  difficulty?: 'easy' | 'medium' | 'hard';
-  topics?: string[];
-  language?: string;
-  context?: {
-    learningStyles?: CognitiveApproach[];
-    preferredAiTone?: ExplanationStyle;
-    preferredAiVerbosity?: InteractionStyle;
-    primaryGoal?: string;
-  };
-}
 
 /**
  * A generated question

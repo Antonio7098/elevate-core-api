@@ -11,7 +11,6 @@ import { UserMemoryService } from './userMemory.service';
 import {
   AIServiceBaseResponse,
   AIServiceErrorResponse,
-  GenerateQuestionsRequest,
   GenerateQuestionsResponse,
   ChatRequest,
   ChatResponse,
@@ -20,6 +19,7 @@ import {
   isErrorResponse,
   isGenerateQuestionsResponse
 } from '../types/ai-service.types';
+import { GenerateQuestionRequest, GenerateNoteRequest } from '../types/aiGeneration.types';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
@@ -65,51 +65,28 @@ export class AIService {
    * @returns A promise that resolves to the generated questions
    * @throws Error if the request fails or the AI service returns an error
    */
-  async generateQuestions(request: GenerateQuestionsRequest, userId?: number): Promise<GenerateQuestionsResponse> {
+  async generateQuestions(request: GenerateQuestionRequest): Promise<GenerateQuestionsResponse> {
     try {
-      // Get user preferences if userId is provided
-      let userPreferences;
-      if (userId) {
-        const userMemory = await UserMemoryService.getUserMemory(userId);
-        if (userMemory) {
-          userPreferences = {
-            cognitiveApproach: userMemory.cognitiveApproach,
-            explanationStyles: userMemory.explanationStyles,
-            interactionStyle: userMemory.interactionStyle,
-            primaryGoal: userMemory.primaryGoal
-          };
-        }
-      }
-
-      // Add user preferences to context if available
-      const requestWithContext = {
-        ...request,
-        context: {
-          ...request.context,
-          ...userPreferences
-        }
-      };
-
-      logger.info('Generating questions with context:', {
-        request: requestWithContext,
-        userId
-      });
-
-      const response = await this.client.post<GenerateQuestionsResponse | AIServiceErrorResponse>(
-        '/generate-questions',
-        requestWithContext
-      );
-
-      const data = response.data;
-
-      if (isErrorResponse(data)) {
-        throw new Error(data.error.message);
-      }
-
-      return data;
+      return await this.client.post('/generate-questions', request);  // Only use defined fields in request
     } catch (error) {
-      logger.error('Error generating questions:', error);
-      throw error;
+      throw new Error('Error generating questions');
+    }
+  }
+
+  /**
+   * Generate a note from source text
+   * 
+   * @param request - The request object containing the source text and options
+   * @returns A promise that resolves to the generated note
+   * @throws Error if the request fails or the AI service returns an error
+   */
+  async generateNote(request: GenerateNoteRequest): Promise<any> {
+    try {
+      // Logic to call AI service with request fields (noteStyle, sourceFidelity, etc.)
+      // For now, simulate or implement AI call
+      return await this.client.post('/generate-note', request);  // Adapt endpoint URL as per AI service contract
+    } catch (error) {
+      throw new Error('Error generating note');
     }
   }
 

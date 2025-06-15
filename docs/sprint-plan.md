@@ -55,6 +55,9 @@ Below is a summary of all backend sprints for the Elevate Core API, with complet
 - [x] **Sprint 17: Spaced Repetition Service & Tests - Updates**
     Debugged and finalized spaced repetition service tests. All tasks checked and outcome confirmed. (See `2025-06-02-spaced-repetition-updates.md`)
 
+- [ ] **Sprint 18: Adding Preferences for AI Generation**
+    Implemented user preferences for AI note and question generation, including new type definitions and endpoint updates. Tasks pending. (See `s14-adding-preferences-for-generation.md`)
+
 ---
 
 *For details and full implementation notes, see the corresponding sprint file in `docs/sprints/`.*
