@@ -16,6 +16,7 @@ import statsRouter from './routes/stats.routes';
 import noteRouter from './routes/note.routes';
 import insightCatalystRouter from './routes/insightCatalyst.routes';
 import userMemoryRouter from './routes/userMemory.routes';
+import evaluationRouter from './routes/evaluation.routes';
 
 // Load environment variables
 dotenv.config();
@@ -30,7 +31,8 @@ app.use(express.json());
 app.use('/api/auth', authRouter);
 app.use('/api/users', userRouter);
 app.use('/api/folders', folderRouter);
-app.use('/api/ai', aiRouter); // Note: /api/ai is used twice, ensure this is intended or consolidate
+app.use('/api/ai', aiRouter);
+app.use('/api/ai', evaluationRouter);
 app.use('/api/reviews', reviewRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/todays-tasks', todaysTasksRoutes);

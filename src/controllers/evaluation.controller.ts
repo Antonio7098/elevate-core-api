@@ -70,7 +70,9 @@ export async function evaluateAnswer(
       questionText: question.text,
       expectedAnswer: question.answer || undefined,
       questionType: question.questionType,
-      options: question.options
+      options: question.options,
+      markingCriteria: question.markingCriteria as string | string[] | null | undefined,
+      uueFocus: question.uueFocus
     },
     userAnswer: answer
   });

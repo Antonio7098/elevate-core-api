@@ -1,7 +1,12 @@
-import { prisma } from '../lib/prisma';
+import { PrismaClient } from '@prisma/client';
 import { generateToken } from '../utils/auth';
 
+const prisma = new PrismaClient();
+
 export async function createTestUser(email: string = 'test@example.com'): Promise<{ id: number; token: string }> {
+  // Ensure database connection
+  await prisma.$connect();
+  
   // Create test user
   const user = await prisma.user.create({
     data: {
@@ -14,8 +19,11 @@ export async function createTestUser(email: string = 'test@example.com'): Promis
   // Generate token
   const token = generateToken(user);
 
+  // Close connection
+  await prisma.$disconnect();
+
   return {
     id: user.id,
     token
   };
-} 
+}

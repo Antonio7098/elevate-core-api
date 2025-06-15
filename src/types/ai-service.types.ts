@@ -207,6 +207,8 @@ export interface EvaluateAnswerRequest {
     questionType: string;
     options?: string[];
     marksAvailable?: number;
+    markingCriteria?: string | string[] | null;
+    uueFocus?: string | null;
   };
   userAnswer: string;
   context?: {
