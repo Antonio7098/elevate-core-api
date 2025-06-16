@@ -80,7 +80,7 @@ app.get('/api/questionsets/:id/questions', authenticate, async (req: any, res: a
         id: questionSet.id,
         name: questionSet.name,
         folderId: questionSet.folderId,
-        folderName: questionSet.folder.name,
+        folderName: questionSet.folder?.name,
         // Include spaced repetition fields from the QuestionSet model
         understandScore: questionSet.understandScore || 0,
         useScore: questionSet.useScore || 0,

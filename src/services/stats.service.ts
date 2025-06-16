@@ -42,14 +42,24 @@ export const fetchQuestionSetStatsDetails = async (
     throw createError(403, 'User does not have access to this QuestionSet.');
   }
 
-  const reviewSessions = await prisma.userStudySession.findMany({
+  const answersInSet = await prisma.userQuestionAnswer.findMany({
     where: {
       userId,
-      userQuestionAnswers: {
-        some: {
-          questionSetId: questionSetId,
-        },
+      questionSetId,
+    },
+    select: {
+      questionSetStudySessionId: true,
+    },
+  });
+
+  const uniqueSessionIds = [...new Set(answersInSet.map(a => a.questionSetStudySessionId).filter(id => id !== null))] as number[];
+
+  const reviewSessions = await prisma.userStudySession.findMany({
+    where: {
+      id: {
+        in: uniqueSessionIds,
       },
+      userId,
     },
     orderBy: {
       sessionEndedAt: 'asc',
@@ -238,18 +248,19 @@ export const fetchFolderStatsDetails = async (
 
   // Calculate total review sessions in the folder
   const questionSetIds = questionSetsInFolder.map(qs => qs.id);
-  const totalReviewSessionsInFolder = await prisma.userStudySession.count({
+  const answersInFolder = await prisma.userQuestionAnswer.findMany({
     where: {
       userId,
-      userQuestionAnswers: {
-        some: {
-          questionSetId: {
-            in: questionSetIds,
-          },
-        },
+      questionSetId: {
+        in: questionSetIds,
       },
     },
+    select: {
+      questionSetStudySessionId: true,
+    },
   });
+  const uniqueSessionIds = new Set(answersInFolder.map(a => a.questionSetStudySessionId).filter(id => id !== null));
+  const totalReviewSessionsInFolder = uniqueSessionIds.size;
 
   return {
     masteryHistory: folder.masteryHistory.filter((h: Prisma.JsonValue | null) => h !== null) as Prisma.JsonValue[], // Ensure no nulls

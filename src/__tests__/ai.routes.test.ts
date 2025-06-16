@@ -1,8 +1,8 @@
 import request from 'supertest';
-import app from '../../app';  // Assume app is exported from the main server file
-import { prisma } from '../../prisma';  // Import Prisma for test setup
+import app from '../app';  // Assume app is exported from the main server file
+import prisma from '../lib/prisma';  // Import Prisma for test setup
 
-import { GenerateNoteRequest, GenerateQuestionRequest } from '../../types/aiGeneration.types';  // Correct path if needed, assuming src/types directory
+import { GenerateNoteRequest, GenerateQuestionRequest, NoteStyle, SourceFidelity, QuestionScope, QuestionTone } from '../types/aiGeneration.types';  // Correct path if needed, assuming src/types directory
 
 describe('AI Routes Integration Tests', () => {
   beforeAll(async () => {
@@ -15,10 +15,15 @@ describe('AI Routes Integration Tests', () => {
   });
 
   it('should generate a note successfully with valid request', async () => {
+    const noteRequest: GenerateNoteRequest = {
+      sourceId: 'test-source-id',
+      noteStyle: NoteStyle.THOROUGH,
+      sourceFidelity: SourceFidelity.STRICT,
+    };
     const response = await request(app)
       .post('/api/ai/generate-note')
-      .set('Authorization', 'Bearer valid-token')  // Mock auth token if needed
-      .send({ sourceId: 'test-source', userId: 1, noteStyle: 'detailed', sourceFidelity: 'high' } as GenerateNoteRequest);
+      .set('Authorization', 'Bearer valid-token')  
+      .send(noteRequest);
     expect(response.status).toBe(200);  // Adjust expected status based on endpoint implementation
     expect(response.body).toHaveProperty('note');  // Check for expected response fields
   });
@@ -33,10 +38,15 @@ describe('AI Routes Integration Tests', () => {
   });
 
   it('should generate questions successfully with valid request', async () => {
+    const questionRequest: GenerateQuestionRequest = {
+      sourceId: 'test-source-id',
+      questionScope: QuestionScope.THOROUGH,
+      questionTone: QuestionTone.FORMAL,
+    };
     const response = await request(app)
       .post('/api/ai/generate-questions')
       .set('Authorization', 'Bearer valid-token')
-      .send({ sourceId: 'test-source', userId: 1, questionScope: 'detailed', questionTone: 'informal' } as GenerateQuestionRequest);
+      .send(questionRequest);
     expect(response.status).toBe(200);
     expect(response.body).toHaveProperty('questions');
   });

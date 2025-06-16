@@ -4,38 +4,13 @@ import {
   getDueQuestionSets,
   getPrioritizedQuestions,
   getUserProgressSummary,
-  processQuestionSetReview,
-  UNDERSTAND_WEIGHT,
-  USE_WEIGHT,
-  EXPLORE_WEIGHT
-} from '../services/spacedRepetition.service';
-import { processAdvancedReview } from '../services/advancedSpacedRepetition.service';
-
-// Extend QuestionSet type to include new fields
-interface ExtendedQuestionSet extends QuestionSet {
-  srStage: number;
-  easeFactor: number;
-  lapses: number;
-  folder: Folder;
-}
+  processAdvancedReview,
+  QuestionSetWithRelations,
+  PrioritizedQuestion,
+} from '../services/advancedSpacedRepetition.service';
+import { FrontendReviewOutcome } from '../types/review';
 
 const prisma = new PrismaClient();
-
-// Type for Question Set with related data
-export type QuestionSetWithRelations = QuestionSet & {
-  questions: Question[];
-  folder: {
-    id: number;
-    name: string;
-    description?: string | null;
-  };
-};
-
-// Interface for prioritized question, extending the base Prisma Question type
-export interface PrioritizedQuestion extends Question {
-  priorityScore: number;
-  uueFocus: string;
-};
 
 /**
  * Get question sets due for review today
@@ -63,7 +38,7 @@ export const getTodayReviews = async (req: Request, res: Response, next: NextFun
     // Return the question sets due for review
     res.status(200).json({
       count: dueQuestionSets.length,
-      questionSets: dueQuestionSets.map(set => ({
+      questionSets: dueQuestionSets.map((set: QuestionSetWithRelations) => ({
         id: set.id,
         name: set.name,
         folderId: set.folderId,
@@ -149,26 +124,6 @@ export const getReviewQuestions = async (req: Request, res: Response, next: Next
   }
 };
 
-// New interface for the incoming payload from the frontend
-export interface FrontendReviewOutcome {
-  questionId: string; // Will be parsed to number
-  scoreAchieved: number; // Expected as 0-5 from frontend, will be normalized to 0-1 for service
-  uueFocus?: 'Understand' | 'Use' | 'Explore'; // Optional: service fetches authoritative uueFocus
-  userAnswerText?: string; // Renamed from userAnswer
-  timeSpentOnQuestion?: number; // Optional: time spent on this specific question
-}
-
-export interface FrontendReviewSubmission {
-  questionSetId: string; // Will be parsed to number
-  outcomes: FrontendReviewOutcome[];
-  sessionDurationSeconds: number; // Renamed from timeSpent, total time for the review session in seconds
-}
-
-/**
- * Interface for the question set review submission request body
- * This is the OLD interface, kept for reference during transition or if other parts still use it.
- * The submitReview function will now primarily work with FrontendReviewSubmission.
- */
 interface QuestionSetReviewSubmission {
   questionSetId: number;
   understandScore: number;
@@ -200,54 +155,43 @@ interface UserQuestionAnswerData {
  */
 export const submitReview = async (req: Request, res: Response): Promise<void> => {
   const userId = req.user?.userId;
-  const { questionSetId, outcomes, sessionStartTime, sessionDurationSeconds } = req.body;
+  // questionSetId is now optional and not used for authorization here
+  const { outcomes, sessionDurationSeconds } = req.body as { outcomes: FrontendReviewOutcome[], sessionDurationSeconds: number };
 
   if (!userId) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
 
+  if (!outcomes || !Array.isArray(outcomes) || outcomes.length === 0) {
+    res.status(400).json({ error: 'Review outcomes are required.' });
+    return;
+  }
+
   try {
-    const questionSet = await prisma.questionSet.findUnique({
-      where: { id: parseInt(questionSetId) },
-      include: {
-        folder: true
-      }
-    });
-
-    if (!questionSet) {
-      res.status(404).json({ error: 'Question set not found' });
-      return;
-    }
-
-    // Type assertion after null check
-    const extendedQuestionSet = questionSet as unknown as ExtendedQuestionSet;
-
-    if (extendedQuestionSet.folder.userId !== userId) {
-      res.status(403).json({ error: 'Access denied' });
-      return;
-    }
-
-    const updatedQuestionSet = await processAdvancedReview(
-      parseInt(questionSetId),
+    const updatedQuestionSets = await processAdvancedReview(
       userId,
-      outcomes
-    ) as unknown as ExtendedQuestionSet;
+      outcomes,
+      sessionDurationSeconds,
+    );
 
-    res.json({
-      questionSet: {
-        id: updatedQuestionSet.id,
-        name: updatedQuestionSet.name,
-        currentStage: updatedQuestionSet.srStage,
-        currentInterval: updatedQuestionSet.currentIntervalDays,
-        easeFactor: updatedQuestionSet.easeFactor,
-        lapses: updatedQuestionSet.lapses,
-        nextReviewAt: updatedQuestionSet.nextReviewAt
-      }
-    });
+    // Return the array of updated sets directly, as expected by tests.
+    res.status(200).json(updatedQuestionSets);
   } catch (error) {
+    if (error instanceof Error) {
+      // Handle specific errors thrown from the service layer.
+      if (error.message.includes('not found during review processing')) {
+        res.status(404).json({ message: error.message });
+        return;
+      }
+      if (error.message === 'ACCESS_DENIED') {
+        res.status(403).json({ message: 'Access denied to one or more question sets.' });
+        return;
+      }
+    }
+    // Generic error handler
     console.error('Error submitting review:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 
@@ -299,7 +243,7 @@ export const startReview = async (req: Request, res: Response): Promise<void> =>
     }
 
     // Type assertion after null check
-    const extendedQuestionSet = questionSet as unknown as ExtendedQuestionSet;
+    const extendedQuestionSet = questionSet as unknown as QuestionSetWithRelations;
 
     if (extendedQuestionSet.folder.userId !== userId) {
       res.status(403).json({ error: 'Access denied' });

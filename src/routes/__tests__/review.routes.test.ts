@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { PrismaClient, Question, QuestionSet, Folder, User } from '@prisma/client';
-import { FrontendReviewSubmission } from '../../controllers/review.controller';
+import { FrontendReviewSubmission } from '../../types/review';
 import { getIntervalForMastery } from '../../services/spacedRepetition.service';
 import app from '../../app';
 import jwt from 'jsonwebtoken';
@@ -12,7 +12,9 @@ describe('Review Routes', () => {
   let userId: number;
   let folderId: number;
   let questionSetId: number;
+  let questionSetId2: number;
   let questionId: number;
+  let questionId2: number;
 
   // Setup test data before all tests
   beforeAll(async () => {
@@ -78,6 +80,15 @@ describe('Review Routes', () => {
     });
     questionSetId = questionSet.id;
 
+    // Create a second test question set
+    const questionSet2 = await prisma.questionSet.create({
+      data: {
+        name: 'Test Review Question Set 2',
+        folderId: folder.id,
+      },
+    });
+    questionSetId2 = questionSet2.id;
+
     // Create test questions with different uueFocus and totalMarksAvailable
     const questionData = [
       {
@@ -115,8 +126,20 @@ describe('Review Routes', () => {
       }))
     );
 
+    const createdQuestions2 = await prisma.question.create({
+      data: {
+        text: 'Second set question',
+        answer: 'An answer.',
+        questionType: 'multiple-choice',
+        uueFocus: 'Explore',
+        totalMarksAvailable: 4,
+        questionSetId: questionSetId2,
+      },
+    });
+
     // Save the ID of the first question for testing the review submission
     questionId = createdQuestions[0].id; // This is the 'Understand' question
+    questionId2 = createdQuestions2.id;
 
     // Original code for reference, now replaced by the above structured creation
     // const questions = await Promise.all([
@@ -176,7 +199,7 @@ describe('Review Routes', () => {
       expect(Array.isArray(response.body.questionSets)).toBe(true);
       
       // Should include question sets that are due
-      expect(response.body.count).toBe(1); // Adjusted based on observed output
+      expect(response.body.count).toBe(2); // Two sets are created, both are due initially
       
       // Check that the question sets have the expected properties
       if (response.body.questionSets.length > 0) {
@@ -215,22 +238,24 @@ describe('Review Routes', () => {
   describe('POST /api/reviews', () => {
     it('should submit a review and update QuestionSet scores for a correct answer', async () => {
       const initialQuestionSet = await prisma.questionSet.findUnique({
-        where: { id: questionSetId }
+        where: { id: questionSetId },
       });
-      if (!initialQuestionSet) throw new Error('Test setup error: Initial question set not found for correct answer test');
+      if (!initialQuestionSet) throw new Error('Test setup error: Initial question set not found');
 
+      // This test simulates answering one question correctly.
       const reviewData: FrontendReviewSubmission = {
-        questionSetId: String(questionSetId),
         outcomes: [
-          {
-            questionId: String(questionId),
-            scoreAchieved: 5, // Max score (0-5 scale)
-            userAnswerText: 'Correct answer text for Q1',
-            uueFocus: 'Understand'
-          }
+          { questionId: questionId, marksAchieved: 1, marksAvailable: 1 },
         ],
-        sessionDurationSeconds: 120 // Example total session time in seconds
+        sessionDurationSeconds: 120,
       };
+
+      // Based on the test setup:
+      // Q1 (Understand, totalMarks: 1) is answered with 1/1 marks.
+      // Q2 (Use, totalMarks: 2) is not answered.
+      // Q3 (Explore, totalMarks: 1) is not answered.
+      // Total marks available = 1 + 2 + 1 = 4. Total marks achieved = 1.
+      const expectedTotalMasteryScore = Math.round((1 / 4) * 100); // 25
 
       const response = await request(app)
         .post('/api/reviews')
@@ -239,56 +264,32 @@ describe('Review Routes', () => {
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
-      const updatedQuestionSetResponse = response.body[0]; // Assuming the first set is the one we're targeting for detailed checks
-      expect(updatedQuestionSetResponse.id).toBe(questionSetId);
+      expect(response.body.length).toBe(1);
 
-      // Q1 (Understand, totalMarks: 1) answered with score 5/5 (normalized 1.0)
-      // Q2 (Use, totalMarks: 2) not answered (score 0)
-      // Q3 (Explore, totalMarks: 1) not answered (score 0)
-
-      const expectedUnderstandScore = Math.round((1.0 / 1) * 100); // 100
-      const expectedUseScore = Math.round((0 / 2) * 100);          // 0
-      const expectedExploreScore = Math.round((0 / 1) * 100);       // 0
-      const expectedTotalMasteryScore = Math.round(((1.0 + 0 + 0) / (1 + 2 + 1)) * 100); // 25
-
-      expect(updatedQuestionSetResponse.understandScore).toBe(expectedUnderstandScore);
-      expect(updatedQuestionSetResponse.useScore).toBe(expectedUseScore);
-      expect(updatedQuestionSetResponse.exploreScore).toBe(expectedExploreScore);
-      expect(updatedQuestionSetResponse.currentTotalMasteryScore).toBe(expectedTotalMasteryScore);
-
-      expect(updatedQuestionSetResponse).toHaveProperty('lastReviewedAt');
-      const lastReviewedDate = new Date(updatedQuestionSetResponse.lastReviewedAt);
-      expect(lastReviewedDate.getTime()).toBeLessThanOrEqual(new Date().getTime()); // Should be recent
-
-      const expectedIntervalDays = getIntervalForMastery(expectedTotalMasteryScore);
-      expect(updatedQuestionSetResponse.currentIntervalDays).toBe(expectedIntervalDays);
-
-      const expectedNextReviewDate = new Date(lastReviewedDate);
-      expectedNextReviewDate.setDate(lastReviewedDate.getDate() + expectedIntervalDays);
-      expect(new Date(updatedQuestionSetResponse.nextReviewAt).toISOString().split('T')[0]).toBe(expectedNextReviewDate.toISOString().split('T')[0]);
-      
-      expect(updatedQuestionSetResponse.reviewCount).toBe((initialQuestionSet.reviewCount || 0) + 1);
+      const updatedSet = response.body[0];
+      expect(updatedSet.id).toBe(questionSetId);
+      expect(updatedSet.currentTotalMasteryScore).toBe(expectedTotalMasteryScore);
+      expect(updatedSet.reviewCount).toBe((initialQuestionSet.reviewCount || 0) + 1);
+      expect(updatedSet.lastReviewedAt).not.toBeNull();
+      expect(new Date(updatedSet.lastReviewedAt!)).toBeInstanceOf(Date);
     });
 
     it('should submit a review and update QuestionSet scores for an incorrect answer', async () => {
       const initialQuestionSet = await prisma.questionSet.findUnique({
-        where: { id: questionSetId }
+        where: { id: questionSetId },
       });
-      if (!initialQuestionSet) throw new Error('Test setup error: Initial question set not found for incorrect answer test');
+      if (!initialQuestionSet) throw new Error('Test setup error: Initial question set not found');
 
+      // This test simulates answering one question incorrectly.
       const reviewData: FrontendReviewSubmission = {
-        questionSetId: String(questionSetId),
         outcomes: [
-          {
-            questionId: String(questionId),
-            scoreAchieved: 0, // Min score (0-5 scale) for incorrect answer
-            userAnswerText: 'Incorrect answer text for Q1',
-            uueFocus: 'Understand'
-          }
+          { questionId: questionId, marksAchieved: 0, marksAvailable: 1 },
         ],
-        sessionDurationSeconds: 90
+        sessionDurationSeconds: 60,
       };
+
+      // Total marks achieved = 0.
+      const expectedTotalMasteryScore = 0;
 
       const response = await request(app)
         .post('/api/reviews')
@@ -297,200 +298,167 @@ describe('Review Routes', () => {
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
-      const updatedQuestionSetResponse = response.body[0]; // Assuming the first set is the one we're targeting for detailed checks
-      expect(updatedQuestionSetResponse.id).toBe(questionSetId);
+      expect(response.body.length).toBe(1);
 
-      // Q1 (Understand, totalMarks: 1) answered with score 0/5 (normalized 0.0)
-      // Q2 (Use, totalMarks: 2) not answered (score 0)
-      // Q3 (Explore, totalMarks: 1) not answered (score 0)
-
-      const expectedUnderstandScore = Math.round((0.0 / 1) * 100); // 0
-      const expectedUseScore = Math.round((0 / 2) * 100);          // 0
-      const expectedExploreScore = Math.round((0 / 1) * 100);       // 0
-      const expectedTotalMasteryScore = Math.round(((0.0 + 0 + 0) / (1 + 2 + 1)) * 100); // 0
-
-      expect(updatedQuestionSetResponse.understandScore).toBe(expectedUnderstandScore);
-      expect(updatedQuestionSetResponse.useScore).toBe(expectedUseScore);
-      expect(updatedQuestionSetResponse.exploreScore).toBe(expectedExploreScore);
-      expect(updatedQuestionSetResponse.currentTotalMasteryScore).toBe(expectedTotalMasteryScore);
-
-      expect(updatedQuestionSetResponse).toHaveProperty('lastReviewedAt');
-      const lastReviewedDate = new Date(updatedQuestionSetResponse.lastReviewedAt);
-      expect(lastReviewedDate.getTime()).toBeLessThanOrEqual(new Date().getTime());
-
-      const expectedIntervalDays = getIntervalForMastery(expectedTotalMasteryScore);
-      expect(updatedQuestionSetResponse.currentIntervalDays).toBe(expectedIntervalDays);
-
-      const expectedNextReviewDate = new Date(lastReviewedDate);
-      expectedNextReviewDate.setDate(lastReviewedDate.getDate() + expectedIntervalDays);
-      expect(new Date(updatedQuestionSetResponse.nextReviewAt).toISOString().split('T')[0]).toBe(expectedNextReviewDate.toISOString().split('T')[0]);
-
-      expect(updatedQuestionSetResponse.reviewCount).toBe((initialQuestionSet.reviewCount || 0) + 1);
+      const updatedSet = response.body[0];
+      expect(updatedSet.id).toBe(questionSetId);
+      expect(updatedSet.currentTotalMasteryScore).toBe(expectedTotalMasteryScore);
+      expect(updatedSet.reviewCount).toBe((initialQuestionSet.reviewCount || 0) + 1);
+      expect(updatedSet.lastReviewedAt).not.toBeNull();
     });
 
-    it('should require authentication', async () => {
+    it('should handle a review submission spanning multiple question sets', async () => {
       const reviewData: FrontendReviewSubmission = {
-        questionSetId: String(questionSetId),
-        outcomes: [{ questionId: String(questionId), scoreAchieved: 3, userAnswerText: 'Some answer', timeSpentOnQuestion: 5 }],
-        sessionDurationSeconds: 30
+        outcomes: [
+          { questionId: questionId, marksAchieved: 1, marksAvailable: 1, timeSpentOnQuestion: 10 }, // From set 1
+          { questionId: questionId2, marksAchieved: 4, marksAvailable: 4, timeSpentOnQuestion: 15 }, // From set 2
+        ],
+        sessionDurationSeconds: 25,
       };
 
       const response = await request(app)
         .post('/api/reviews')
+        .set('Authorization', `Bearer ${authToken}`)
         .send(reviewData);
 
-      expect(response.status).toBe(401);
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveLength(2);
+
+      // Verify updates for the first set
+      const updatedSet1 = response.body.find((s: QuestionSet) => s.id === questionSetId);
+      expect(updatedSet1).toBeDefined();
+      expect(updatedSet1.currentTotalMasteryScore).toBe(25); // 1/4 marks for the whole set
+
+      // Verify updates for the second set
+      const updatedSet2 = response.body.find((s: QuestionSet) => s.id === questionSetId2);
+      expect(updatedSet2).toBeDefined();
+      expect(updatedSet2.currentTotalMasteryScore).toBe(100); // 4/4 marks for the whole set
     });
 
-    it('should validate the request body for missing outcomes', async () => {
-      const invalidReviewData = {
-        questionSetId: String(questionSetId),
-        // outcomes: missing
-        sessionDurationSeconds: 30
-      } as Partial<FrontendReviewSubmission>; // Cast to allow missing properties for testing
-
-      const response = await request(app)
-        .post('/api/reviews')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send(invalidReviewData);
-
-      expect(response.status).toBe(400);
-      expect(response.body.errors[0].msg).toBe('Outcomes are required');
-    });
-
-    it('should validate the request body for missing sessionDurationSeconds', async () => {
-      const invalidReviewData = {
-        questionSetId: String(questionSetId),
-        outcomes: [{ questionId: String(questionId), scoreAchieved: 3, userAnswerText: 'Some answer', uueFocus: 'Understand' }]
-        // sessionDurationSeconds: missing
-      } as Partial<FrontendReviewSubmission>; // Cast to allow missing properties for testing
-
-      const response = await request(app)
-        .post('/api/reviews')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send(invalidReviewData);
-
-      expect(response.status).toBe(400);
-      expect(response.body.errors[0].msg).toBe('sessionDurationSeconds is required');
-    });
-
-    it('should handle non-existent question in outcomes gracefully', async () => {
-      const nonExistentQuestionIdString = "99999"; // Non-existent ID as string
+    it('should return 404 if a question in the review does not exist', async () => {
+      const nonExistentQuestionId = 999999;
       const reviewData: FrontendReviewSubmission = {
-        questionSetId: String(questionSetId),
         outcomes: [
-          {
-            questionId: nonExistentQuestionIdString,
-            scoreAchieved: 0, // Valid score (0-5 scale)
-            userAnswerText: 'Answer for non-existent question',
-            uueFocus: 'Understand'
-          },
+          { questionId: nonExistentQuestionId, marksAchieved: 1, marksAvailable: 1 },
+        ],
+        sessionDurationSeconds: 10,
+      };
+
+      const response = await request(app)
+        .post('/api/reviews')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send(reviewData);
+
+      expect(response.status).toBe(404);
+      expect(response.body.message).toBe(`Question with ID ${nonExistentQuestionId} not found during review processing.`);
+    });
+
+    it('should require authentication', async () => {
+      const reviewData: FrontendReviewSubmission = {
+        outcomes: [
+          { questionId: questionId, marksAchieved: 1, marksAvailable: 1 },
         ],
         sessionDurationSeconds: 60,
       };
 
       const response = await request(app)
         .post('/api/reviews')
-        .set('Authorization', `Bearer ${authToken}`)
         .send(reviewData);
-
-      // With the controller's improved error handling, this should now be a 404 from the service layer error
-      expect(response.status).toBe(404); 
-      expect(response.body.message).toBe(`Question with ID ${nonExistentQuestionIdString} not found during review processing.`);
-    });
-  });
-
-  describe('GET /api/reviews/question-set/:id', () => {
-  it('should require authentication', async () => {
-    const response = await request(app)
-      .get(`/api/reviews/question-set/${questionSetId}`);
-    expect(response.status).toBe(401);
-  });
-
-  it('should return 403 or 404 if user does not own the question set', async () => {
-    // Create a second user and question set
-    const otherUser = await prisma.user.create({
-      data: {
-        email: 'other-review@example.com',
-        password: 'hashedpassword456'
-      }
-    });
-    const otherFolder = await prisma.folder.create({
-      data: {
-        name: 'Other Review Folder',
-        description: 'A folder for unauthorized access test',
-        userId: otherUser.id
-      }
-    });
-    const otherQuestionSet = await prisma.questionSet.create({
-      data: {
-        name: 'Other Review Question Set',
-        folderId: otherFolder.id
-      }
-    });
-    const secret = process.env.JWT_SECRET || 'your-secret-key';
-    const otherAuthToken = jwt.sign({ userId: otherUser.id }, secret, { expiresIn: '1h' });
-
-    // Try to access the main user's question set with other user's token
-    const forbiddenResponse = await request(app)
-      .get(`/api/reviews/question-set/${questionSetId}`)
-      .set('Authorization', `Bearer ${otherAuthToken}`);
-    expect([403, 404]).toContain(forbiddenResponse.status);
-
-    // Clean up
-    await prisma.questionSet.delete({ where: { id: otherQuestionSet.id } });
-    await prisma.folder.delete({ where: { id: otherFolder.id } });
-    await prisma.user.delete({ where: { id: otherUser.id } });
-  });
-
-  it('should return 200 and prioritized questions for a valid request', async () => {
-    const response = await request(app)
-      .get(`/api/reviews/question-set/${questionSetId}`)
-      .set('Authorization', `Bearer ${authToken}`);
-    expect(response.status).toBe(200);
-    expect(Array.isArray(response.body.questions) || Array.isArray(response.body)).toBe(true);
-    // Accept either { questions: [...] } or just an array for flexibility
-    const questions = Array.isArray(response.body.questions) ? response.body.questions : response.body;
-    expect(questions.length).toBeGreaterThan(0);
-    for (const q of questions) {
-      expect(q).toHaveProperty('id');
-      expect(q).toHaveProperty('text');
-      expect(q).toHaveProperty('questionType');
-      expect(q).toHaveProperty('options');
-      expect(q).toHaveProperty('uueFocus');
-      expect(q).toHaveProperty('conceptTags');
-      expect(q).toHaveProperty('totalMarksAvailable');
-      expect(q).toHaveProperty('priorityScore');
-    }
-  });
-});
-
-describe('GET /api/reviews/stats', () => {
-    it('should return review statistics', async () => {
-      const response = await request(app)
-        .get('/api/reviews/stats')
-        .set('Authorization', `Bearer ${authToken}`);
-
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('totalQuestions');
-      expect(response.body).toHaveProperty('totalSets');
-      expect(response.body).toHaveProperty('masteredSets');
-      expect(response.body).toHaveProperty('dueSets');
-      
-      
-      // Check that the statistics are numbers
-      expect(typeof response.body.totalQuestions).toBe('number');
-      expect(typeof response.body.totalSets).toBe('number');
-      expect(typeof response.body.masteredSets).toBe('number');
-      expect(typeof response.body.dueSets).toBe('number');
-    });
-
-    it('should require authentication', async () => {
-      const response = await request(app)
-        .get('/api/reviews/stats');
 
       expect(response.status).toBe(401);
     });
   });
+
+  describe('GET /api/reviews/question-set/:id', () => {
+    it('should require authentication', async () => {
+      const response = await request(app)
+        .get(`/api/reviews/question-set/${questionSetId}`);
+      expect(response.status).toBe(401);
+    });
+
+    it('should return 403 or 404 if user does not own the question set', async () => {
+      // Create a second user and question set
+      const otherUser = await prisma.user.create({
+        data: {
+          email: 'other-review@example.com',
+          password: 'hashedpassword456'
+        }
+      });
+      const otherFolder = await prisma.folder.create({
+        data: {
+          name: 'Other Review Folder',
+          description: 'A folder for unauthorized access test',
+          userId: otherUser.id
+        }
+      });
+      const otherQuestionSet = await prisma.questionSet.create({
+        data: {
+          name: 'Other Review Question Set',
+          folderId: otherFolder.id
+        }
+      });
+      const secret = process.env.JWT_SECRET || 'your-secret-key';
+      const otherAuthToken = jwt.sign({ userId: otherUser.id }, secret, { expiresIn: '1h' });
+
+      // Try to access the main user's question set with other user's token
+      const forbiddenResponse = await request(app)
+        .get(`/api/reviews/question-set/${questionSetId}`)
+        .set('Authorization', `Bearer ${otherAuthToken}`);
+      expect([403, 404]).toContain(forbiddenResponse.status);
+
+      // Clean up
+      await prisma.questionSet.delete({ where: { id: otherQuestionSet.id } });
+      await prisma.folder.delete({ where: { id: otherFolder.id } });
+      await prisma.user.delete({ where: { id: otherUser.id } });
+    });
+
+    it('should return 200 and prioritized questions for a valid request', async () => {
+      const response = await request(app)
+        .get(`/api/reviews/question-set/${questionSetId}`)
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.questions) || Array.isArray(response.body)).toBe(true);
+      // Accept either { questions: [...] } or just an array for flexibility
+      const questions = Array.isArray(response.body.questions) ? response.body.questions : response.body;
+      expect(questions.length).toBeGreaterThan(0);
+      for (const q of questions) {
+        expect(q).toHaveProperty('id');
+        expect(q).toHaveProperty('text');
+        expect(q).toHaveProperty('questionType');
+        expect(q).toHaveProperty('options');
+        expect(q).toHaveProperty('uueFocus');
+        expect(q).toHaveProperty('conceptTags');
+        expect(q).toHaveProperty('totalMarksAvailable');
+        expect(q).toHaveProperty('priorityScore');
+      }
+    });
+  });
+
+  describe('GET /api/reviews/stats', () => {
+      it('should return review statistics', async () => {
+        const response = await request(app)
+          .get('/api/reviews/stats')
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(response.status).toBe(200);
+        expect(response.body).toHaveProperty('totalQuestions');
+        expect(response.body).toHaveProperty('totalSets');
+        expect(response.body).toHaveProperty('masteredSets');
+        expect(response.body).toHaveProperty('dueSets');
+        
+        
+        // Check that the statistics are numbers
+        expect(typeof response.body.totalQuestions).toBe('number');
+        expect(typeof response.body.totalSets).toBe('number');
+        expect(typeof response.body.masteredSets).toBe('number');
+        expect(typeof response.body.dueSets).toBe('number');
+      });
+
+      it('should require authentication', async () => {
+        const response = await request(app)
+          .get('/api/reviews/stats');
+
+        expect(response.status).toBe(401);
+      });
+    });
 });

@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "windows", "debian-openssl-3.0.x"]
 }
 
@@ -41,20 +41,21 @@ model UserMemory {
 }
 
 model User {
-  id                    Int                  @id @default(autoincrement())
-  email                 String               @unique
-  password              String
-  name                  String?
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
-  dailyStudyTimeMinutes Int                  @default(0)
-  folders               Folder[]
-  questionAnswers       UserQuestionAnswer[]
-  studySessions         UserStudySession[]
-  notes                 Note[]
-  insightCatalysts      InsightCatalyst[]
-  scheduledReviews      ScheduledReview[]
-  userMemory            UserMemory?
+  id                       Int                       @id @default(autoincrement())
+  email                    String                    @unique
+  password                 String
+  name                     String?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  dailyStudyTimeMinutes    Int                       @default(0)
+  folders                  Folder[]
+  questionAnswers          UserQuestionAnswer[]
+  studySessions            UserStudySession[]
+  questionSetStudySessions QuestionSetStudySession[]
+  notes                    Note[]
+  insightCatalysts         InsightCatalyst[]
+  scheduledReviews         ScheduledReview[]
+  userMemory               UserMemory?
 
   @@index([email])
 }
@@ -82,115 +83,137 @@ model Folder {
 }
 
 model QuestionSet {
-  id                      Int               @id @default(autoincrement())
-  name                    String
-  createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @updatedAt
-  currentIntervalDays    Float?
-  exploreScore           Float             @default(0)
-  lastReviewedAt         DateTime?
-  nextReviewAt           DateTime?
-  reviewCount            Int               @default(0)
-  understandScore        Float             @default(0)
-  useScore               Float             @default(0)
+  id                         Int                         @id @default(autoincrement())
+  name                       String
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  currentIntervalDays        Float?
+  exploreScore               Float                       @default(0)
+  lastReviewedAt             DateTime?
+  nextReviewAt               DateTime?
+  reviewCount                Int                         @default(0)
+  understandScore            Float                       @default(0)
+  useScore                   Float                       @default(0)
   currentForgottenPercentage Float?
-  currentTotalMasteryScore Float           @default(0)
-  currentUUESetStage     String            @default("Explore")
-  forgettingCurveParams  Json?
-  masteryHistory         Json[]
-  source                 String?
-  instructions           String?
-  isTracked              Boolean           @default(true)
-  isPinned               Boolean           @default(false)
-  folderId               Int?
-  folder                 Folder?           @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  questions              Question[]
-  notes                  Note[]
-  userAnswers            UserQuestionAnswer[]
-  scheduledReviews       ScheduledReview[]
+  currentTotalMasteryScore   Float                       @default(0)
+  currentUUESetStage         String                      @default("Explore")
+  forgettingCurveParams      Json?
+  masteryHistory             Json[]
+  source                     String?
+  instructions               String?
+  isTracked                  Boolean                     @default(true)
+  isPinned                   Boolean                     @default(false)
+  folderId                   Int?
+  folder                     Folder?                     @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  questions                  Question[]
+  notes                      Note[]
+  userAnswers                UserQuestionAnswer[]
+  scheduledReviews           ScheduledReview[]
+  questionSetStudySessions   QuestionSetStudySession[]
 
   // New fields for adaptive SR
-  srStage                Int               @default(0)
-  easeFactor             Float             @default(2.5)
-  lapses                 Int               @default(0)
-  trackingMode           String            @default("AUTO")
+  srStage                    Int                         @default(0)
+  easeFactor                 Float                       @default(2.5)
+  lapses                     Int                         @default(0)
+  trackingMode               String                      @default("AUTO")
 
   @@index([folderId])
 }
 
 model Question {
-  id                       Int                  @id @default(autoincrement())
-  answer                   String?
-  questionSetId            Int
-  createdAt                DateTime             @default(now())
-  updatedAt                DateTime             @updatedAt
-  options                  String[]
-  questionType             String
-  text                     String
-  conceptTags              String[]
-  lastAnswerCorrect        Boolean?
-  uueFocus                 String               @default("Understand")
-  totalMarksAvailable      Int                  @default(1) @map("marksAvailable")
-  markingCriteria          Json?
-  currentMasteryScore      Float?
-  difficultyScore          Float?
-  timesAnsweredCorrectly   Int                  @default(0)
-  timesAnsweredIncorrectly Int                  @default(0)
-  selfMark                 Boolean              @default(false)
-  autoMark                 Boolean              @default(false)
-  aiGenerated              Boolean              @default(false)
-  inCat                    String?
-  imageUrls                String[]
-  questionSet              QuestionSet          @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
-  userAnswers              UserQuestionAnswer[]
-  insightCatalysts         InsightCatalyst[]
+  id                         Int                         @id @default(autoincrement())
+  answer                     String?
+  questionSetId              Int
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  options                    String[]
+  questionType               String
+  text                       String
+  conceptTags                String[]
+  lastAnswerCorrect          Boolean?
+  uueFocus                   String                      @default("Understand")
+  totalMarksAvailable        Int                         @default(1) @map("marksAvailable")
+  markingCriteria            Json?
+  currentMasteryScore        Float?
+  difficultyScore            Float?
+  timesAnsweredCorrectly     Int                         @default(0)
+  timesAnsweredIncorrectly   Int                         @default(0)
+  selfMark                   Boolean                     @default(false)
+  autoMark                   Boolean                     @default(false)
+  aiGenerated                Boolean                     @default(false)
+  inCat                      String?
+  imageUrls                  String[]
+  questionSet                QuestionSet                 @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
+  userAnswers                UserQuestionAnswer[]
+  insightCatalysts           InsightCatalyst[]
+  questionSetStudySessions   QuestionSetStudySession[]
 
   @@index([questionSetId])
   @@index([uueFocus])
 }
 
 model UserQuestionAnswer {
-  id                 Int               @id @default(autoincrement())
-  userId             Int
-  questionId         Int
-  isCorrect          Boolean
-  confidence         Int?
-  timeSpent          Int
-  answeredAt         DateTime          @default(now())
-  scoreAchieved      Float
-  createdAt          DateTime          @default(now())
-  feedbackFromAI     String?
-  questionSetId      Int?
-  updatedAt          DateTime          @default(now()) @updatedAt
-  userAnswerText     String?
-  uueFocusTested     String?
-  userStudySessionId Int?
-  question           Question          @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  questionSet        QuestionSet?      @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
-  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  studySession       UserStudySession? @relation(fields: [userStudySessionId], references: [id])
+  id                        Int                      @id @default(autoincrement())
+  userId                    Int
+  questionId                Int
+  isCorrect                 Boolean
+  confidence                Int?
+  timeSpent                 Int
+  answeredAt                DateTime                 @default(now())
+  userAnswerText            String?
+  scoreAchieved             Int
+  questionSetId             Int?
+  user                      User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question                  Question                 @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionSet               QuestionSet?             @relation(fields: [questionSetId], references: [id])
+  questionSetStudySessionId Int?
+  questionSetStudySession   QuestionSetStudySession? @relation(fields: [questionSetStudySessionId], references: [id])
 
   @@index([userId])
   @@index([questionId])
   @@index([questionSetId])
   @@index([answeredAt])
-  @@index([userStudySessionId])
+  @@index([questionSetStudySessionId])
 }
 
 model UserStudySession {
-  id                     Int                  @id @default(autoincrement())
-  userId                 Int
-  sessionStartedAt       DateTime?
-  sessionEndedAt         DateTime             @default(now())
-  timeSpentSeconds       Int
-  answeredQuestionsCount Int
-  createdAt              DateTime             @default(now())
-  updatedAt              DateTime             @default(now()) @updatedAt
-  userQuestionAnswers    UserQuestionAnswer[]
-  user                   User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                       Int                       @id @default(autoincrement())
+  userId                   Int
+  sessionStartedAt         DateTime?
+  sessionEndedAt           DateTime                  @default(now())
+  timeSpentSeconds         Int
+  answeredQuestionsCount   Int
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @default(now()) @updatedAt
+
+  questionSetStudySessions QuestionSetStudySession[]
+  user                     User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([sessionEndedAt])
+}
+
+model QuestionSetStudySession {
+  id                    Int        @id @default(autoincrement())
+  userId                Int
+  user                  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId             Int
+  session               UserStudySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionSetId         Int
+  questionSet           QuestionSet @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
+
+  // Session-specific performance snapshot
+  sessionMarksAchieved  Int        // Sum of marks achieved for questions from this set in this session
+  sessionMarksAvailable Int        // Sum of marks available for questions from this set in this session
+  questionsAnswered     Question[]           // Direct references to questions answered in this session
+  userQuestionAnswers   UserQuestionAnswer[] // The specific answers given in this session for this set
+
+  srStageBefore         Int // The SR stage of the QuestionSet before this session
+  createdAt             DateTime   @default(now())
+
+  @@unique([sessionId, questionSetId])
+  @@index([userId])
+  @@index([questionSetId])
 }
 
 model Note {
@@ -237,7 +260,7 @@ model InsightCatalyst {
 model ScheduledReview {
   id            Int         @id @default(autoincrement())
   reviewDate    DateTime
-  type          String      // "AUTO" or "MANUAL"
+  type          String // "AUTO" or "MANUAL"
   status        String      @default("PENDING") // "PENDING" or "COMPLETED"
   userId        Int
   questionSetId Int

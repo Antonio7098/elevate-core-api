@@ -1,5 +1,5 @@
 import { PrismaClient, ScheduledReview, QuestionSet } from '@prisma/client';
-import { getNextReviewDate } from './advancedSpacedRepetition.service';
+
 
 const prisma = new PrismaClient();
 
@@ -211,39 +211,4 @@ export const getUpcomingReviews = async (
   });
 };
 
-/**
- * Process automatic review scheduling for a question set
- * @param questionSet Question set to schedule reviews for
- * @returns Created scheduled review
- */
-export const processAutomaticScheduling = async (
-  questionSet: QuestionSet
-): Promise<ScheduledReview | null> => {
-  // Only schedule if tracking mode is AUTO
-  if (questionSet.trackingMode !== 'AUTO') {
-    return null;
-  }
-
-  const nextReview = getNextReviewDate(questionSet);
-  
-  // Don't schedule if next review is in the past
-  if (nextReview <= new Date()) {
-    return null;
-  }
-
-  // Get the folder to find the user ID
-  const folder = await prisma.folder.findUnique({
-    where: { id: questionSet.folderId! }
-  });
-
-  if (!folder) {
-    throw new Error('Folder not found for automatic scheduling');
-  }
-
-  return scheduleReview(
-    folder.userId,
-    questionSet.id,
-    nextReview,
-    'AUTO'
-  );
-}; 
+ 
