@@ -199,9 +199,8 @@ interface UserQuestionAnswerData {
  * POST /api/reviews
  */
 export const submitReview = async (req: Request, res: Response): Promise<void> => {
-  const { questionSetId } = req.params;
   const userId = req.user?.userId;
-  const { outcomes, sessionStartTime, sessionDurationSeconds } = req.body;
+  const { questionSetId, outcomes, sessionStartTime, sessionDurationSeconds } = req.body;
 
   if (!userId) {
     res.status(401).json({ error: 'Unauthorized' });
