@@ -38,7 +38,7 @@ describe('Note Routes', () => {
     });
 
     // Generate auth token
-    authToken = generateToken(testUser.id);
+    authToken = generateToken({ userId: testUser.id });
   });
 
   afterAll(async () => {
@@ -90,7 +90,15 @@ describe('Note Routes', () => {
         .set('Authorization', `Bearer ${authToken}`)
         .send({
           title: 'Test Note in Question Set',
-          content: '<p>Test content</p>',
+          content: {
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: 'Test content' }],
+              },
+            ],
+          },
           plainText: 'Test content',
           questionSetId: testQuestionSet.id,
         });

@@ -248,19 +248,14 @@ export const fetchFolderStatsDetails = async (
 
   // Calculate total review sessions in the folder
   const questionSetIds = questionSetsInFolder.map(qs => qs.id);
-  const answersInFolder = await prisma.userQuestionAnswer.findMany({
+  const totalReviewSessionsInFolder = await prisma.questionSetStudySession.count({
     where: {
-      userId,
       questionSetId: {
         in: questionSetIds,
       },
-    },
-    select: {
-      questionSetStudySessionId: true,
+      userId: userId,
     },
   });
-  const uniqueSessionIds = new Set(answersInFolder.map(a => a.questionSetStudySessionId).filter(id => id !== null));
-  const totalReviewSessionsInFolder = uniqueSessionIds.size;
 
   return {
     masteryHistory: folder.masteryHistory.filter((h: Prisma.JsonValue | null) => h !== null) as Prisma.JsonValue[], // Ensure no nulls

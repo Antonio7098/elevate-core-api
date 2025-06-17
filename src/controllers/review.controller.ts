@@ -72,7 +72,7 @@ export const getTodayReviews = async (req: Request, res: Response, next: NextFun
  * Get questions for a specific review session
  * GET /api/questionsets/:id/review-questions
  */
-export const getReviewQuestions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const getReviewQuestions = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
     const questionSetId = parseInt(req.params.id);
@@ -96,6 +96,14 @@ export const getReviewQuestions = async (req: Request, res: Response, next: Next
     if (!questionSet) {
       res.status(404).json({ message: 'Question set not found or access denied' });
       return;
+    }
+
+    const now = new Date();
+    if (questionSet.nextReviewAt && new Date(questionSet.nextReviewAt) > now) {
+      return res.status(403).json({ 
+        message: 'This question set is not due for review yet.',
+        nextReviewAt: questionSet.nextReviewAt
+      });
     }
     
     // Get prioritized questions for the review session
@@ -220,7 +228,7 @@ export const getReviewStats = async (req: Request, res: Response, next: NextFunc
   }
 };
 
-export const startReview = async (req: Request, res: Response): Promise<void> => {
+export const startReview = async (req: Request, res: Response) => {
   const { questionSetId } = req.params;
   const userId = req.user?.userId;
 
@@ -230,24 +238,25 @@ export const startReview = async (req: Request, res: Response): Promise<void> =>
   }
 
   try {
-    const questionSet = await prisma.questionSet.findUnique({
-      where: { id: parseInt(questionSetId) },
-      include: {
-        folder: true
+    const questionSet = await prisma.questionSet.findFirst({
+      where: { 
+        id: parseInt(questionSetId),
+        folder: {
+          userId: userId
+        }
       }
     });
 
     if (!questionSet) {
-      res.status(404).json({ error: 'Question set not found' });
-      return;
+      return res.status(404).json({ error: 'Question set not found or access denied' });
     }
 
-    // Type assertion after null check
-    const extendedQuestionSet = questionSet as unknown as QuestionSetWithRelations;
-
-    if (extendedQuestionSet.folder.userId !== userId) {
-      res.status(403).json({ error: 'Access denied' });
-      return;
+    const now = new Date();
+    if (questionSet.nextReviewAt && new Date(questionSet.nextReviewAt) > now) {
+      return res.status(403).json({ 
+        message: 'This question set is not due for review yet.',
+        nextReviewAt: questionSet.nextReviewAt
+      });
     }
 
     const questions = await getPrioritizedQuestions(
@@ -258,12 +267,11 @@ export const startReview = async (req: Request, res: Response): Promise<void> =>
 
     res.json({
       questionSet: {
-        id: extendedQuestionSet.id,
-        name: extendedQuestionSet.name,
-        currentStage: extendedQuestionSet.srStage,
-        currentInterval: extendedQuestionSet.currentIntervalDays,
-        easeFactor: extendedQuestionSet.easeFactor,
-        lapses: extendedQuestionSet.lapses
+        id: questionSet.id,
+        name: questionSet.name,
+        currentInterval: questionSet.currentIntervalDays,
+        masteryScore: questionSet.currentTotalMasteryScore,
+        nextReviewAt: questionSet.nextReviewAt
       },
       questions
     });

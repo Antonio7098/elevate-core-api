@@ -80,54 +80,49 @@ export async function processAdvancedReview(
     const questionSet = await prisma.questionSet.findUnique({
       where: { id: questionSetId },
       include: {
-        questions: {
-          select: { id: true, uueFocus: true, totalMarksAvailable: true },
-        },
+        questions: { select: { id: true, uueFocus: true, totalMarksAvailable: true } },
       },
     });
 
     if (!questionSet) continue;
     updatedSetIds.push(questionSetId);
 
+    const questionMarksMap = new Map(questionSet.questions.map(q => [q.id, q.totalMarksAvailable]));
     const { sessionMarksAchieved, sessionMarksAvailable } = sessionOutcomes.reduce(
       (acc, cur) => {
-        acc.sessionMarksAchieved += cur.marksAchieved;
-        acc.sessionMarksAvailable += cur.marksAvailable;
+        acc.sessionMarksAchieved += cur.marksAchieved; // Use marksAchieved from FrontendReviewOutcome
+        acc.sessionMarksAvailable += questionMarksMap.get(cur.questionId) || 0;
         return acc;
       },
       { sessionMarksAchieved: 0, sessionMarksAvailable: 0 },
     );
 
-    // Atomically create the set-specific session and all its associated answer records.
-    // This is now pushed to the transaction promises array.
     transactionPromises.push(
-      prisma['questionSetStudySession'].create({
+      prisma.questionSetStudySession.create({
         data: {
-          userId,
-          sessionId: userStudySession.id,
-          questionSetId,
-          sessionMarksAchieved,
-          sessionMarksAvailable,
+          user: { connect: { id: userId } },
+          session: { connect: { id: userStudySession.id } },
+          questionSet: { connect: { id: questionSetId } },
+          sessionMarksAchieved, // Correctly summed from outcome.marksAchieved
+          sessionMarksAvailable, // Correctly summed from Question.totalMarksAvailable
           srStageBefore: questionSet.srStage,
           questionsAnswered: {
             connect: sessionOutcomes.map(o => ({ id: o.questionId })),
           },
-          // Use a nested write to create answers and link them atomically
           userQuestionAnswers: {
             create: sessionOutcomes.map(outcome => ({
               userId,
               questionId: outcome.questionId,
-              scoreAchieved: outcome.marksAchieved,
+              scoreAchieved: outcome.marksAchieved, // Populate DB scoreAchieved from outcome.marksAchieved
               userAnswerText: outcome.userAnswerText,
               timeSpent: outcome.timeSpentOnQuestion ?? 0,
-              isCorrect: outcome.marksAchieved > 0, // A simple heuristic for now
+              isCorrect: outcome.marksAchieved > 0, // Derive isCorrect from outcome.marksAchieved
             })),
           },
         },
       }),
     );
 
-    // This now runs *after* the new answers have been saved within the transaction.
     const { totalMastery, uueScores } = await calculateHistoricalMastery(userId, questionSet, sessionOutcomes);
     const isFailure = totalMastery <= MASTERY_THRESHOLD;
     const nextSrStage = await determineNextSrStage(userId, questionSet, totalMastery);
@@ -140,18 +135,13 @@ export async function processAdvancedReview(
           lastReviewedAt: new Date(),
           nextReviewAt,
           srStage: nextSrStage,
-          reviewCount: { // Increment review count on each submission
-            increment: 1,
-          },
+          reviewCount: { increment: 1 },
           currentTotalMasteryScore: totalMastery,
           exploreScore: uueScores.Explore,
           understandScore: uueScores.Understand,
           useScore: uueScores.Use,
           masteryHistory: {
-            push: {
-              date: new Date().toISOString(),
-              score: totalMastery,
-            },
+            push: { date: new Date().toISOString(), score: totalMastery },
           },
         },
       }),

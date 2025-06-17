@@ -38,7 +38,7 @@ describe('Question Set Routes', () => {
     });
 
     // Generate auth token
-    authToken = generateToken(testUser.id);
+    authToken = generateToken({ userId: testUser.id });
   });
 
   afterAll(async () => {
@@ -87,13 +87,18 @@ describe('Question Set Routes', () => {
   });
 
   describe('GET /api/folders/:folderId/questionsets', () => {
+    beforeEach(async () => {
+      await prisma.note.deleteMany({
+        where: { questionSetId: testQuestionSet.id },
+      });
+    });
     it('should get all question sets in a folder with their questions and notes', async () => {
-      // Create a test note
-      const testNote = await prisma.note.create({
+      // Create a test note specifically for this test
+      const testNoteForThisTest = await prisma.note.create({
         data: {
-          title: 'Test Note',
-          content: '<p>Test content</p>',
-          plainText: 'Test content',
+          title: 'Test Note for GET all',
+          content: '<p>Test content for GET all</p>',
+          plainText: 'Test content for GET all',
           userId: testUser.id,
           questionSetId: testQuestionSet.id,
         },
@@ -111,8 +116,8 @@ describe('Question Set Routes', () => {
       expect(Array.isArray(response.body[0].questions)).toBe(true);
       expect(Array.isArray(response.body[0].notes)).toBe(true);
       expect(response.body[0].notes).toHaveLength(1);
-      expect(response.body[0].notes[0]).toHaveProperty('id', testNote.id);
-      expect(response.body[0].notes[0]).toHaveProperty('title', 'Test Note');
+      expect(response.body[0].notes[0]).toHaveProperty('id', testNoteForThisTest.id);
+      expect(response.body[0].notes[0]).toHaveProperty('title', 'Test Note for GET all');
     });
   });
 
