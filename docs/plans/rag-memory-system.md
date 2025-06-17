@@ -648,21 +648,63 @@ Phase 1: Foundational RAG Core	The Index Source Code	• Core Blueprint Generati
 Phase 2: Intelligent Agent	The Targeting & Routing System	• Router Agent Pattern (using summaryForRouting)&lt;br>• Advanced Metadata Filtering&lt;br>• Agentic Chat with smarter tools
 Phase 3: Advanced Synthesis	The Queryable Knowledge Graph	• Multi-Hop Reasoning (using relationships)&lt;br>• Knowledge Graph Integration&lt;br>• Insight Catalyst System&lt;br>• Misconception Prevention
 
-Export to Sheets
+evised Schema Concept (Recap):
 
+LearningBlueprint Model:
+Will have its own id, userId (for ownership), sourceText, and blueprintJson.
+It will not have a direct questionSetId linking it to a single 
+QuestionSet
+.
+Instead, it will have relations like generatedNotes: Note[] and generatedQuestionSets: QuestionSet[] to point to all materials derived from it.
+QuestionSet
+ Model:
+Will get an optional foreign key, say generatedFromBlueprintId: Int?, linking it back to the LearningBlueprint it was created from.
+Note
+ Model:
+Similarly, will get an optional foreign key, generatedFromBlueprintId: Int?, linking it back to its originating LearningBlueprint.
+Workflow Implications & API Design:
 
+This one-to-many relationship strongly suggests that the creation of a LearningBlueprint should be a distinct step from the generation of specific study materials (
+Note
+s or 
+QuestionSet
+s) from that blueprint.
 
+Consider these potential API endpoints:
 
+A. Create a Learning Blueprint:
+POST /api/learning-blueprints (or a similar new route)
+Request: { sourceText: "...", folderId: "..." (optional for organization) }
+Core API Logic:
+Authenticates user.
+Calls AI Service's /deconstruct with sourceText.
+Receives blueprintJson.
+Creates and saves a new LearningBlueprint record in the database (associated with the userId, storing sourceText and blueprintJson).
+Returns the new learningBlueprint.id and perhaps a summary.
+B. Generate a new Question Set from an existing Blueprint:
+POST /api/learning-blueprints/:blueprintId/question-sets
+Request: { questionOptions: { ... }, folderId: "..." (to place the new QuestionSet) }
+Core API Logic:
+Authenticates user, verifies ownership of blueprintId.
+Fetches the LearningBlueprint (to get its sourceText and blueprintJson).
+Calls AI Service's /generate/questions with sourceText, blueprintJson, and questionOptions.
+Creates a new 
+QuestionSet
+ record, linking it to the specified folderId and setting its generatedFromBlueprintId to :blueprintId.
+Saves the generated questions to this new 
+QuestionSet
+.
+Returns the new questionSet.id.
+C. Generate a new Note from an existing Blueprint:
+POST /api/learning-blueprints/:blueprintId/notes
+Request: { noteOptions: { ... }, folderId: "..." (optional, if notes can be in folders directly or are tied to a QuestionSet created from the same blueprint) }
+Core API Logic: Similar to generating a question set, but calls /generate/notes and creates a 
+Note
+ record linked via generatedFromBlueprintId.
+What this means for existing RAG plan endpoints:
 
-
-
-
-
-
-
-Video
-
-Deep Research
-
-Canvas
+The original POST /question-sets/generate-from-source from the RAG plan might be better split into the "Create Blueprint" step (A) and then a subsequent "Generate Question Set from Blueprint" step (B).
+The original POST /question-sets/:id/generate-materials could still be useful if you want to add more questions or regenerate notes for an existing 
+QuestionSet
+ that was already linked to a blueprint.
 

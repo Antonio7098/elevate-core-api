@@ -58,6 +58,21 @@ Below is a summary of all backend sprints for the Elevate Core API, with complet
 - [ ] **Sprint 18: Adding Preferences for AI Generation**
     Implemented user preferences for AI note and question generation, including new type definitions and endpoint updates. Tasks pending. (See `s14-adding-preferences-for-generation.md`)
 
+- [ ] **Sprint 19: RAG - Core Schema & API Foundations**
+    Goal: Establish the database schema and foundational API structures for the RAG system. (See `s19-rag-schema-foundations.md` - *to be created*)
+
+- [ ] **Sprint 20: RAG - Learning Blueprint Lifecycle**
+    Goal: Implement the creation and management of Learning Blueprints. (See `s20-rag-blueprint-lifecycle.md` - *to be created*)
+
+- [ ] **Sprint 21: RAG - Material Generation from Blueprints**
+    Goal: Enable generation of `QuestionSet`s and `Note`s from existing Learning Blueprints. (See `s21-rag-material-generation.md` - *to be created*)
+
+- [ ] **Sprint 22: RAG - Conversational Chat Integration**
+    Goal: Integrate the RAG-powered chat functionality. (See `s22-rag-chat-integration.md` - *to be created*)
+
+- [ ] **Sprint 23: RAG - Testing, Refinement & Old AI Deprecation**
+    Goal: Ensure robustness of the new RAG system and clean up legacy AI components. (See `s23-rag-testing-deprecation.md` - *to be created*)
+
 ---
 
 *For details and full implementation notes, see the corresponding sprint file in `docs/sprints/`.*
