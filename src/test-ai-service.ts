@@ -6,7 +6,7 @@
  */
 
 import dotenv from 'dotenv';
-import { aiService } from './services/aiService';
+// import { aiService } from './services/aiService';
 import { GenerateQuestionsRequest, ChatRequest, EvaluateAnswerRequest } from './types/ai-service.types';
 
 // Load environment variables
@@ -16,7 +16,8 @@ dotenv.config();
 async function testAIServiceAvailability() {
   try {
     console.log('Testing AI service availability...');
-    const isAvailable = await aiService.isAvailable();
+    // const isAvailable = await aiService.isAvailable();
+    const isAvailable = false;
     console.log(`AI service is ${isAvailable ? 'available' : 'not available'}`);
     return isAvailable;
   } catch (error) {
@@ -36,7 +37,8 @@ async function testGenerateQuestions() {
       difficulty: 'easy'
     };
     
-    const response = await aiService.generateQuestions(request);
+    // const response = await aiService.generateQuestions(request);
+    throw new Error('AI service is disabled');
     console.log('Question generation successful!');
     console.log('Generated questions:', JSON.stringify(response, null, 2));
     return true;
@@ -69,7 +71,8 @@ async function testChatWithAI() {
       }
     };
     
-    const response = await aiService.chat(request);
+    // const response = await aiService.chat(request);
+    throw new Error('AI service is disabled');
     console.log('Chat with AI successful!');
     console.log('AI response:', JSON.stringify(response, null, 2));
     return true;
@@ -91,7 +94,8 @@ async function testEvaluateAnswer() {
       userAnswer: 'They produce energy for the cell'
     };
     
-    const response = await aiService.evaluateAnswer(request);
+    // const response = await aiService.evaluateAnswer(request);
+    throw new Error('AI service is disabled');
     console.log('Answer evaluation successful!');
     console.log('Evaluation:', JSON.stringify(response, null, 2));
     return true;

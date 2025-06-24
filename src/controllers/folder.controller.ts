@@ -28,12 +28,9 @@ export const createFolder = async (req: AuthRequest, res: Response): Promise<voi
     const createData: any = {
       name,
       description,
-      userId
+      userId,
+      parentId: parentId || null
     };
-
-    if (parentId) {
-      createData.parent = { connect: { id: parentId } };
-    }
 
     const folder = await prisma.folder.create({
       data: createData
@@ -171,7 +168,7 @@ export const updateFolder = async (req: AuthRequest, res: Response): Promise<voi
   }
 
   // Construct the data object for Prisma update
-  const dataToUpdate: { name?: string; description?: string | null; parent?: { connect: { id: number } } | { disconnect: true } } = {};
+  const dataToUpdate: { name?: string; description?: string | null; parentId?: number | null } = {};
   if (name !== undefined) {
     dataToUpdate.name = name;
   }
@@ -180,7 +177,7 @@ export const updateFolder = async (req: AuthRequest, res: Response): Promise<voi
   }
   if (parentId !== undefined) {
     if (parentId === null) {
-      dataToUpdate.parent = { disconnect: true };
+      dataToUpdate.parentId = null;
     } else {
       // Prevent a folder from becoming its own parent
       if (parseInt(folderId) === parentId) {
@@ -191,10 +188,12 @@ export const updateFolder = async (req: AuthRequest, res: Response): Promise<voi
       const parentFolder = await prisma.folder.findFirst({
         where: { id: parentId, userId },
       });
+
       if (!parentFolder) {
         res.status(400).json({ message: 'Parent folder not found or access denied' });
         return;
       }
+      
       // Prevent cycles by checking if the parent is a descendant of the current folder
       let currentParent = await prisma.folder.findUnique({ where: { id: parentId } }) as { id: number; parentId: number | null } | null;
       while (currentParent?.parentId) {
@@ -204,7 +203,8 @@ export const updateFolder = async (req: AuthRequest, res: Response): Promise<voi
         }
         currentParent = await prisma.folder.findUnique({ where: { id: currentParent.parentId } }) as { id: number; parentId: number | null } | null;
       }
-      dataToUpdate.parent = { connect: { id: parentId } };
+      
+      dataToUpdate.parentId = parentId;
     }
   }
 

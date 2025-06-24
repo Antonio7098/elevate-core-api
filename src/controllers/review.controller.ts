@@ -75,7 +75,7 @@ export const getTodayReviews = async (req: Request, res: Response, next: NextFun
 export const getReviewQuestions = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    const questionSetId = parseInt(req.params.id);
+    const questionSetId = parseInt(req.params.questionSetId);
     const count = req.query.count ? parseInt(req.query.count as string) : 10;
     
     if (!userId) {
@@ -100,10 +100,11 @@ export const getReviewQuestions = async (req: Request, res: Response, next: Next
 
     const now = new Date();
     if (questionSet.nextReviewAt && new Date(questionSet.nextReviewAt) > now) {
-      return res.status(403).json({ 
+      res.status(403).json({ 
         message: 'This question set is not due for review yet.',
         nextReviewAt: questionSet.nextReviewAt
       });
+      return;
     }
     
     // Get prioritized questions for the review session

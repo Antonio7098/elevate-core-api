@@ -24,7 +24,7 @@ router.use(protect);
 router.get('/today', getTodayReviews);
 
 // GET /api/reviews/question-set/:id - Get questions for a specific review session
-router.get('/question-set/:id', getReviewQuestions);
+router.get('/question-set/:questionSetId', getReviewQuestions);
 
 // POST /api/reviews - Submit a review for a question set
 router.post('/', submitReview);

@@ -1,9 +1,8 @@
 // src/routes/__tests__/folder.routes.test.ts
 import request from 'supertest';
 import app from '../../app';
-import { PrismaClient, User } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { User } from '@prisma/client';
+import prisma from '../../lib/prisma';
 
 describe('Folder Routes API', () => {
   let testUser: User;
@@ -42,7 +41,7 @@ describe('Folder Routes API', () => {
     if (testUser) {
       await prisma.user.delete({ where: { id: testUser.id } }).catch(() => {});
     }
-    await prisma.$disconnect();
+    // Do not disconnect the shared prisma client, the test runner will handle it.
   });
 
   describe('POST /api/folders', () => {
@@ -206,7 +205,7 @@ describe('Folder Routes API', () => {
 
       // Create a child folder
       const childFolder = await prisma.folder.create({
-        data: { name: 'Child Folder', userId: testUser.id, parent: { connect: { id: parentFolder.id } } } as any,
+        data: { name: 'Child Folder', userId: testUser.id, parentId: parentFolder.id },
       });
 
       const response = await request(app)

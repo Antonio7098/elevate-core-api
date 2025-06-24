@@ -147,21 +147,29 @@ export const validateQuestionUpdate = [
 ];
 
 export const validateChatWithAI = [
-  check('message')
+  check('messageContent')
     .notEmpty()
-    .withMessage('Message cannot be empty')
+    .withMessage('messageContent cannot be empty')
     .isString()
-    .withMessage('Message must be a string')
+    .withMessage('messageContent must be a string')
     .trim(),
-  check('questionSetId')
+  check('context')
+    .isObject()
+    .withMessage('context must be an object'),
+  check('context.folderId')
     .optional()
     .isInt({ gt: 0 })
-    .withMessage('Question set ID must be a positive integer')
+    .withMessage('context.folderId must be a positive integer')
     .toInt(),
-  check('folderId')
+  check('context.questionSetId')
     .optional()
     .isInt({ gt: 0 })
-    .withMessage('Folder ID must be a positive integer')
+    .withMessage('context.questionSetId must be a positive integer')
+    .toInt(),
+  check('context.noteId')
+    .optional()
+    .isInt({ gt: 0 })
+    .withMessage('context.noteId must be a positive integer')
     .toInt(),
   handleValidationErrors,
 ];
@@ -233,17 +241,19 @@ export const validateQuestionSetUpdate = [
 
 export const validateGenerateFromSource = [
   check('sourceId')
-    .isString()
-    .withMessage('Source ID must be a string')
-    .notEmpty()
-    .withMessage('Source ID cannot be empty')
-    .trim(),
+    .isInt({ min: 1 })
+    .withMessage('Source ID must be a positive integer')
+    .toInt(),
   check('questionScope')
-    .isIn(Object.values(QuestionScope))
-    .withMessage(`Question scope must be one of: ${Object.values(QuestionScope).join(', ')}`),
+    .isString()
+    .withMessage('Question scope must be a string')
+    .notEmpty()
+    .withMessage('Question scope cannot be empty'),
   check('questionTone')
-    .isIn(Object.values(QuestionTone))
-    .withMessage(`Question tone must be one of: ${Object.values(QuestionTone).join(', ')}`),
+    .isString()
+    .withMessage('Question tone must be a string')
+    .notEmpty()
+    .withMessage('Question tone cannot be empty'),
   check('questionCount')
     .optional()
     .isInt({ min: 1, max: 20 })
