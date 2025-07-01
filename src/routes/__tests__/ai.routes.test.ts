@@ -2,6 +2,7 @@ import request from 'supertest';
 import { app } from '../../app';
 import prisma from '../../lib/prisma';
 import jwt from 'jsonwebtoken';
+import aiService from '../../services/aiService';
 
 describe('AI Routes', () => {
   let authToken: string;
@@ -107,7 +108,9 @@ describe('AI Routes', () => {
     });
 
     it('should return 503 when AI service is unavailable', async () => {
-      // Since the AI service endpoint doesn't exist, this should return 503
+      // Spy and mock the AI service to return false for availability check
+      const isAvailableSpy = jest.spyOn(aiService, 'isServiceAvailable').mockResolvedValue(false);
+
       const response = await request(app)
         .post('/api/ai/evaluate-answer')
         .set('Authorization', `Bearer ${authToken}`)
@@ -119,6 +122,44 @@ describe('AI Routes', () => {
       // The endpoint should return 503 when AI service is not available
       expect(response.status).toBe(503);
       expect(response.body.message).toContain('AI service is currently unavailable');
+
+      // Verify the mock was called
+      expect(isAvailableSpy).toHaveBeenCalled();
+
+      // Restore the mock
+      isAvailableSpy.mockRestore();
+    });
+
+    it('should return evaluation results with feedback when AI service is available', async () => {
+      // Spy and mock the AI service to return true for availability check
+      const isAvailableSpy = jest.spyOn(aiService, 'isServiceAvailable').mockResolvedValue(true);
+      const evaluateAnswerSpy = jest.spyOn(aiService, 'evaluateAnswer').mockResolvedValue({
+        marks_achieved: 2,
+        corrected_answer: 'Paris',
+        feedback: 'Excellent answer! You correctly identified the capital of France.'
+      });
+
+      const response = await request(app)
+        .post('/api/ai/evaluate-answer')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          questionId: questionId,
+          userAnswer: 'Paris'
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('correctedAnswer', 'Paris');
+      expect(response.body).toHaveProperty('marksAvailable', 2);
+      expect(response.body).toHaveProperty('marksAchieved', 2);
+      expect(response.body).toHaveProperty('feedback', 'Excellent answer! You correctly identified the capital of France.');
+
+      // Verify the mocks were called
+      expect(isAvailableSpy).toHaveBeenCalled();
+      expect(evaluateAnswerSpy).toHaveBeenCalled();
+
+      // Restore the mocks
+      isAvailableSpy.mockRestore();
+      evaluateAnswerSpy.mockRestore();
     });
   });
 }); 

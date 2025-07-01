@@ -15,7 +15,7 @@ const mockPrismaNoteFindfirst = jest.fn();
 // Import controller functions AFTER mocks are defined and set up
 import { generateQuestionsFromSource, chatWithAI } from '../ai.controller';
 import { AuthRequest } from '../../middleware/auth.middleware';
-import AiRAGService from '../../services/ai-rag.service';
+import { AiRAGService } from '../../ai-rag/ai-rag.service';
 
 // Mock AiRAGService
 jest.mock('../../services/ai-rag.service');
@@ -169,9 +169,11 @@ describe('AI Controller', () => {
   });
 
   describe('chatWithAI', () => {
+    let handleChatMessageSpy: jest.SpyInstance;
     beforeEach(() => {
-      // The mock is on the imported module, so we cast it to jest.Mock
-      (AiRAGService.handleChatMessage as jest.Mock).mockClear();
+      // Spy on the prototype method so all instances use the mock
+      handleChatMessageSpy = jest.spyOn(AiRAGService.prototype, 'handleChatMessage');
+      handleChatMessageSpy.mockClear();
 
       mockReq = {
         user: { userId: 1 },
@@ -182,13 +184,17 @@ describe('AI Controller', () => {
       };
     });
 
+    afterEach(() => {
+      handleChatMessageSpy.mockRestore();
+    });
+
     it('should call AiRAGService.handleChatMessage and return 200 on success', async () => {
       const mockServiceResponse = { response: 'This is the AI response.' };
-      (AiRAGService.handleChatMessage as jest.Mock).mockResolvedValue(mockServiceResponse);
+      handleChatMessageSpy.mockResolvedValue(mockServiceResponse);
 
       await chatWithAI(mockReq as any, mockRes as any, mockNext);
 
-      expect(AiRAGService.handleChatMessage).toHaveBeenCalledWith(mockReq.body, 1);
+      expect(handleChatMessageSpy).toHaveBeenCalledWith(mockReq.body, 1);
       expect(mockRes.status).toHaveBeenCalledWith(200);
       expect(mockRes.json).toHaveBeenCalledWith(mockServiceResponse);
       expect(mockNext).not.toHaveBeenCalled();
@@ -196,23 +202,23 @@ describe('AI Controller', () => {
 
     it('should return 404 when service throws a "not found" error', async () => {
       const errorMessage = 'Item not found or access denied.';
-      (AiRAGService.handleChatMessage as jest.Mock).mockRejectedValue(new Error(errorMessage));
+      handleChatMessageSpy.mockRejectedValue(new Error(errorMessage));
 
       await chatWithAI(mockReq as any, mockRes as any, mockNext);
 
-      expect(AiRAGService.handleChatMessage).toHaveBeenCalledWith(mockReq.body, 1);
+      expect(handleChatMessageSpy).toHaveBeenCalledWith(mockReq.body, 1);
       expect(mockRes.status).toHaveBeenCalledWith(404);
       expect(mockRes.json).toHaveBeenCalledWith({ message: errorMessage });
       expect(mockNext).not.toHaveBeenCalled();
     });
 
     it('should call next with the error for other service failures', async () => {
-      const genericError = new Error('AI service is down');
-      (AiRAGService.handleChatMessage as jest.Mock).mockRejectedValue(genericError);
+      const genericError = new Error('AI Service Error');
+      handleChatMessageSpy.mockRejectedValue(genericError);
 
       await chatWithAI(mockReq as any, mockRes as any, mockNext);
 
-      expect(AiRAGService.handleChatMessage).toHaveBeenCalledWith(mockReq.body, 1);
+      expect(handleChatMessageSpy).toHaveBeenCalledWith(mockReq.body, 1);
       expect(mockRes.status).not.toHaveBeenCalled();
       expect(mockRes.json).not.toHaveBeenCalled();
       expect(mockNext).toHaveBeenCalledWith(genericError);
@@ -223,7 +229,7 @@ describe('AI Controller', () => {
 
       await chatWithAI(mockReq as any, mockRes as any, mockNext);
 
-      expect(AiRAGService.handleChatMessage).not.toHaveBeenCalled();
+      expect(handleChatMessageSpy).not.toHaveBeenCalled();
       expect(mockRes.status).toHaveBeenCalledWith(401);
       expect(mockRes.json).toHaveBeenCalledWith({ message: 'Unauthorized' });
     });

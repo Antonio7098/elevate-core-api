@@ -369,20 +369,12 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
     // Call the AI service
     const aiResponse = await aiService.evaluateAnswer(evaluationRequest);
 
-    if (!aiResponse.success) {
-      res.status(500).json({ message: 'AI evaluation failed.' });
-      return;
-    }
-
-    // Calculate marks achieved based on AI score and marks available
-    const marksAvailable = question.totalMarksAvailable;
-    const marksAchieved = Math.round(aiResponse.evaluation.score * marksAvailable);
-
-    // Return only the required fields
+    // Return the AI service response directly
     res.status(200).json({
-      correctedAnswer: aiResponse.evaluation.correctedAnswer || question.answer,
-      marksAvailable: marksAvailable,
-      marksAchieved: marksAchieved
+      correctedAnswer: aiResponse.corrected_answer,
+      marksAvailable: question.totalMarksAvailable,
+      marksAchieved: aiResponse.marks_achieved,
+      feedback: aiResponse.feedback
     });
 
   } catch (error) {

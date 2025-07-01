@@ -1,14 +1,26 @@
+// Create a mock instance that we can control
+let mockAiRagServiceInstance: any;
+
+jest.mock('../../ai-rag/ai-rag.service', () => ({
+  AiRAGService: jest.fn().mockImplementation(() => {
+    if (!mockAiRagServiceInstance) {
+      mockAiRagServiceInstance = {
+        createLearningBlueprint: jest.fn(),
+        generateQuestionsFromBlueprint: jest.fn(),
+        generateNoteFromBlueprint: jest.fn(),
+      };
+    }
+    return mockAiRagServiceInstance;
+  }),
+}));
+
 import request from 'supertest';
 import { app } from '../../app';
 import prisma from '../../lib/prisma';
 import { User } from '@prisma/client';
 import { createTestUser } from '../../scripts/create-test-user';
-import aiRagService from '../../services/ai-rag.service';
-
-jest.mock('../../services/ai-rag.service');
 
 describe('Learning Blueprints Routes', () => {
-  const mockAiRagService = aiRagService as jest.Mocked<typeof aiRagService>;
   let user: User;
   let token: string;
 
@@ -29,7 +41,7 @@ describe('Learning Blueprints Routes', () => {
 
     describe('POST /api/learning-blueprints', () => {
         it('should create a learning blueprint', async () => {
-      mockAiRagService.createLearningBlueprint.mockResolvedValue({
+      mockAiRagServiceInstance.createLearningBlueprint.mockResolvedValue({
         id: 1,
         sourceText: 'This is a test source text.',
         blueprintJson: { some: 'data' },
@@ -52,7 +64,7 @@ describe('Learning Blueprints Routes', () => {
   describe('POST /api/learning-blueprints/:blueprintId/question-sets', () => {
     it('should generate a question set from a blueprint', async () => {
       const blueprintId = 1;
-      mockAiRagService.generateQuestionsFromBlueprint.mockResolvedValue({
+      mockAiRagServiceInstance.generateQuestionsFromBlueprint.mockResolvedValue({
         id: 1,
         name: 'Generated Question Set',
         userId: user.id,
@@ -77,7 +89,7 @@ describe('Learning Blueprints Routes', () => {
   describe('POST /api/learning-blueprints/:blueprintId/notes', () => {
     it('should generate a note from a blueprint', async () => {
       const blueprintId = 1;
-      mockAiRagService.generateNoteFromBlueprint.mockResolvedValue({
+      mockAiRagServiceInstance.generateNoteFromBlueprint.mockResolvedValue({
         id: 1,
         title: 'Generated Note',
         content: {},

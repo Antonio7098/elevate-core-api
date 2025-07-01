@@ -200,23 +200,16 @@ export interface EvaluateAnswerRequest {
   };
 }
 
-export interface EvaluateAnswerResponse extends AIServiceBaseResponse {
-  success: true;
-  evaluation: {
-    isCorrect: boolean | 'partially_correct';
-    score: number; // 0.0 to 1.0
-    feedback: string;
-    correctedAnswer?: string;
-  };
-  metadata: {
-    processingTime: string;
-    model: string;
-    confidenceScore: number;
-  };
+export interface EvaluateAnswerResponse {
+  marks_achieved: number;
+  corrected_answer: string;
+  feedback: string;
 }
 
 export function isEvaluateAnswerResponse(
-  response: AIServiceBaseResponse
+  response: any
 ): response is EvaluateAnswerResponse {
-  return response.success && 'evaluation' in response;
+  return response && typeof response.marks_achieved === 'number' && 
+         typeof response.corrected_answer === 'string' && 
+         typeof response.feedback === 'string';
 }
