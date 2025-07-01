@@ -110,7 +110,113 @@ Once a `LearningBlueprint` is created, you can use its ID to generate specific l
 
 ---
 
-## 3. Conversational Chat
+--- 
+
+## 3. Internal AI Service Contract
+
+This section outlines the expected request and response formats for the internal AI service endpoints that the Core API calls. Developers building the AI service should adhere to this contract.
+
+### `POST /api/v1/deconstruct`
+
+-   **Purpose**: Deconstructs raw text into a structured `LearningBlueprint` JSON.
+-   **Request Body**:
+
+    ```json
+    {
+      "source_text": "The mitochondria is the powerhouse of the cell."
+    }
+    ```
+
+-   **Success Response Body**:
+
+    ```json
+...
+    ```
+
+### `POST /api/v1/generate/questions`
+
+-   **Purpose**: Generates a set of questions from a `LearningBlueprint`.
+-   **Request Body**:
+
+    ```json
+    {
+      "blueprint_json": { /* ... LearningBlueprint JSON ... */ },
+      "question_options": {
+        "scope": "KeyConcepts",
+        "tone": "Formal"
+      }
+    }
+    ```
+
+-   **Success Response Body**:
+
+    ```json
+    {
+      "questions": [
+        {
+          "text": "What is the primary function of the mitochondria?",
+          "answer": "It is the powerhouse of the cell, generating ATP.",
+          "question_type": "understand/use/explore",
+          "total_marks_available": 2,
+          "marking_criteria": "Award 1 mark for 'powerhouse' and 1 mark for mentioning 'ATP'."
+        }
+      ]
+    }
+    ```
+
+### `POST /api/v1/generate/notes`
+
+-   **Purpose**: Generates a structured note from a `LearningBlueprint`.
+-   **Request Body**:
+
+    ```json
+    {
+      "source_text": "The full original text...",
+      "blueprint_json": { /* ... LearningBlueprint JSON ... */ },
+      "note_options": { /* ... any specific options ... */ }
+    }
+    ```
+
+-   **Success Response Body**:
+
+    ```json
+    {
+      "content": { /* ... JSON content for the note (e.g., TipTap format) ... */ },
+      "plain_text": "A summary of the key points about mitochondria..."
+    }
+    ```
+
+### `POST /api/v1/chat`
+
+-   **Purpose**: Handles a conversational turn, potentially with context.
+-   **Request Body**:
+
+    ```json
+    {
+      "user_id": 123,
+      "message_content": "Explain this in simpler terms.",
+      "chat_history": [
+        { "role": "user", "content": "What is ATP?" },
+        { "role": "assistant", "content": "ATP is adenosine triphosphate..." }
+      ],
+      "context": {
+        "blueprintId": 1
+      }
+    }
+    ```
+
+-   **Success Response Body**:
+
+    ```json
+    {
+      "role": "assistant",
+      "content": "Think of mitochondria as tiny power plants inside a cell..."
+    }
+    ```
+
+---
+
+## 4. Conversational Chat
 
 The chat endpoint provides a unified interface for conversational interaction, with the ability to reference specific learning materials for context.
 

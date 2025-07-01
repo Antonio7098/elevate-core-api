@@ -1,5 +1,6 @@
 // src/services/aiService.ts
 import axios from 'axios';
+import { EvaluateAnswerRequest, EvaluateAnswerResponse } from '../types/ai-service.types';
 
 /**
  * AIService class for interacting with the AI backend service
@@ -90,6 +91,23 @@ export class AIService {
       };
     } catch (error) {
       console.error('Error generating note:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Evaluate a user's answer to a question
+   */
+  async evaluateAnswer(payload: EvaluateAnswerRequest): Promise<EvaluateAnswerResponse> {
+    try {
+      const response = await axios.post(`${this.apiUrl}/evaluate/answer`, {
+        question_context: payload.questionContext,
+        user_answer: payload.userAnswer,
+        context: payload.context
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error evaluating answer:', error);
       throw error;
     }
   }

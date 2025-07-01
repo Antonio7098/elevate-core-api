@@ -253,57 +253,57 @@ export class AiRAGService {
     }));
 
     try {
-      const createdQuestionSet = await this.prisma.questionSet.create({
+      // Step 1: Create the QuestionSet with all scalar foreign keys.
+      const newQuestionSet = await this.prisma.questionSet.create({
         data: {
           name: dto.name,
-          user: {
-            connect: { id: userId },
-          },
-          generatedFromBlueprint: {
-            connect: { id: blueprintId },
-          },
-          questions: {
-            create: questionsToCreate,
-          },
-          ...(dto.folderId && { folder: { connect: { id: dto.folderId } } }),
+          generatedFromBlueprintId: blueprintId,
+          ...(dto.folderId && { folderId: dto.folderId }),
         },
       });
 
-      // Re-fetch to ensure relations are loaded for the DTO.
-      const newQuestionSetMaybe = await this.prisma.questionSet.findUnique({
-        where: { id: createdQuestionSet.id },
-        include: {
-          questions: true,
-        },
-      });
-
-      if (!newQuestionSetMaybe) {
-        throw new Error('Failed to retrieve question set after creation.');
+      // Step 2: Prepare and create the related questions, then fetch them to get IDs.
+      let createdQuestions: Question[] = [];
+      if (questionsToCreate.length > 0) {
+        const questionsWithSetId = questionsToCreate.map(q => ({
+          ...q,
+          questionSetId: newQuestionSet.id,
+        }));
+        await this.prisma.question.createMany({
+          data: questionsWithSetId,
+        });
+        createdQuestions = await this.prisma.question.findMany({
+            where: {
+                questionSetId: newQuestionSet.id
+            }
+        });
       }
-      const newQuestionSet = newQuestionSetMaybe as QuestionSetWithQuestions;
 
-      console.log(`New QuestionSet created with ID: ${newQuestionSet.id} and ${newQuestionSet.questions.length} questions.`);
+      console.log(`New QuestionSet created with ID: ${newQuestionSet.id} and ${createdQuestions.length} questions.`);
 
+      // Step 3: Manually construct the response DTO from the results of our two separate creates.
       return {
         id: newQuestionSet.id,
         name: newQuestionSet.name,
-        userId: newQuestionSet.userId,
-        folderId: newQuestionSet.folderId ?? undefined,
-        generatedFromBlueprintId: newQuestionSet.generatedFromBlueprintId ?? undefined,
+        userId: userId, // Include userId in response even though not stored on QuestionSet
+        folderId: dto.folderId ?? undefined,
+        generatedFromBlueprintId: blueprintId,
         createdAt: newQuestionSet.createdAt,
         updatedAt: newQuestionSet.updatedAt,
-        questions: newQuestionSet.questions.map((q: Question) => ({
+        questions: createdQuestions.map((q) => ({
           id: q.id,
           text: q.text,
           answer: q.answer ?? undefined,
+          questionType: q.questionType,
+          totalMarksAvailable: q.totalMarksAvailable,
+          markingCriteria: q.markingCriteria as any,
+          createdAt: q.createdAt,
+          updatedAt: q.updatedAt,
         })),
       };
     } catch (error: any) {
-      console.error('Error saving QuestionSet to database:', error);
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        throw new HttpException(`Database error: ${error.message}`, HttpStatus.CONFLICT);
-      }
-      throw new HttpException('Failed to save question set to database.', HttpStatus.INTERNAL_SERVER_ERROR);
+      console.error('Error creating question set in DB:', error);
+      throw new HttpException('Failed to save generated questions to the database.', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 

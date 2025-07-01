@@ -2,11 +2,13 @@ import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
 import { Prisma } from '@prisma/client'; // Correctly import Prisma types
 import { protect, AuthRequest } from '../middleware/auth.middleware';
-import AiRAGService from '../services/ai-rag.service';
+import { AiRAGService } from '../ai-rag/ai-rag.service';
+const aiRagService = new AiRAGService(prisma);
 import { ChatMessageDto } from '../dtos/ai-rag';
 import { GenerateQuestionRequest, GenerateNoteRequest } from '../types/aiGeneration.types';
-import { GenerateQuestionsResponse, AIServiceErrorResponse, ChatRequest, isErrorResponse } from '../types/ai-service.types';
+import { GenerateQuestionsResponse, AIServiceErrorResponse, ChatRequest, isErrorResponse, EvaluateAnswerRequest } from '../types/ai-service.types';
 import { QuestionSet, Question, Folder } from '@prisma/client';
+import aiService from '../services/aiService';
 
 // Define the structure for generated questions
 interface GeneratedQuestion {
@@ -278,7 +280,7 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
   try {
     const chatRequestDto = req.body as ChatMessageDto;
 
-    const result = await AiRAGService.handleChatMessage(chatRequestDto, userId);
+    const result = await aiRagService.handleChatMessage(chatRequestDto, userId);
 
     res.status(200).json(result);
 
@@ -290,6 +292,101 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
             return;
         }
     }
+    next(error);
+  }
+};
+
+/**
+ * Evaluate a user's answer to a question using AI
+ * POST /api/ai/evaluate-answer
+ */
+export const evaluateAnswer = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  const { questionId, userAnswer } = req.body;
+  const userId = req.user?.userId;
+
+  if (!userId) {
+    res.status(401).json({ message: 'User not authenticated.' });
+    return;
+  }
+
+  if (!questionId || !userAnswer) {
+    res.status(400).json({ message: 'Question ID and user answer are required.' });
+    return;
+  }
+
+  try {
+    // Fetch the question and verify ownership
+    const question = await prisma.question.findFirst({
+      where: {
+        id: parseInt(questionId),
+        questionSet: {
+          folder: {
+            userId: userId
+          }
+        }
+      },
+      include: {
+        questionSet: {
+          include: {
+            folder: true
+          }
+        }
+      }
+    });
+
+    if (!question) {
+      res.status(404).json({ message: 'Question not found or access denied.' });
+      return;
+    }
+
+    // Check if AI service is available
+    const isAIServiceAvailable = await aiService.isServiceAvailable();
+
+    if (!isAIServiceAvailable) {
+      res.status(503).json({ message: 'AI service is currently unavailable.' });
+      return;
+    }
+
+    // Prepare the evaluation request
+    const evaluationRequest: EvaluateAnswerRequest = {
+      questionContext: {
+        questionId: question.id,
+        questionText: question.text,
+        expectedAnswer: question.answer || undefined,
+        questionType: question.questionType,
+        options: question.options,
+        marksAvailable: question.totalMarksAvailable,
+        markingCriteria: question.markingCriteria ? JSON.stringify(question.markingCriteria) : null,
+        uueFocus: question.uueFocus
+      },
+      userAnswer: userAnswer,
+      context: {
+        questionSetName: question.questionSet.name,
+        folderName: question.questionSet.folder?.name || 'Unknown'
+      }
+    };
+
+    // Call the AI service
+    const aiResponse = await aiService.evaluateAnswer(evaluationRequest);
+
+    if (!aiResponse.success) {
+      res.status(500).json({ message: 'AI evaluation failed.' });
+      return;
+    }
+
+    // Calculate marks achieved based on AI score and marks available
+    const marksAvailable = question.totalMarksAvailable;
+    const marksAchieved = Math.round(aiResponse.evaluation.score * marksAvailable);
+
+    // Return only the required fields
+    res.status(200).json({
+      correctedAnswer: aiResponse.evaluation.correctedAnswer || question.answer,
+      marksAvailable: marksAvailable,
+      marksAchieved: marksAchieved
+    });
+
+  } catch (error) {
+    console.error('Error evaluating answer:', error);
     next(error);
   }
 };

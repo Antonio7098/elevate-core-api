@@ -1,5 +1,7 @@
 import { Response } from 'express';
-import aiRagService from '../services/ai-rag.service';
+import { AiRAGService } from '../ai-rag/ai-rag.service';
+import prisma from '../lib/prisma';
+const aiRagService = new AiRAGService(prisma);
 import { AuthenticatedRequest } from '../types/express';
 
 class LearningBlueprintsController {
@@ -10,8 +12,8 @@ class LearningBlueprintsController {
         return;
       }
       const result = await aiRagService.createLearningBlueprint(
-        req.user.userId,
         req.body,
+        req.user.userId,
       );
       res.status(201).json(result);
     } catch (error) {
@@ -34,9 +36,9 @@ class LearningBlueprintsController {
       }
       const blueprintId = parseInt(req.params.blueprintId, 10);
       const result = await aiRagService.generateQuestionsFromBlueprint(
-        req.user.userId,
         blueprintId,
         req.body,
+        req.user.userId,
       );
       res.status(201).json(result);
     } catch (error) {
@@ -56,9 +58,9 @@ class LearningBlueprintsController {
       }
       const blueprintId = parseInt(req.params.blueprintId, 10);
       const result = await aiRagService.generateNoteFromBlueprint(
-        req.user.userId,
         blueprintId,
         req.body,
+        req.user.userId,
       );
       res.status(201).json(result);
     } catch (error) {

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { generateQuestionsFromSource, generateNoteFromSource, chatWithAI } from '../controllers/ai.controller';
+import { generateQuestionsFromSource, generateNoteFromSource, chatWithAI, evaluateAnswer } from '../controllers/ai.controller';
 import { protect } from '../middleware/auth.middleware';
 import { validateGenerateFromSource, validateGenerateNote, validateChatWithAI } from '../middleware/validation';
 
@@ -18,9 +18,7 @@ router.post('/chat', validateChatWithAI, chatWithAI);
 router.post('/generate-note', validateGenerateNote, generateNoteFromSource);
 
 // POST /api/ai/evaluate-answer - Evaluate a user's answer
-router.post('/evaluate-answer', (req, res) => {
-  res.status(501).json({ message: 'Not Implemented' });
-});
+router.post('/evaluate-answer', evaluateAnswer);
 
 
 export default router;

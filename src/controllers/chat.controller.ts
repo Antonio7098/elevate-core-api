@@ -1,5 +1,7 @@
 import { Response } from 'express';
-import aiRagService from '../services/ai-rag.service';
+import { AiRAGService } from '../ai-rag/ai-rag.service';
+import prisma from '../lib/prisma';
+const aiRagService = new AiRAGService(prisma);
 import { AuthenticatedRequest } from '../types/express';
 
 class ChatController {
@@ -10,8 +12,8 @@ class ChatController {
         return;
       }
       const result = await aiRagService.handleChatMessage(
-        req.user.userId,
         req.body,
+        req.user.userId,
       );
       res.status(200).json(result);
     } catch (error) {
