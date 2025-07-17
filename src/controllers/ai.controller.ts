@@ -347,16 +347,16 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
       return;
     }
 
-    // Prepare the evaluation request
+    // Prepare the evaluation request for the AI service
     const evaluationRequest: EvaluateAnswerRequest = {
       questionContext: {
         questionId: question.id,
         questionText: question.text,
-        expectedAnswer: question.answer || undefined,
+        expectedAnswer: question.answer || "No expected answer provided",
         questionType: question.questionType,
         options: question.options,
         marksAvailable: question.totalMarksAvailable,
-        markingCriteria: question.markingCriteria ? JSON.stringify(question.markingCriteria) : null,
+        markingCriteria: question.markingCriteria ? JSON.stringify(question.markingCriteria) : "Award marks based on accuracy and completeness",
         uueFocus: question.uueFocus
       },
       userAnswer: userAnswer,
@@ -369,12 +369,12 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
     // Call the AI service
     const aiResponse = await aiService.evaluateAnswer(evaluationRequest);
 
-    // Return the AI service response directly
+    // Return the AI service response in the format the frontend expects
     res.status(200).json({
       correctedAnswer: aiResponse.corrected_answer,
       marksAvailable: question.totalMarksAvailable,
       marksAchieved: aiResponse.marks_achieved,
-      feedback: aiResponse.feedback
+      feedback: aiResponse.feedback || `You achieved ${aiResponse.marks_achieved} out of ${question.totalMarksAvailable} marks. ${aiResponse.corrected_answer}`
     });
 
   } catch (error) {

@@ -5,6 +5,7 @@
     "rootDir": "./src",
     "outDir": "./dist",
     "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "strict": true,
@@ -12,6 +13,7 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
+    "downlevelIteration": true,
     "noEmit": true
   },
   "include": ["src/**/*"],

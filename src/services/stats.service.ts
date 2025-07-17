@@ -192,9 +192,47 @@ export const getOverallStats = async (userId: number): Promise<OverallStats> => 
   });
 
   const totalSets = allQuestionSets.length;
-  // For overall mastery history, we'll return an empty array for now.
-  // A more meaningful aggregation could be complex (e.g., average scores over time points).
-  const overallMasteryHistory: Array<{ timestamp: Date; score: number }> = []; 
+  
+  // Calculate overall mastery history by aggregating from all question sets
+  const overallMasteryHistory: Array<{ timestamp: Date; score: number }> = [];
+  
+  // Get all unique timestamps from all question sets' mastery history
+  const allTimestamps = new Set<string>();
+  allQuestionSets.forEach(qs => {
+    if (qs.masteryHistory && Array.isArray(qs.masteryHistory)) {
+      qs.masteryHistory.forEach((entry: any) => {
+        if (entry && entry.timestamp) {
+          allTimestamps.add(entry.timestamp);
+        }
+      });
+    }
+  });
+  
+  // Sort timestamps chronologically
+  const sortedTimestamps = Array.from(allTimestamps).sort();
+  
+  // Calculate average mastery score for each timestamp
+  sortedTimestamps.forEach(timestamp => {
+    let totalScore = 0;
+    let setCount = 0;
+    
+    allQuestionSets.forEach(qs => {
+      if (qs.masteryHistory && Array.isArray(qs.masteryHistory)) {
+        const entry = qs.masteryHistory.find((e: any) => e && typeof e === 'object' && e.timestamp === timestamp);
+        if (entry && typeof entry === 'object' && 'totalMasteryScore' in entry && typeof entry.totalMasteryScore === 'number') {
+          totalScore += entry.totalMasteryScore;
+          setCount++;
+        }
+      }
+    });
+    
+    if (setCount > 0) {
+      overallMasteryHistory.push({
+        timestamp: new Date(timestamp),
+        score: Math.round(totalScore / setCount)
+      });
+    }
+  });
 
   return {
     masteryScore: totalSets > 0 ? Math.round(totalMasteryScoreSum / totalSets) : 0,
@@ -213,7 +251,7 @@ export const getOverallStats = async (userId: number): Promise<OverallStats> => 
 export const fetchFolderStatsDetails = async (
   userId: number,
   folderId: number
-): Promise<FolderStatsDetails> => {
+): Promise<any> => {
   const folder = await prisma.folder.findUnique({
     where: { id: folderId },
   });
@@ -226,11 +264,9 @@ export const fetchFolderStatsDetails = async (
     throw createError(403, 'User does not have access to this Folder.');
   }
 
-  // Get all question sets in the folder
-  const questionSetsInFolder = await prisma.questionSet.findMany({
-    where: {
-      folderId: folderId,
-    },
+  // Get direct question sets in the folder
+  const questionSets = await prisma.questionSet.findMany({
+    where: { folderId: folderId },
     select: {
       id: true,
       name: true,
@@ -239,27 +275,35 @@ export const fetchFolderStatsDetails = async (
     },
   });
 
-  const questionSetSummaries: QuestionSetSummary[] = questionSetsInFolder.map(qs => ({ // qs is implicitly typed by Prisma based on the select statement
-    id: qs.id,
-    name: qs.name,
-    currentTotalMasteryScore: qs.currentTotalMasteryScore,
-    nextReviewAt: qs.nextReviewAt,
-  }));
+  // Get direct subfolders
+  const subfolders = await prisma.folder.findMany({
+    where: { parentId: folderId, userId },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      createdAt: true,
+      updatedAt: true,
+      imageUrls: true,
+      isPinned: true,
+    },
+  });
 
-  // Calculate total review sessions in the folder
-  const questionSetIds = questionSetsInFolder.map(qs => qs.id);
-  const totalReviewSessionsInFolder = await prisma.questionSetStudySession.count({
+  // Calculate total review sessions in the folder (for direct question sets only)
+  const questionSetIds = questionSets.map(qs => qs.id);
+  const totalReviewSessionsInFolder = questionSetIds.length > 0 ? await prisma.questionSetStudySession.count({
     where: {
       questionSetId: {
         in: questionSetIds,
       },
       userId: userId,
     },
-  });
+  }) : 0;
 
   return {
-    masteryHistory: folder.masteryHistory.filter((h: Prisma.JsonValue | null) => h !== null) as Prisma.JsonValue[], // Ensure no nulls
+    questionSets,
+    subfolders,
+    masteryHistory: folder.masteryHistory.filter((h: Prisma.JsonValue | null) => h !== null) as Prisma.JsonValue[],
     totalReviewSessionsInFolder,
-    questionSetSummaries,
   };
 };

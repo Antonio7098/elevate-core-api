@@ -141,11 +141,47 @@ export async function processAdvancedReview(
           understandScore: uueScores.Understand,
           useScore: uueScores.Use,
           masteryHistory: {
-            push: { date: new Date().toISOString(), score: totalMastery },
+            push: { 
+              timestamp: new Date().toISOString(), 
+              totalMasteryScore: totalMastery,
+              understandScore: uueScores.Understand,
+              useScore: uueScores.Use,
+              exploreScore: uueScores.Explore
+            },
           },
         },
       }),
     );
+
+    // Update parent folder's mastery history
+    if (questionSet.folderId) {
+      const folder = await prisma.folder.findUnique({
+        where: { id: questionSet.folderId },
+        include: { questionSets: true }
+      });
+      
+      if (folder) {
+        // Calculate folder's aggregated mastery score
+        const folderQuestionSets = folder.questionSets;
+        const totalFolderMastery = folderQuestionSets.reduce((sum, qs) => sum + (qs.currentTotalMasteryScore || 0), 0);
+        const averageFolderMastery = folderQuestionSets.length > 0 ? Math.round(totalFolderMastery / folderQuestionSets.length) : 0;
+        
+        transactionPromises.push(
+          prisma.folder.update({
+            where: { id: questionSet.folderId },
+            data: {
+              currentMasteryScore: averageFolderMastery,
+              masteryHistory: {
+                push: { 
+                  timestamp: new Date().toISOString(), 
+                  aggregatedScore: averageFolderMastery
+                },
+              },
+            },
+          })
+        );
+      }
+    }
   }
 
   // 4. Execute transaction and return updated sets

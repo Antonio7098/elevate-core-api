@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import { protect } from '../middleware/auth.middleware';
 import { validateFolderCreate, validateFolderUpdate } from '../middleware/validation';
-import { createFolder, getFolders, getFolderById, updateFolder, deleteFolder, pinFolder } from '../controllers/folder.controller.ts'; 
+import { createFolder, getFolders, getFolderById, updateFolder, deleteFolder, pinFolder } from '../controllers/folder.controller'; 
 import { getAllQuestionsInFolder, getAllNotesInFolder } from '../controllers/recursiveFolder.controller';
 import questionsetRouter from './questionset.routes';
 

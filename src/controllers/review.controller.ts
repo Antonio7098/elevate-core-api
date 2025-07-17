@@ -70,12 +70,12 @@ export const getTodayReviews = async (req: Request, res: Response, next: NextFun
 
 /**
  * Get questions for a specific review session
- * GET /api/questionsets/:id/review-questions
+ * GET /api/reviews/question-set/:questionSetIds (supports comma-separated IDs)
  */
 export const getReviewQuestions = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    const questionSetId = parseInt(req.params.questionSetId);
+    const questionSetIdsParam = req.params.questionSetId;
     const count = req.query.count ? parseInt(req.query.count as string) : 10;
     
     if (!userId) {
@@ -83,49 +83,108 @@ export const getReviewQuestions = async (req: Request, res: Response, next: Next
       return;
     }
     
-    // Verify that the question set belongs to the user
-    const questionSet = await prisma.questionSet.findFirst({
+    // Parse comma-separated question set IDs
+    const questionSetIds = questionSetIdsParam
+      .split(',')
+      .map(id => parseInt(id.trim()))
+      .filter(id => !isNaN(id));
+    
+    if (questionSetIds.length === 0) {
+      res.status(400).json({ message: 'Invalid question set ID(s) provided' });
+      return;
+    }
+    
+    // Verify that all question sets belong to the user
+    const questionSets = await prisma.questionSet.findMany({
       where: {
-        id: questionSetId,
+        id: { in: questionSetIds },
         folder: {
           userId: userId
         }
       }
     });
     
-    if (!questionSet) {
-      res.status(404).json({ message: 'Question set not found or access denied' });
+    if (questionSets.length !== questionSetIds.length) {
+      res.status(404).json({ message: 'One or more question sets not found or access denied' });
       return;
     }
 
+    // Check if any question set is not due for review
     const now = new Date();
-    if (questionSet.nextReviewAt && new Date(questionSet.nextReviewAt) > now) {
+    const notDueSets = questionSets.filter(set => 
+      set.nextReviewAt && new Date(set.nextReviewAt) > now
+    );
+    
+    if (notDueSets.length > 0) {
       res.status(403).json({ 
-        message: 'This question set is not due for review yet.',
-        nextReviewAt: questionSet.nextReviewAt
+        message: 'One or more question sets are not due for review yet.',
+        notDueSets: notDueSets.map(set => ({
+          id: set.id,
+          name: set.name,
+          nextReviewAt: set.nextReviewAt
+        }))
       });
       return;
     }
     
-    // Get prioritized questions for the review session
-    const questions = await getPrioritizedQuestions(questionSetId, userId, count);
+    // Get prioritized questions from all question sets
+    const allQuestions: PrioritizedQuestion[] = [];
+    const questionsPerSet = Math.ceil(count / questionSets.length);
     
-    // Return the questions for the review session
-    res.status(200).json({
-      questionSetId,
-      questionSetName: questionSet.name,
-      count: questions.length,
-      questions: questions.map((q: PrioritizedQuestion) => ({
-        id: q.id,
-        text: q.text,
-        questionType: q.questionType,
-        options: q.options,
-        uueFocus: q.uueFocus,
-        conceptTags: q.conceptTags,
-        totalMarksAvailable: q.totalMarksAvailable,
-        priorityScore: q.priorityScore
-      }))
-    });
+    for (const questionSet of questionSets) {
+      const questions = await getPrioritizedQuestions(questionSet.id, userId, questionsPerSet);
+      allQuestions.push(...questions);
+    }
+    
+    // Sort by priority score and limit to requested count
+    const sortedQuestions = allQuestions
+      .sort((a, b) => (b.priorityScore || 0) - (a.priorityScore || 0))
+      .slice(0, count);
+    
+    // Return response format based on number of question sets
+    if (questionSets.length === 1) {
+      // Backward compatibility: single question set format
+      const questionSet = questionSets[0];
+      res.status(200).json({
+        questionSetId: questionSet.id,
+        questionSetName: questionSet.name,
+        count: sortedQuestions.length,
+        questions: sortedQuestions.map((q: PrioritizedQuestion) => ({
+          id: q.id,
+          text: q.text,
+          questionType: q.questionType,
+          options: q.options,
+          uueFocus: q.uueFocus,
+          conceptTags: q.conceptTags,
+          totalMarksAvailable: q.totalMarksAvailable,
+          priorityScore: q.priorityScore
+        }))
+      });
+    } else {
+      // Multi-question-set format
+      res.status(200).json({
+        questionSetIds,
+        questionSets: questionSets.map(set => ({
+          id: set.id,
+          name: set.name,
+          currentInterval: set.currentIntervalDays,
+          masteryScore: set.currentTotalMasteryScore,
+          nextReviewAt: set.nextReviewAt
+        })),
+        count: sortedQuestions.length,
+        questions: sortedQuestions.map((q: PrioritizedQuestion) => ({
+          id: q.id,
+          text: q.text,
+          questionType: q.questionType,
+          options: q.options,
+          uueFocus: q.uueFocus,
+          conceptTags: q.conceptTags,
+          totalMarksAvailable: q.totalMarksAvailable,
+          priorityScore: q.priorityScore,
+          questionSetId: q.questionSetId // Include which set this question belongs to
+        }))
+      });
+    }
     
   } catch (error) {
     console.error('Error getting review questions:', error);

@@ -39,48 +39,69 @@ const app = express();
 
 // Function to setup Swagger
 async function setupSwagger(expressApp: express.Express) {
-  // Create a temporary NestJS application instance just for Swagger generation
-  const nestApp = await NestFactory.create(SwaggerAppModule, {
-    // Suppress NestJS logger for this temporary instance if desired
-    logger: false, // or ['error', 'warn']
-  });
+  try {
+    console.log('Setting up Swagger documentation...');
+    
+    // Create a temporary NestJS application instance just for Swagger generation
+    const nestApp = await NestFactory.create(SwaggerAppModule, {
+      // Suppress NestJS logger for this temporary instance if desired
+      logger: false, // or ['error', 'warn']
+    });
 
-  const config = new DocumentBuilder()
-    .setTitle('Elevate Core API - RAG Endpoints')
-    .setDescription('API documentation for the RAG (Retrieval Augmented Generation) features.')
-    .setVersion('1.0')
-    .addTag('ai-rag', 'Endpoints related to Learning Blueprints, Question/Note Generation, and Chat')
-    .addBearerAuth() // If you use Bearer token auth
-    .build();
+    const config = new DocumentBuilder()
+      .setTitle('Elevate Core API - RAG Endpoints')
+      .setDescription('API documentation for the RAG (Retrieval Augmented Generation) features.')
+      .setVersion('1.0')
+      .addTag('ai-rag', 'Endpoints related to Learning Blueprints, Question/Note Generation, and Chat')
+      .addBearerAuth() // If you use Bearer token auth
+      .build();
 
-  const document = SwaggerModule.createDocument(nestApp, config, {
-    // Ensure AiRAGController is considered for path generation
-    // and all DTOs are included for schema generation
-    include: [SwaggerAppModule, AiRAGController], 
-    extraModels: [
-      CreateLearningBlueprintDto,
-      GenerateQuestionsFromBlueprintDto,
-      GenerateNoteFromBlueprintDto,
-      ChatMessageDto,
-      LearningBlueprintResponseDto,
-      QuestionSetResponseDto,
-      NoteResponseDto,
-      ChatResponseMessageDto,
-      ChatMessageContentDto, // Ensure nested DTO is included
-    ],
-  });
+    const document = SwaggerModule.createDocument(nestApp, config, {
+      // Ensure AiRAGController is considered for path generation
+      // and all DTOs are included for schema generation
+      include: [SwaggerAppModule, AiRAGController], 
+      extraModels: [
+        CreateLearningBlueprintDto,
+        GenerateQuestionsFromBlueprintDto,
+        GenerateNoteFromBlueprintDto,
+        ChatMessageDto,
+        LearningBlueprintResponseDto,
+        QuestionSetResponseDto,
+        NoteResponseDto,
+        ChatResponseMessageDto,
+        ChatMessageContentDto, // Ensure nested DTO is included
+      ],
+    });
 
-  expressApp.use('/api-docs', swaggerUi.serve, swaggerUi.setup(document));
+    expressApp.use('/api-docs', swaggerUi.serve, swaggerUi.setup(document));
 
-  // Close the temporary NestJS app instance once Swagger setup is complete
-  await nestApp.close();
+    // Close the temporary NestJS app instance once Swagger setup is complete
+    await nestApp.close();
+    
+    console.log('✅ Swagger documentation setup complete');
+  } catch (error) {
+    console.error('❌ Swagger setup failed:', error);
+    throw error; // Re-throw to be caught by the caller
+  }
 }
 
 // Only setup Swagger if not in a test environment, as it can interfere with test runners.
 if (process.env.NODE_ENV !== 'test') {
-  setupSwagger(app).catch(error => {
-    console.error('Failed to setup Swagger:', error);
-  });
+  // Setup Swagger asynchronously without blocking server startup
+  const swaggerTimeout = setTimeout(() => {
+    console.warn('⚠️  Swagger setup is taking too long, continuing without documentation');
+  }, 10000); // 10 second timeout
+
+  setupSwagger(app)
+    .then(() => {
+      clearTimeout(swaggerTimeout);
+      console.log('✅ Swagger documentation available at /api-docs');
+    })
+    .catch(error => {
+      clearTimeout(swaggerTimeout);
+      console.error('❌ Failed to setup Swagger:', error);
+      console.log('Server will continue without Swagger documentation');
+    });
 }
 
 

@@ -134,3 +134,66 @@ export const getStandaloneQuestionSetQuestions = async (req: AuthRequest, res: R
     next(error);
   }
 };
+
+/**
+ * Get all question sets for a user across all folders
+ * GET /api/questionsets
+ */
+export const getAllQuestionSetsForUser = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  const userId = req.user?.userId;
+
+  if (!userId) {
+    res.status(401).json({ message: 'User not authenticated' });
+    return;
+  }
+
+  try {
+    // Get all question sets for the user across all folders
+    const questionSets = await prisma.questionSet.findMany({
+      where: {
+        folder: {
+          userId: userId,
+        },
+      },
+      include: {
+        folder: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+          },
+        },
+        questions: {
+          select: {
+            id: true,
+            text: true,
+            questionType: true,
+            currentMasteryScore: true,
+          },
+        },
+        notes: {
+          orderBy: {
+            updatedAt: 'desc',
+          },
+          take: 1, // Only get the most recent note
+        },
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+    });
+
+    res.status(200).json(questionSets);
+  } catch (error) {
+    console.error('--- Get All Question Sets For User Error ---');
+    if (error instanceof Error) {
+      console.error('Message:', error.message);
+      console.error('Stack:', error.stack);
+    } else {
+      console.error('Error object (raw):', error);
+    }
+    console.error('Error object (stringified):', JSON.stringify(error, null, 2));
+    console.error('--- End Get All Question Sets For User Error ---');
+    next(error);
+  }
+};

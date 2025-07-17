@@ -100,14 +100,41 @@ export class AIService {
    */
   async evaluateAnswer(payload: EvaluateAnswerRequest): Promise<EvaluateAnswerResponse> {
     try {
-      const response = await axios.post(`${this.apiUrl}/evaluate/answer`, {
-        question_context: payload.questionContext,
-        user_answer: payload.userAnswer,
+      const apiKey = process.env.AI_SERVICE_API_KEY;
+      if (!apiKey) {
+        throw new Error('AI_SERVICE_API_KEY environment variable is not set');
+      }
+
+      const requestBody = {
+        questionContext: payload.questionContext,
+        userAnswer: payload.userAnswer,
         context: payload.context
+      };
+
+      // Log to file for debugging
+      const fs = require('fs');
+      const logData = {
+        timestamp: new Date().toISOString(),
+        url: `${this.apiUrl}/api/v1/ai/evaluate-answer`,
+        payload: requestBody
+      };
+      fs.appendFileSync('/tmp/ai-service-debug.log', JSON.stringify(logData, null, 2) + '\n');
+      
+      console.log('🔍 [AI Service] Sending request to AI service:');
+      console.log('URL:', `${this.apiUrl}/api/v1/ai/evaluate-answer`);
+      console.log('Payload:', JSON.stringify(requestBody, null, 2));
+
+      const response = await axios.post(`${this.apiUrl}/api/v1/ai/evaluate-answer`, requestBody, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
       });
       return response.data;
-    } catch (error) {
-      console.error('Error evaluating answer:', error);
+    } catch (error: any) {
+      console.error('❌ [AI Service] Error evaluating answer:');
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
       throw error;
     }
   }

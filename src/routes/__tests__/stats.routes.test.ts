@@ -309,5 +309,72 @@ describe('Stats API Endpoints', () => {
       expect(summaryQs2.currentTotalMasteryScore).toBe(50);
       expect(new Date(summaryQs2.nextReviewAt).getTime()).toBeGreaterThan(Date.now());
     });
+
+    it('should return question sets from nested subfolders', async () => {
+      // Create a nested folder structure
+      const subfolder = await prisma.folder.create({
+        data: {
+          userId,
+          name: 'Subfolder in Stats Test',
+          parentId: userFolderId,
+        },
+      });
+
+      // Create a question set in the subfolder
+      const nestedQs = await prisma.questionSet.create({
+        data: {
+          folderId: subfolder.id,
+          name: 'Nested Question Set',
+          currentTotalMasteryScore: 90,
+          nextReviewAt: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000),
+          questions: { create: [{ text: 'Nested Q1', totalMarksAvailable: 1, questionType: 'TEXT' }] },
+        },
+        include: { questions: true },
+      });
+
+      // Create a study session for the nested question set
+      const nestedSessionDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000);
+      const nestedUserSession = await prisma.userStudySession.create({
+        data: { userId, sessionEndedAt: nestedSessionDate, timeSpentSeconds: 300, answeredQuestionsCount: 1 },
+      });
+      await prisma.questionSetStudySession.create({
+        data: {
+          userId: userId,
+          sessionId: nestedUserSession.id,
+          questionSetId: nestedQs.id,
+          sessionMarksAchieved: 1,
+          sessionMarksAvailable: 1,
+          srStageBefore: 0,
+          questionsAnswered: { connect: [{ id: nestedQs.questions[0].id }] },
+          userQuestionAnswers: {
+            create: {
+              userId: userId,
+              questionId: nestedQs.questions[0].id,
+              userAnswerText: 'Nested Answer',
+              scoreAchieved: 1,
+              isCorrect: true,
+              timeSpent: 150,
+              answeredAt: nestedSessionDate,
+            },
+          },
+        },
+      });
+
+      // Test that the parent folder details include the nested question set
+      const res = await request(app)
+        .get(`/api/stats/folders/${userFolderId}/details`)
+        .set('Authorization', `Bearer ${userToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('questionSetSummaries');
+      expect(res.body.questionSetSummaries).toHaveLength(3); // 2 original + 1 nested
+
+      const nestedSummary = res.body.questionSetSummaries.find((s: any) => s.id === nestedQs.id);
+      expect(nestedSummary).toBeDefined();
+      expect(nestedSummary.name).toBe('Nested Question Set');
+      expect(nestedSummary.currentTotalMasteryScore).toBe(90);
+
+      expect(res.body).toHaveProperty('totalReviewSessionsInFolder', 4); // 3 original + 1 nested
+    });
   });
 });
