@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus, Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { PrismaClient, LearningBlueprint, Prisma, Question } from '@prisma/client'; // Added LearningBlueprint for return type and Prisma namespace
+import { PrismaClient, LearningBlueprint, Prisma, Question } from '@prisma/client'; 
 import axios, { AxiosInstance } from 'axios';
+import { getAIAPIClient } from '../services/ai-api-client.service';
 import { CreateLearningBlueprintDto } from './dtos/create-learning-blueprint.dto';
 import { UpdateLearningBlueprintDto } from './dtos/update-learning-blueprint.dto';
 import { GenerateQuestionsFromBlueprintDto } from './dtos/generate-questions-from-blueprint.dto';
@@ -10,7 +11,7 @@ import { LearningBlueprintResponseDto, QuestionSetResponseDto, NoteResponseDto, 
 
 // TODO: Move to environment variables
 const AI_SERVICE_BASE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000/api/v1'; // Example URL
-const AI_SERVICE_API_KEY = process.env.AI_SERVICE_API_KEY || 'your-ai-service-api-key'; // Example API Key
+const AI_SERVICE_API_KEY = process.env.AI_SERVICE_API_KEY || 'test_api_key_123'; // Dev default matches AI API
 
 @Injectable()
 export class AiRAGService {
@@ -38,7 +39,8 @@ export class AiRAGService {
     try {
       console.log(`Calling AI service at ${AI_SERVICE_BASE_URL}/deconstruct`);
       const response = await this.axiosInstance.post('/deconstruct', {
-        source_text: dto.sourceText, // Assuming AI service expects 'source_text'
+        source_text: dto.sourceText,
+        userId: userId.toString(), // AI service expects userId in payload
       });
       blueprintJson = response.data.blueprint_json; // Assuming AI service returns { blueprint_json: ... }
       console.log('AI service /deconstruct call successful.');
@@ -67,7 +69,32 @@ export class AiRAGService {
       throw new Error('Failed to save learning blueprint.');
     }
 
-    // 3. Return the created LearningBlueprint object (or a DTO representation)
+    // 3. Index the blueprint in the AI API (non-blocking)
+    try {
+      const aiApiClient = getAIAPIClient();
+      console.log(`Indexing blueprint ${newBlueprint.id} with AI API...`);
+      const indexingResponse = await aiApiClient.indexBlueprint({
+        blueprint_id: newBlueprint.id.toString(),
+        blueprint_json: blueprintJson,
+        force_reindex: false
+      });
+      console.log(`Successfully indexed blueprint ${newBlueprint.id} with AI API`);
+      
+      // Store the source_id (UUID) returned by AI API for proper deletion later
+      if (indexingResponse.blueprint_id) {
+        console.log(`Storing AI API source_id: ${indexingResponse.blueprint_id} for blueprint ${newBlueprint.id}`);
+        await this.prisma.learningBlueprint.update({
+          where: { id: newBlueprint.id },
+          data: { sourceId: indexingResponse.blueprint_id }
+        });
+      }
+    } catch (error: any) {
+      // Non-blocking: log the error but don't fail the blueprint creation
+      console.error(`Failed to index blueprint ${newBlueprint.id} with AI API:`, error.message);
+      console.log('Blueprint creation completed successfully despite indexing failure');
+    }
+
+    // 4. Return the created LearningBlueprint object (or a DTO representation)
     return {
       id: newBlueprint.id,
       userId: newBlueprint.userId,
@@ -119,66 +146,124 @@ export class AiRAGService {
     };
   }
 
+
+
   async updateLearningBlueprint(
     blueprintId: number,
-    userId: number,
     dto: UpdateLearningBlueprintDto,
+    userId: number,
   ): Promise<LearningBlueprintResponseDto | null> {
     console.log(`AiRAGService: updateLearningBlueprint called for ID ${blueprintId} by user ${userId}`);
+
+    // 1. Check if blueprint exists and belongs to user
     const existingBlueprint = await this.prisma.learningBlueprint.findUnique({
       where: { id: blueprintId },
     });
 
     if (!existingBlueprint || existingBlueprint.userId !== userId) {
-      return null; // Not found or not owned by user
+      console.log(`Blueprint ${blueprintId} not found or access denied for user ${userId}`);
+      return null;
     }
 
-    let blueprintJson = existingBlueprint.blueprintJson;
-    let sourceText = existingBlueprint.sourceText;
-
+    // 2. If sourceText is being updated, call AI Service to regenerate blueprint
+    let updatedBlueprintJson = existingBlueprint.blueprintJson;
     if (dto.sourceText && dto.sourceText !== existingBlueprint.sourceText) {
-      console.log('New sourceText provided, re-deconstructing with AI service...');
       try {
+        console.log(`Calling AI service to regenerate blueprint for updated sourceText`);
         const response = await this.axiosInstance.post('/deconstruct', {
           source_text: dto.sourceText,
         });
-        blueprintJson = response.data.blueprint_json;
-        sourceText = dto.sourceText;
+        updatedBlueprintJson = response.data.blueprint_json;
         console.log('AI service /deconstruct call successful for update.');
       } catch (error: any) {
-        console.error('Error calling AI service /deconstruct during update:', error.response?.data || error.message);
-        throw new Error('Failed to re-deconstruct text via AI service for update.');
+        console.error('Error calling AI service /deconstruct for update:', error.response?.data || error.message);
+        throw new Error('Failed to regenerate blueprint via AI service.');
       }
     }
 
-    // Only update if there are actual changes to sourceText or blueprintJson
-    if (sourceText !== existingBlueprint.sourceText || blueprintJson !== existingBlueprint.blueprintJson) {
-      const updatedBlueprint = await this.prisma.learningBlueprint.update({
+    // 3. Update the database record
+    let updatedBlueprint: LearningBlueprint;
+    try {
+      updatedBlueprint = await this.prisma.learningBlueprint.update({
         where: { id: blueprintId },
         data: {
-          sourceText: sourceText,
-          blueprintJson: blueprintJson === null ? Prisma.JsonNull : blueprintJson, // Handle explicit null
-          // userId is not updated
+          sourceText: dto.sourceText || existingBlueprint.sourceText,
+          blueprintJson: updatedBlueprintJson as any,
+          updatedAt: new Date(),
         },
       });
-      return {
-        id: updatedBlueprint.id,
-        userId: updatedBlueprint.userId,
-        sourceText: updatedBlueprint.sourceText,
-        blueprintJson: updatedBlueprint.blueprintJson as any,
-        createdAt: updatedBlueprint.createdAt,
-        updatedAt: updatedBlueprint.updatedAt,
-      };
+      console.log(`LearningBlueprint ${blueprintId} updated successfully`);
+    } catch (error: any) {
+      console.error('Error updating LearningBlueprint in database:', error);
+      throw new Error('Failed to update learning blueprint.');
     }
-    
-    // If no changes were made (e.g., DTO was empty or sourceText was the same), return the existing blueprint data
+
+    // 4. Sync with AI API (non-blocking)
+    try {
+      console.log(`\n=== BLUEPRINT SYNC DEBUG START ===`);
+      console.log(`Synchronizing blueprint ${blueprintId} update with AI API...`);
+      console.log('Raw updatedBlueprintJson type:', typeof updatedBlueprintJson);
+      console.log('Raw updatedBlueprintJson value:', JSON.stringify(updatedBlueprintJson, null, 2));
+      
+      // Ensure blueprintData is a proper object. The database may return blueprintJson as a
+      // JSON string (e.g. when using the Prisma Json field with some drivers). If we detect
+      // a string, attempt to JSON.parse it. Fallback to an empty object if parsing fails.
+      let blueprintData: Record<string, any> = {};
+      if (updatedBlueprintJson && typeof updatedBlueprintJson === 'object') {
+        blueprintData = updatedBlueprintJson as Record<string, any>;
+      } else if (typeof updatedBlueprintJson === 'string') {
+        try {
+          blueprintData = JSON.parse(updatedBlueprintJson) as Record<string, any>;
+        } catch (parseErr) {
+          console.warn('Failed to parse blueprintJson string. Proceeding with empty object.', parseErr);
+        }
+      }
+
+      console.log('Processed blueprintData:', JSON.stringify(blueprintData, null, 2));
+
+      const blueprintPayload = {
+        source_id: blueprintId.toString(),
+        source_title: blueprintData.source_title || `Blueprint ${blueprintId}`,
+        source_type: blueprintData.source_type || 'text',
+        source_summary: blueprintData.source_summary || {
+          core_thesis_or_main_argument: 'Learning content analysis',
+          inferred_purpose: 'Educational material for learning',
+        },
+        sections: blueprintData.sections || [],
+        knowledge_primitives: blueprintData.knowledge_primitives || {
+          key_propositions_and_facts: [],
+          key_entities_and_definitions: [],
+          described_processes_and_steps: [],
+          identified_relationships: [],
+          implicit_and_open_questions: [],
+        },
+      };
+      
+      console.log('Final blueprint payload being sent to AI API:');
+      console.log(JSON.stringify(blueprintPayload, null, 2));
+      console.log('About to call aiApiClient.updateBlueprint...');
+      
+      const aiApiClient = getAIAPIClient();
+      await aiApiClient.updateBlueprint(blueprintId.toString(), blueprintPayload, 'incremental');
+      console.log(`✅ Successfully synchronized blueprint ${blueprintId} update with AI API`);
+      console.log(`=== BLUEPRINT SYNC DEBUG END ===\n`);
+    } catch (error: any) {
+      // Non-blocking: log the error but don't fail the blueprint update
+      console.error(`\n❌ BLUEPRINT SYNC ERROR:`);
+      console.error(`Failed to sync blueprint ${blueprintId} update with AI API:`, error.message);
+      console.error('Full error:', error);
+      console.error('Error response data:', error.response?.data);
+      console.log('Blueprint update completed successfully despite sync failure\n');
+    }
+
+    // 5. Return the updated blueprint
     return {
-      id: existingBlueprint.id,
-      userId: existingBlueprint.userId,
-      sourceText: existingBlueprint.sourceText,
-      blueprintJson: existingBlueprint.blueprintJson as any,
-      createdAt: existingBlueprint.createdAt,
-      updatedAt: existingBlueprint.updatedAt,
+      id: updatedBlueprint.id,
+      userId: updatedBlueprint.userId,
+      sourceText: updatedBlueprint.sourceText,
+      blueprintJson: updatedBlueprint.blueprintJson as any,
+      createdAt: updatedBlueprint.createdAt,
+      updatedAt: updatedBlueprint.updatedAt,
     };
   }
 
@@ -192,10 +277,231 @@ export class AiRAGService {
       return false; // Not found or not owned by user
     }
 
-    await this.prisma.learningBlueprint.delete({
+    // 1. Clean up from AI API first (non-blocking)
+    try {
+      const aiApiClient = getAIAPIClient();
+      console.log(`Cleaning up blueprint ${blueprintId} from AI API...`);
+      
+      // Use the sourceId (UUID) if available, otherwise fall back to database ID
+      const blueprintIdForDeletion = blueprint.sourceId || blueprintId.toString();
+      console.log(`Using blueprint ID for deletion: ${blueprintIdForDeletion} (sourceId: ${blueprint.sourceId}, dbId: ${blueprintId})`);
+      
+      await aiApiClient.deleteBlueprint(blueprintIdForDeletion);
+      console.log(`Successfully cleaned up blueprint ${blueprintId} from AI API`);
+    } catch (error: any) {
+      // Non-blocking: log the error but continue with database deletion
+      console.error(`Failed to clean up blueprint ${blueprintId} from AI API:`, error.message);
+      console.log('Proceeding with database deletion despite AI API cleanup failure');
+    }
+
+    // 2. Delete from database
+    try {
+      await this.prisma.learningBlueprint.delete({
+        where: { id: blueprintId },
+      });
+      console.log(`Successfully deleted blueprint ${blueprintId} from database`);
+      return true;
+    } catch (error: any) {
+      console.error(`Failed to delete blueprint ${blueprintId} from database:`, error);
+      throw new Error('Failed to delete learning blueprint from database.');
+    }
+  }
+
+  // Task 4: Blueprint Status Management
+  async getBlueprintIndexingStatus(blueprintId: number, userId: number): Promise<any> {
+    console.log(`AiRAGService: getBlueprintIndexingStatus called for ID ${blueprintId} by user ${userId}`);
+    
+    // 1. Check if blueprint exists and belongs to user
+    const blueprint = await this.prisma.learningBlueprint.findUnique({
       where: { id: blueprintId },
     });
-    return true;
+
+    if (!blueprint || blueprint.userId !== userId) {
+      throw new NotFoundException('Blueprint not found or access denied');
+    }
+
+    // 2. Get indexing status from AI API
+    try {
+      const aiApiClient = getAIAPIClient();
+      const status = await aiApiClient.getBlueprintStatus(blueprintId.toString());
+      console.log(`Retrieved indexing status for blueprint ${blueprintId}:`, status);
+      return {
+        blueprintId: blueprintId,
+        indexed: status.indexed || false,
+        lastIndexed: status.lastIndexed || null,
+        indexingErrors: status.errors || [],
+        vectorCount: status.vectorCount || 0,
+        status: status.status || 'unknown'
+      };
+    } catch (error: any) {
+      console.error(`Failed to get indexing status for blueprint ${blueprintId}:`, error.message);
+      return {
+        blueprintId: blueprintId,
+        indexed: false,
+        lastIndexed: null,
+        indexingErrors: [error.message],
+        vectorCount: 0,
+        status: 'error'
+      };
+    }
+  }
+
+  async reindexBlueprint(blueprintId: number, userId: number): Promise<any> {
+    console.log(`AiRAGService: reindexBlueprint called for ID ${blueprintId} by user ${userId}`);
+    
+    // 1. Check if blueprint exists and belongs to user
+    const blueprint = await this.prisma.learningBlueprint.findUnique({
+      where: { id: blueprintId },
+    });
+
+    if (!blueprint || blueprint.userId !== userId) {
+      throw new NotFoundException('Blueprint not found or access denied');
+    }
+
+    // 2. Force reindexing via AI API
+    try {
+      const aiApiClient = getAIAPIClient();
+      console.log(`Force reindexing blueprint ${blueprintId} with AI API...`);
+      
+      // First, delete any existing index
+      try {
+        await aiApiClient.deleteBlueprint(blueprintId.toString());
+        console.log(`Cleaned up existing index for blueprint ${blueprintId}`);
+      } catch (cleanupError: any) {
+        console.warn(`Cleanup failed for blueprint ${blueprintId}, proceeding with reindex:`, cleanupError.message);
+      }
+
+      // Then, reindex with current data
+      const result = await aiApiClient.indexBlueprint({
+        blueprint_id: blueprintId.toString(),
+        blueprint_json: blueprint.blueprintJson as any,
+        force_reindex: true,
+      });
+      
+      console.log(`Successfully reindexed blueprint ${blueprintId}`);
+      return {
+        blueprintId: blueprintId,
+        reindexed: true,
+        timestamp: new Date().toISOString(),
+        result: result
+      };
+    } catch (error: any) {
+      console.error(`Failed to reindex blueprint ${blueprintId}:`, error.message);
+      throw new Error(`Reindexing failed: ${error.message}`);
+    }
+  }
+
+  // RAG Chat Enhancement Helper Methods
+  async fetchUserMemoryContext(userId: number, context?: any): Promise<any[]> {
+    console.log(`AiRAGService: fetchUserMemoryContext for user ${userId}`);
+    
+    try {
+      // Fetch user memory (note: UserMemory is a single record per user, not multiple memories)
+      const userMemory = await this.prisma.userMemory.findUnique({
+        where: { userId: userId }
+      });
+
+      if (!userMemory) {
+        console.log(`No user memory found for user ${userId}`);
+        return [];
+      }
+
+      // Convert user memory preferences into context for AI
+      const memoryContext = {
+        id: userMemory.id,
+        userId: userMemory.userId,
+        cognitiveApproach: userMemory.cognitiveApproach,
+        explanationStyles: userMemory.explanationStyles,
+        interactionStyle: userMemory.interactionStyle,
+        primaryGoal: userMemory.primaryGoal,
+        createdAt: userMemory.createdAt,
+        updatedAt: userMemory.updatedAt
+      };
+
+      return [memoryContext];
+    } catch (error: any) {
+      console.warn('Failed to fetch user memory context:', error.message);
+      return []; // Return empty array if fetch fails
+    }
+  }
+
+  async fetchBlueprintContextForChat(
+    blueprintId: number, 
+    userId: number, 
+    messageContent: string
+  ): Promise<any[]> {
+    console.log(`AiRAGService: fetchBlueprintContextForChat for blueprint ${blueprintId}`);
+    
+    try {
+      // 1. Verify user owns the blueprint
+      const blueprint = await this.prisma.learningBlueprint.findUnique({
+        where: { id: blueprintId }
+      });
+
+      if (!blueprint || blueprint.userId !== userId) {
+        console.warn(`Blueprint ${blueprintId} not found or access denied for user ${userId}`);
+        return [];
+      }
+
+      // 2. Try to get relevant context from AI API using RAG retrieval
+      try {
+        const aiApiClient = getAIAPIClient();
+        const relevantContext = await aiApiClient.queryBlueprint({
+          blueprintId: blueprintId.toString(),
+          query: messageContent,
+          maxResults: 5
+        });
+        
+        console.log(`Retrieved ${relevantContext.length} relevant context items from AI API`);
+        return relevantContext;
+      } catch (aiApiError: any) {
+        console.warn('AI API context retrieval failed, using blueprint content:', aiApiError.message);
+        
+        // 3. Fallback: return the full blueprint content
+        return [{
+          id: blueprint.id,
+          content: blueprint.sourceText,
+          metadata: {
+            blueprintJson: blueprint.blueprintJson,
+            type: 'full_blueprint',
+            fallback: true
+          }
+        }];
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch blueprint context for chat:', error.message);
+      return [];
+    }
+  }
+
+  async fallbackToLegacyChat(
+    dto: ChatMessageDto, 
+    userId: number, 
+    enhancedContext: any
+  ): Promise<ChatResponseMessageDto> {
+    console.log('AiRAGService: fallbackToLegacyChat called');
+    
+    try {
+      console.log(`Calling legacy AI service at ${AI_SERVICE_BASE_URL}/chat`);
+      const response = await this.axiosInstance.post('/chat', {
+        user_id: userId,
+        message_content: dto.messageContent,
+        chat_history: dto.chatHistory || [],
+        context: enhancedContext,
+      });
+
+      console.log('Legacy AI service /chat call successful.');
+      return response.data as ChatResponseMessageDto;
+    } catch (error: any) {
+      console.error('Legacy AI service /chat failed:', error.response?.data || error.message);
+      if (axios.isAxiosError(error) && error.response) {
+        throw new HttpException(
+          error.response.data.message || 'An error occurred with the AI service.',
+          error.response.status,
+        );
+      }
+      throw new HttpException('Failed to get chat response from AI service.', HttpStatus.BAD_GATEWAY);
+    }
   }
 
   async generateQuestionsFromBlueprint(
@@ -385,34 +691,68 @@ export class AiRAGService {
   ): Promise<ChatResponseMessageDto> {
     console.log(`AiRAGService: handleChatMessage called for user ${userId}`);
 
-    // In a real implementation, we might fetch context from the DB
-    // based on dto.context (blueprintId, noteId, etc.) to pass to the AI.
-    // For now, we'll pass the context IDs directly to the AI service.
-
-    // 1. Call the AI Service's /chat endpoint
     try {
-      console.log(`Calling AI service at ${AI_SERVICE_BASE_URL}/chat`);
-      const response = await this.axiosInstance.post('/chat', {
-        user_id: userId, // Pass user ID for context retrieval on the AI side
-        message_content: dto.messageContent,
-        chat_history: dto.chatHistory || [],
-        context: dto.context || {},
-      });
+      // 1. Fetch user memory context for enhanced chat experience
+      const userMemoryContext = await this.fetchUserMemoryContext(userId, dto.context);
+      console.log(`Fetched user memory context items: ${userMemoryContext.length}`);
 
-      console.log('AI service /chat call successful.');
-      // Assuming the AI service returns a message in the same format
-      return response.data as ChatResponseMessageDto;
+      // 2. Fetch relevant blueprint context if specified
+      let blueprintContext: any[] = [];
+      if (dto.context?.blueprintId) {
+        blueprintContext = await this.fetchBlueprintContextForChat(
+          dto.context.blueprintId,
+          userId,
+          dto.messageContent
+        );
+        console.log(`Fetched blueprint context items: ${blueprintContext.length}`);
+      }
+
+      // 3. Prepare enhanced context for AI API
+      const enhancedContext = {
+        blueprintId: dto.context?.blueprintId,
+        noteId: dto.context?.noteId,
+        questionSetId: dto.context?.questionSetId,
+        userMemory: userMemoryContext,
+        blueprintContent: blueprintContext,
+        timestamp: new Date().toISOString()
+      };
+
+      // 4. Try to use AI API for RAG-enhanced chat first
+      try {
+        const aiApiClient = getAIAPIClient();
+        console.log('Using AI API for RAG-enhanced chat...');
+        
+        const chatResponse = await aiApiClient.sendChatMessage({
+          userId: userId.toString(),
+          message: dto.messageContent,
+          chatHistory: dto.chatHistory || [],
+          context: enhancedContext
+        });
+
+        console.log('AI API chat call successful with RAG enhancement');
+        return {
+          role: 'assistant',
+          content: chatResponse.response || chatResponse.content || 'I received your message but couldn\'t generate a proper response.'
+        };
+      } catch (aiApiError: any) {
+        console.warn('AI API chat failed, falling back to AI service:', aiApiError.message);
+        
+        // 5. Fallback to legacy AI service with enhanced context
+        return await this.fallbackToLegacyChat(dto, userId, enhancedContext);
+      }
     } catch (error: any) {
-      console.error('Error calling AI service /chat:', error.response?.data || error.message);
-      if (axios.isAxiosError(error) && error.response) {
-        // Forward the error from the downstream service
+      console.error('Error in enhanced chat message handling:', error.message);
+      
+      // 6. Final fallback to basic chat without context enhancement
+      try {
+        return await this.fallbackToLegacyChat(dto, userId, {});
+      } catch (fallbackError: any) {
+        console.error('All chat methods failed:', fallbackError.message);
         throw new HttpException(
-          error.response.data.message || 'An error occurred with the AI service.',
-          error.response.status,
+          'Unable to process chat message. Please try again later.',
+          HttpStatus.SERVICE_UNAVAILABLE
         );
       }
-      // For other types of errors (e.g., network issues)
-      throw new HttpException('Failed to get chat response from AI service.', HttpStatus.BAD_GATEWAY);
     }
   }
 }

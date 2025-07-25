@@ -19,6 +19,7 @@ import userMemoryRouter from './routes/userMemory.routes';
 import learningBlueprintsRouter from './routes/learning-blueprints.routes';
 import chatRouter from './routes/chat.routes';
 import { aiRagRouter } from './ai-rag/ai-rag.routes';
+import { initializeAIAPIClient, shutdownAIAPIClient, getAIAPIClient } from './services/ai-api-client.service';
 import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as swaggerUi from 'swagger-ui-express';
@@ -36,6 +37,37 @@ import { ChatMessageHistoryItemDto as ChatMessageContentDto } from './ai-rag/dto
 dotenv.config();
 
 const app = express();
+
+// Initialize AI API Client on application startup
+async function initializeApplication() {
+  try {
+    console.log('🚀 Initializing AI API client...');
+    await initializeAIAPIClient();
+    
+    // Perform health check
+    const client = getAIAPIClient();
+    if (client) {
+      const healthStatus = await client.healthCheck();
+      console.log(`✅ AI API client initialized successfully. Status: ${healthStatus.status}`);
+    }
+  } catch (error) {
+    console.error('❌ Failed to initialize AI API client:', error);
+    console.log('🔄 Application will continue without AI API integration');
+  }
+}
+
+// Setup graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('\n🔄 Received SIGINT. Graceful shutdown...');
+  await shutdownAIAPIClient();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('\n🔄 Received SIGTERM. Graceful shutdown...');
+  await shutdownAIAPIClient();
+  process.exit(0);
+});
 
 // Function to setup Swagger
 async function setupSwagger(expressApp: express.Express) {
@@ -150,6 +182,6 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   res.status(500).json({ message: 'Something broke!', error: err.message });
 });
 
-export { app };
+export { app, initializeApplication };
 export default app;
 

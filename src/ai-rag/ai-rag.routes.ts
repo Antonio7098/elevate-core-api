@@ -126,7 +126,7 @@ aiRagRouter.put(
     }
 
     try {
-      const updatedBlueprint = await aiRagService.updateLearningBlueprint(blueprintId, userId, dto);
+      const updatedBlueprint = await aiRagService.updateLearningBlueprint(blueprintId, dto, userId);
       if (!updatedBlueprint) {
         res.status(404).json({ message: 'Learning Blueprint not found or access denied.' });
         return;

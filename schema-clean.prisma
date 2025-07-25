@@ -1,0 +1,211 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  firstName String?
+  lastName  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  folders            Folder[]
+  questionSets       QuestionSet[]
+  userQuestionAnswers UserQuestionAnswer[]
+  userStudySessions  UserStudySession[]
+  learningBlueprints LearningBlueprint[]
+  userMemories       UserMemory[]
+  userPrimitiveProgress UserPrimitiveProgress[]
+  userCriterionMastery UserCriterionMastery[]
+
+  @@map("users")
+}
+
+model Folder {
+  id        Int      @id @default(autoincrement())
+  name      String
+  userId    Int
+  parentId  Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent       Folder?       @relation("FolderHierarchy", fields: [parentId], references: [id])
+  children     Folder[]      @relation("FolderHierarchy")
+  questionSets QuestionSet[]
+
+  @@map("folders")
+}
+
+model QuestionSet {
+  id             Int      @id @default(autoincrement())
+  title          String
+  userId         Int
+  folderId       Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  marksAvailable Int      @default(0)
+  isPinned       Boolean  @default(false)
+
+  // Relations
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder              Folder?              @relation(fields: [folderId], references: [id])
+  questions           Question[]
+  userQuestionAnswers UserQuestionAnswer[]
+  userStudySessions   UserStudySession[]
+
+  @@map("question_sets")
+}
+
+model Question {
+  id             Int     @id @default(autoincrement())
+  questionSetId  Int
+  questionText   String
+  answerText     String?
+  marksAvailable Int     @default(1)
+
+  // Relations
+  questionSet         QuestionSet          @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
+  userQuestionAnswers UserQuestionAnswer[]
+
+  @@map("questions")
+}
+
+model UserQuestionAnswer {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  questionSetId Int
+  questionId    Int
+  userAnswer    String?
+  isCorrect     Boolean?
+  marksAwarded  Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questionSet QuestionSet @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
+  question    Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@map("user_question_answers")
+}
+
+model UserStudySession {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  questionSetId Int
+  startedAt     DateTime @default(now())
+  completedAt   DateTime?
+  totalQuestions Int     @default(0)
+  correctAnswers Int     @default(0)
+  totalMarks     Int     @default(0)
+  marksAwarded   Int     @default(0)
+
+  // Relations
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questionSet QuestionSet @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
+
+  @@map("user_study_sessions")
+}
+
+model LearningBlueprint {
+  id            Int      @id @default(autoincrement())
+  sourceText    String
+  blueprintJson Json
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  userId        Int
+  sourceId      String?  // AI API UUID for vector database operations
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("learning_blueprints")
+}
+
+model UserMemory {
+  id          Int                @id @default(autoincrement())
+  userId      Int
+  memoryType  UserMemoryType
+  title       String
+  content     String
+  tags        String[]           @default([])
+  isArchived  Boolean            @default(false)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  priority    UserMemoryPriority @default(MEDIUM)
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_memories")
+}
+
+model UserPrimitiveProgress {
+  id                    Int      @id @default(autoincrement())
+  userId                Int
+  primitiveId           String   // Reference to the primitive in the blueprint JSON
+  blueprintId           Int      // Reference to the LearningBlueprint
+  masteryLevel          String   @default("NOT_STARTED") // NOT_STARTED, UNDERSTAND, USE, EXPLORE
+  lastReviewedAt        DateTime?
+  nextReviewAt          DateTime?
+  reviewCount           Int      @default(0)
+  successfulReviews     Int      @default(0)
+  difficultyMultiplier  Float    @default(1.0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, primitiveId, blueprintId])
+  @@map("user_primitive_progress")
+}
+
+model UserCriterionMastery {
+  id                    Int      @id @default(autoincrement())
+  userId                Int
+  criterionId           String   // Reference to the criterion in the blueprint JSON
+  primitiveId           String   // Reference to the parent primitive
+  blueprintId           Int      // Reference to the LearningBlueprint
+  isMastered            Boolean  @default(false)
+  masteredAt            DateTime?
+  lastAttemptedAt       DateTime?
+  attemptCount          Int      @default(0)
+  successfulAttempts    Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, criterionId, primitiveId, blueprintId])
+  @@map("user_criterion_mastery")
+}
+
+enum UserMemoryType {
+  INSIGHT
+  REFLECTION
+  GOAL
+  REMINDER
+  NOTE
+}
+
+enum UserMemoryPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}

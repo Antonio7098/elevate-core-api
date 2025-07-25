@@ -287,7 +287,7 @@ describe('AI RAG Routes - Learning Blueprints', () => {
   });
 
   describe('PUT /api/ai-rag/learning-blueprints/:blueprintId', () => {
-    let mockUpdateLearningBlueprint: jest.SpyInstance<Promise<LearningBlueprintResponseDto | null>, [blueprintId: number, userId: number, dto: UpdateLearningBlueprintDto]>;
+    let mockUpdateLearningBlueprint: jest.SpyInstance<Promise<LearningBlueprintResponseDto | null>, [blueprintId: number, dto: UpdateLearningBlueprintDto, userId: number]>;
 
     beforeEach(() => {
       mockUpdateLearningBlueprint = jest.spyOn(AiRAGService.prototype, 'updateLearningBlueprint');
@@ -318,7 +318,7 @@ describe('AI RAG Routes - Learning Blueprints', () => {
 
         expect(response.status).toBe(200);
         // Corrected parameter order for the spy assertion to match service: blueprintId, userId, dto
-        expect(mockUpdateLearningBlueprint).toHaveBeenCalledWith(createdBlueprintId as number, testUser.id as number, updateDto);
+        expect(mockUpdateLearningBlueprint).toHaveBeenCalledWith(createdBlueprintId as number, updateDto, testUser.id as number);
 
         const expectedCreatedAt = mockServiceResponse.createdAt!;
         const expectedUpdatedAt = mockServiceResponse.updatedAt!;

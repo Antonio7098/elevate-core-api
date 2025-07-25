@@ -6,11 +6,13 @@ import {
   GenerateNoteFromBlueprintDto,
   GenerateQuestionsFromBlueprintDto,
 } from '../dtos/ai-rag';
+import { AIAPIClientService } from './ai-api-client.service';
 
 // TODO: Move to environment variables
 const AI_SERVICE_URL = 'http://localhost:8001';
 
 class AiRAGService {
+  constructor(private aiApiClient: AIAPIClientService) {}
   async createLearningBlueprint(
     userId: number,
     dto: CreateLearningBlueprintDto,
@@ -32,6 +34,19 @@ class AiRAGService {
         blueprintJson,
       },
     });
+
+    // 3. Index the blueprint in the vector database
+    try {
+      await this.aiApiClient.indexBlueprint({
+        blueprint_id: newBlueprint.id.toString(),
+        blueprint_json: newBlueprint.blueprintJson as Record<string, any>,
+        force_reindex: false
+      });
+      console.log(`✅ Blueprint ${newBlueprint.id} indexed in vector database`);
+    } catch (error) {
+      console.error(`❌ Failed to index blueprint ${newBlueprint.id} in vector database:`, error);
+      // Don't throw here - blueprint creation should succeed even if indexing fails
+    }
 
     return newBlueprint;
   }
@@ -263,7 +278,7 @@ class AiRAGService {
 
     try {
       const response = await axios.post(
-        `${AI_SERVICE_URL}/chat/message`,
+        `${AI_SERVICE_URL}/api/v1/chat/message`,
         aiServicePayload,
       );
       return response.data;
@@ -278,4 +293,4 @@ class AiRAGService {
   }
 }
 
-export default new AiRAGService();
+export default AiRAGService;

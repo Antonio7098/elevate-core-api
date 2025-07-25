@@ -67,7 +67,7 @@ export class AiRAGController {
     @Body() updateLearningBlueprintDto: UpdateLearningBlueprintDto,
     @Req() req: RequestWithUser, // Assuming user ID will be available on req.user.userId
   ): Promise<LearningBlueprintResponseDto> {
-    const updatedBlueprint = await this.aiRagService.updateLearningBlueprint(blueprintId, req.user.userId, updateLearningBlueprintDto);
+    const updatedBlueprint = await this.aiRagService.updateLearningBlueprint(blueprintId, updateLearningBlueprintDto, req.user.userId);
     if (!updatedBlueprint) {
       throw new NotFoundException('Learning Blueprint not found or access denied for update.');
     }
