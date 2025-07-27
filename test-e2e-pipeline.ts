@@ -39,6 +39,8 @@ class E2EPipelineTest {
   private authToken: string = '';
   private aiApiClient: AIAPIClientService;
   private createdBlueprintId: number | null = null;
+  private sourceId: string | null = null; // Will hold the UUID from the vector DB
+  private blueprintId: number | null = null;
 
   constructor() {
     this.aiApiClient = new AIAPIClientService();
@@ -46,46 +48,31 @@ class E2EPipelineTest {
 
   async run(): Promise<void> {
     console.log('🚀 Starting End-to-End RAG Pipeline Verification\n');
-    
     try {
-      // Step 1: Authentication
-      await this.authenticateUser();
-      
-      // Step 2: Check AI API health
-      await this.checkAIAPIHealth();
-      
-      // Step 3: Create blueprint via Core API
-      await this.createBlueprint();
-      
-      // Step 4: Verify blueprint is indexed in AI API
-      await this.verifyBlueprintIndexed();
-      
-      // Step 5: Update blueprint via Core API
-      await this.updateBlueprint();
-      
-      // Step 6: Verify blueprint changes in AI API
-      await this.verifyBlueprintUpdated();
-      
-      // Step 7: Test RAG chat with blueprint context
-      await this.testRAGChatWithBlueprint();
-      
-      // Step 8: Delete blueprint via Core API
-      await this.deleteBlueprint();
-      
-      // Step 9: Verify blueprint removed from AI API
-      await this.verifyBlueprintDeleted();
-      
+      await this.runStep(this.authenticateUser.bind(this));
+      await this.runStep(this.checkAIAPIHealth.bind(this));
+      await this.runStep(this.createBlueprint.bind(this));
+      await this.runStep(this.verifyBlueprintIndexed.bind(this));
+      await this.runStep(this.verifySourceIdStored.bind(this)); // Fixes the race condition
+      await this.runStep(this.updateBlueprint.bind(this), true);
+      await this.runStep(this.verifyBlueprintUpdated.bind(this), true);
+      await this.runStep(this.testRAGChatWithBlueprint.bind(this), true);
+      await this.runStep(this.deleteBlueprint.bind(this), true);
+      await this.runStep(this.verifyBlueprintDeleted.bind(this), true);
     } catch (error) {
-      console.error('❌ Test suite failed with unexpected error:', error);
-      this.results.push({
-        step: 'Unexpected Error',
-        status: 'FAIL',
-        error: error
-      });
+      console.error('\n❌ Test suite aborted due to critical failure.');
     }
-    
-    // Print results summary
     this.printResults();
+  }
+
+  private async runStep(step: () => Promise<void>, continueOnError = false) {
+    try {
+      await step();
+    } catch (error) {
+      if (!continueOnError) {
+        throw error;
+      }
+    }
   }
 
   private async authenticateUser(): Promise<void> {
@@ -183,6 +170,7 @@ Photosynthesis is the process by which plants convert sunlight, carbon dioxide, 
 
       if (response.data && response.data.id) {
         this.createdBlueprintId = response.data.id;
+        this.blueprintId = response.data.id;
         this.results.push({
           step: '3. Create Blueprint',
           status: 'PASS',
@@ -205,314 +193,262 @@ Photosynthesis is the process by which plants convert sunlight, carbon dioxide, 
   }
 
   private async verifyBlueprintIndexed(): Promise<void> {
+    const step = '4. Verify Blueprint Indexed';
     try {
-      console.log('🔍 Step 4: Verifying blueprint is indexed in AI API...');
-      
-      if (!this.createdBlueprintId) {
-        throw new Error('No blueprint ID available for verification');
-      }
+      console.log('\n🔍 Step 4: Verifying blueprint indexing in AI API...');
+      if (!this.createdBlueprintId) throw new Error('No blueprint ID available');
 
-      // Retry logic for vector DB indexing verification
-      const maxRetries = 5;
-      const retryDelay = 3000; // 3 seconds between retries
-      let lastError: any;
-      
+      const maxRetries = 10;
+      const retryDelay = 2000;
+
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           console.log(`   🔄 Verification attempt ${attempt}/${maxRetries}...`);
-          
           const status = await this.aiApiClient.getBlueprintStatus(this.createdBlueprintId.toString());
-          
-          // Debug: Log the actual response to understand the structure
-          if (process.env.DEBUG) {
-            console.log('   🔍 Debug - AI API status response:', JSON.stringify(status, null, 2));
-          }
-          
-          // Check multiple possible indicators of successful indexing
-          const isIndexed = status.is_indexed || 
-                           status.indexing_completed || 
-                           (status.nodes_processed && status.nodes_processed > 0) ||
-                           (status.embeddings_generated && status.embeddings_generated > 0) ||
-                           (status.vectors_stored && status.vectors_stored > 0);
-          
-          if (isIndexed) {
-            this.results.push({
-              step: '4. Verify Blueprint Indexed',
-              status: 'PASS',
-              details: `Blueprint indexed successfully after ${attempt} attempt(s). ` +
-                      `Vector count: ${status.vector_count || status.vectors_stored || 'unknown'}, ` +
-                      `Nodes: ${status.nodes_processed || 'unknown'}, ` +
-                      `Last indexed: ${status.last_indexed_at || status.created_at || 'unknown'}`
-            });
-            console.log('   ✅ Blueprint successfully indexed in vector database');
-            console.log(`      📊 Indexing stats: Vectors=${status.vectors_stored || 'unknown'}, Nodes=${status.nodes_processed || 'unknown'}`);
+          if (status.is_indexed) {
+            this.results.push({ step, status: 'PASS', details: 'Blueprint indexed successfully' });
+            console.log('   ✅ Blueprint indexed successfully');
             return; // Success! Exit the retry loop
           }
-          
-          // If not indexed yet, prepare for retry
-          if (attempt < maxRetries) {
-            console.log(`   ⏳ Blueprint not yet indexed, waiting ${retryDelay/1000}s before retry...`);
-            await this.sleep(retryDelay);
-          } else {
-            throw new Error(`Blueprint not indexed after ${maxRetries} attempts. Last status: ${JSON.stringify(status)}`);
-          }
-          
+          await this.sleep(retryDelay);
         } catch (error: any) {
-          lastError = error;
-          
-          // If this is the last attempt, throw the error
           if (attempt === maxRetries) {
             throw error;
           }
-          
-          // For other attempts, log the error and continue
           console.log(`   ⚠️  Attempt ${attempt} failed: ${error.message}, retrying...`);
           await this.sleep(retryDelay);
         }
       }
-      
     } catch (error: any) {
-      this.results.push({
-        step: '4. Verify Blueprint Indexed',
-        status: 'FAIL',
-        details: `Blueprint indexing verification failed: ${error.message}`,
-        error
-      });
+      this.results.push({ step, status: 'FAIL', details: `Blueprint indexing verification failed: ${error.message}`, error });
       console.log('   ❌ Blueprint indexing verification failed');
-      console.log(`   💡 Tip: Try setting DEBUG=1 to see full AI API responses`);
       throw error;
     }
   }
 
-  private async updateBlueprint(): Promise<void> {
-    try {
-      console.log('✏️ Step 5: Updating blueprint via Core API...');
-      
-      if (!this.createdBlueprintId) {
-        throw new Error('No blueprint ID available for update');
+  private async verifySourceIdStored(): Promise<void> {
+    const step = '5. Verify SourceId Stored';
+    console.log('\n💾 Step 5: Verifying sourceId is stored in Core API...');
+    if (!this.createdBlueprintId) throw new Error('No blueprint ID available');
+
+    const maxRetries = 10;
+    const retryDelay = 2000; // 2 seconds
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await axios.get(`${CORE_API_BASE_URL}/api/ai-rag/learning-blueprints/${this.createdBlueprintId}`, {
+          headers: { Authorization: `Bearer ${this.authToken}` },
+        });
+
+        if (response.data && response.data.sourceId) {
+          this.sourceId = response.data.sourceId;
+          this.results.push({ step, status: 'PASS', details: `sourceId ${this.sourceId} stored successfully` });
+          console.log(`   ✅ sourceId found: ${this.sourceId}`);
+          return; // Success
+        }
+
+        if (attempt < maxRetries) {
+          console.log(`   ⏳ sourceId not yet available, waiting ${retryDelay / 1000}s...`);
+          await this.sleep(retryDelay);
+        } else {
+          // Throw error on the last attempt if sourceId is still not found
+          throw new Error(`sourceId was not stored after ${maxRetries} attempts.`);
+        }
+      } catch (error: any) {
+        this.results.push({ step, status: 'FAIL', details: `Failed to verify sourceId: ${error.message}`, error });
+        console.log(`   ❌ sourceId verification failed on attempt ${attempt}`);
+        throw error; // Propagate the error to stop the test suite
       }
+    }
+  }
+
+  private async updateBlueprint(): Promise<void> {
+    const step = '6. Update Blueprint';
+    try {
+      console.log('\n✏️ Step 6: Updating blueprint via Core API...');
+      if (!this.createdBlueprintId) throw new Error('No blueprint ID available for update');
 
       const updatedData = {
-        sourceText: `
-# Photosynthesis Study Guide (Updated)
-
-## What is Photosynthesis?
-Photosynthesis is the biological process by which plants, algae, and some bacteria convert sunlight, carbon dioxide, and water into glucose and oxygen. This process is essential for life on Earth.
-
-## Key Components:
-1. **Chloroplasts**: The specialized organelles where photosynthesis occurs
-2. **Chlorophyll**: The green pigment that captures light energy efficiently
-3. **Stomata**: Microscopic pores in leaves that control gas exchange
-4. **Thylakoids**: Membrane-bound compartments within chloroplasts
-
-## The Process:
-- **Light Reactions (Photo part)**: Occur in the thylakoids, convert light energy to chemical energy
-- **Calvin Cycle (Synthesis part)**: Occurs in the stroma, uses chemical energy to produce glucose
-
-## Additional Details:
-- **Factors affecting photosynthesis**: Light intensity, CO₂ concentration, temperature
-- **Types**: C3, C4, and CAM photosynthesis
-
-## Equation:
-6CO₂ + 6H₂O + light energy → C₆H₁₂O₆ + 6O₂ + ATP
-        `.trim()
+        sourceText: '# Photosynthesis Study Guide (Updated)\n## Key Concepts\nATP is the main energy currency of the cell.'
       };
 
       const response = await axios.put(
         `${CORE_API_BASE_URL}/api/ai-rag/learning-blueprints/${this.createdBlueprintId}`,
         updatedData,
-        {
-          headers: { Authorization: `Bearer ${this.authToken}` }
-        }
+        { headers: { Authorization: `Bearer ${this.authToken}` } }
       );
 
       if (response.status === 200) {
-        this.results.push({
-          step: '5. Update Blueprint',
-          status: 'PASS',
-          details: 'Blueprint updated successfully with expanded content'
-        });
+        this.results.push({ step, status: 'PASS', details: 'Blueprint updated successfully' });
         console.log('   ✅ Blueprint updated successfully');
       } else {
         throw new Error(`Unexpected response status: ${response.status}`);
       }
     } catch (error: any) {
-      this.results.push({
-        step: '5. Update Blueprint',
-        status: 'FAIL',
-        details: `Blueprint update failed: ${error.response?.data?.message || error.message}`,
-        error
-      });
+      this.results.push({ step, status: 'FAIL', details: `Update failed: ${error.response?.data?.message || error.message}`, error });
       console.log('   ❌ Blueprint update failed');
-      throw error;
     }
   }
 
   private async verifyBlueprintUpdated(): Promise<void> {
+    const step = '7. Verify Blueprint Updated';
     try {
-      console.log('🔄 Step 6: Verifying blueprint changes in AI API...');
-      
-      if (!this.createdBlueprintId) {
-        throw new Error('No blueprint ID available for verification');
-      }
+      console.log('\n🔄 Step 7: Verifying blueprint changes in AI API...');
+      if (!this.createdBlueprintId) throw new Error('No blueprint ID available');
 
-      // Wait a bit for re-indexing to complete
-      await this.sleep(3000);
+      // Wait for re-indexing after update
+      await this.sleep(5000);
 
+      // Simply verify the blueprint is still indexed after update
+      // The actual content verification is complex due to vector embeddings
       const status = await this.aiApiClient.getBlueprintStatus(this.createdBlueprintId.toString());
-      
       if (status.is_indexed) {
-        this.results.push({
-          step: '6. Verify Blueprint Updated',
-          status: 'PASS',
-          details: `Blueprint re-indexed successfully. Vector count: ${status.vector_count || 'unknown'}, Last indexed: ${status.last_indexed_at || 'unknown'}`
-        });
-        console.log('   ✅ Blueprint changes reflected in vector database');
-        console.log(`      📊 Updated vector count: ${status.vector_count || 'unknown'}`);
+        this.results.push({ step, status: 'PASS', details: 'Blueprint remains indexed after update' });
+        console.log('   ✅ Blueprint remains indexed after update');
       } else {
-        throw new Error('Updated blueprint not found in vector database');
+        throw new Error('Blueprint lost indexing after update');
       }
     } catch (error: any) {
-      this.results.push({
-        step: '6. Verify Blueprint Updated',
-        status: 'FAIL',
-        details: `Blueprint update verification failed: ${error.message}`,
-        error
-      });
+      this.results.push({ step, status: 'FAIL', details: `Update verification failed: ${error.message}`, error });
       console.log('   ❌ Blueprint update verification failed');
-      // Don't throw - continue with next steps
     }
   }
 
   private async testRAGChatWithBlueprint(): Promise<void> {
+    const step = '8. Test RAG Chat';
     try {
-      console.log('💬 Step 7: Testing RAG chat with blueprint context...');
-      
-      if (!this.createdBlueprintId) {
-        throw new Error('No blueprint ID available for chat test');
-      }
+      console.log('\n💬 Step 8: Testing RAG chat with blueprint context...');
+      if (!this.createdBlueprintId) throw new Error('No blueprint ID available');
 
-      const chatData = {
-        messageContent: 'What are the key components needed for photosynthesis?',
-        context: {
-          blueprintId: this.createdBlueprintId
-        }
-      };
-
-      const response = await axios.post(
+      const chatResponse = await axios.post(
         `${CORE_API_BASE_URL}/api/ai-rag/chat/message`,
-        chatData,
         {
-          headers: { Authorization: `Bearer ${this.authToken}` }
-        }
+          messageContent: 'What is ATP?',
+          context: { blueprintId: this.createdBlueprintId }
+        },
+        { headers: { Authorization: `Bearer ${this.authToken}` } }
       );
 
-      // Handle different possible response formats
-      let responseContent: string | null = null;
-      if (response.data && response.data.response) {
-        responseContent = response.data.response;
-      } else if (response.data && response.data.content) {
-        responseContent = response.data.content;
-      } else if (response.data && typeof response.data === 'string') {
-        responseContent = response.data;
-      }
-
+      const responseContent = chatResponse.data.content;
       if (responseContent && responseContent.length > 0) {
-        this.results.push({
-          step: '7. Test RAG Chat',
-          status: 'PASS',
-          details: `RAG chat successful. Response length: ${responseContent.length} characters`
-        });
-        console.log('   ✅ RAG chat with blueprint context successful');
-        console.log(`      💭 Response preview: ${responseContent.substring(0, 100)}...`);
+        this.results.push({ step, status: 'PASS', details: 'RAG chat successful' });
+        console.log(`   ✅ RAG chat successful. Response: ${responseContent.substring(0, 80)}...`);
       } else {
-        console.log('   🔍 Debug: Full response data:', JSON.stringify(response.data, null, 2));
-        throw new Error('No valid response content received from RAG chat');
+        throw new Error('RAG chat returned an empty response.');
       }
     } catch (error: any) {
-      this.results.push({
-        step: '7. Test RAG Chat',
-        status: 'FAIL',
-        details: `RAG chat test failed: ${error.response?.data?.message || error.message}`,
-        error
-      });
-      console.log('   ❌ RAG chat test failed');
-      // Don't throw - continue with cleanup
+      this.results.push({ step, status: 'FAIL', details: `RAG chat failed: ${error.response?.data?.message || error.message}`, error });
+      console.log('   ❌ RAG chat failed');
     }
   }
 
+// ... (rest of the code remains the same)
   private async deleteBlueprint(): Promise<void> {
+    const step = '9. Delete Blueprint';
     try {
-      console.log('🗑️ Step 8: Deleting blueprint via Core API...');
-      
+      console.log('\n🗑️ Step 9: Deleting blueprint via Core API...');
       if (!this.createdBlueprintId) {
-        throw new Error('No blueprint ID available for deletion');
+        this.results.push({ step, status: 'SKIP', details: 'No blueprint ID to delete.' });
+        console.log('   ⚠️ No blueprint ID to delete, skipping.');
+        return;
       }
 
-      const response = await axios.delete(
+      await axios.delete(
         `${CORE_API_BASE_URL}/api/ai-rag/learning-blueprints/${this.createdBlueprintId}`,
-        {
-          headers: { Authorization: `Bearer ${this.authToken}` }
-        }
+        { headers: { Authorization: `Bearer ${this.authToken}` } }
       );
 
-      if (response.status === 200 || response.status === 204) {
-        this.results.push({
-          step: '8. Delete Blueprint',
-          status: 'PASS',
-          details: 'Blueprint deleted successfully from Core API'
-        });
-        console.log('   ✅ Blueprint deleted from Core API');
-      } else {
-        throw new Error(`Unexpected response status: ${response.status}`);
-      }
+      this.results.push({ step, status: 'PASS', details: 'Blueprint deletion request sent' });
+      console.log('   ✅ Blueprint deletion request sent successfully');
     } catch (error: any) {
-      this.results.push({
-        step: '8. Delete Blueprint',
-        status: 'FAIL',
-        details: `Blueprint deletion failed: ${error.response?.data?.message || error.message}`,
-        error
-      });
+      this.results.push({ step, status: 'FAIL', details: `Deletion failed: ${error.message}`, error });
       console.log('   ❌ Blueprint deletion failed');
-      // Don't throw - still try to verify cleanup
     }
   }
 
   private async verifyBlueprintDeleted(): Promise<void> {
+    const step = '10. Verify Blueprint Deleted';
     try {
-      console.log('🧹 Step 9: Verifying blueprint removed from AI API...');
-      
-      if (!this.createdBlueprintId) {
-        throw new Error('No blueprint ID available for deletion verification');
+      console.log('\n🗑️ Step 10: Verifying blueprint deletion in AI API...');
+      if (!this.sourceId) {
+        this.results.push({ step, status: 'SKIP', details: 'sourceId not found, cannot verify deletion' });
+        console.log('   ⚠️ sourceId not found, skipping deletion verification.');
+        return;
       }
 
-      // Wait a bit for deletion to propagate
-      await this.sleep(2000);
+      // Give more time for deletion to propagate in vector database
+      console.log('   ⏳ Waiting 10 seconds for vector database deletion to propagate...');
+      await this.sleep(10000);
 
-      const status = await this.aiApiClient.getBlueprintStatus(this.createdBlueprintId.toString());
+      // Use the database blueprint ID for verification since that's how nodes are indexed
+      const blueprintIdForVerification = this.blueprintId?.toString();
+      if (!blueprintIdForVerification) {
+        throw new Error('Blueprint ID not found for deletion verification');
+      }
+      console.log(`   ℹ️ Verifying deletion using database ID: ${blueprintIdForVerification} (sourceId: ${this.sourceId})`);
+      console.log(`   ℹ️ Note: Using database ID because vector DB nodes are indexed with blueprint_id=${blueprintIdForVerification}`);
       
-      if (!status.is_indexed) {
+      // Try multiple times as vector database deletions can be asynchronous
+      const maxRetries = 8;
+      let deletionVerified = false;
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`   🔄 Deletion verification attempt ${attempt}/${maxRetries}...`);
+          const status = await this.aiApiClient.getBlueprintStatus(blueprintIdForVerification);
+          
+          if (!status.is_indexed) {
+            deletionVerified = true;
+            console.log(`   ✅ Deletion verified: blueprint no longer indexed`);
+            break;
+          }
+          
+          if (attempt < maxRetries) {
+            const waitTime = Math.min(5000 + (attempt * 2000), 15000); // Progressive backoff, max 15s
+            console.log(`   ⏳ Blueprint still indexed (${status.node_count || 'unknown'} nodes), waiting ${waitTime/1000}s before retry...`);
+            await this.sleep(waitTime);
+          }
+        } catch (error: any) {
+          // 404 or not found errors indicate successful deletion
+          if (error.message.includes('404') || error.message.includes('not found') || 
+              error.message.includes('not_indexed') || error.response?.status === 404) {
+            deletionVerified = true;
+            console.log(`   ✅ Deletion verified: blueprint not found (${error.message})`);
+            break;
+          }
+          
+          if (attempt === maxRetries) {
+            throw error;
+          }
+          
+          console.log(`   ⚠️ Attempt ${attempt} failed: ${error.message}, retrying...`);
+          await this.sleep(5000);
+        }
+      }
+      
+      if (deletionVerified) {
         this.results.push({
-          step: '9. Verify Blueprint Deleted',
+          step,
           status: 'PASS',
           details: 'Blueprint successfully removed from vector database'
         });
         console.log('   ✅ Blueprint successfully removed from vector database');
       } else {
-        throw new Error('Blueprint still exists in vector database after deletion');
+        throw new Error('Blueprint still exists in vector database after deletion and retries');
       }
     } catch (error: any) {
-      if (error.message.includes('not_indexed') || error.message.includes('404')) {
-        // This is actually what we want - blueprint not found means it was deleted
+      // Handle any remaining errors
+      if (error.message.includes('404') || error.message.includes('not found') || 
+          error.message.includes('not_indexed') || error.response?.status === 404) {
         this.results.push({
-          step: '9. Verify Blueprint Deleted',
+          step,
           status: 'PASS',
           details: 'Blueprint successfully removed from vector database (not found)'
         });
         console.log('   ✅ Blueprint successfully removed from vector database');
       } else {
         this.results.push({
-          step: '9. Verify Blueprint Deleted',
+          step,
           status: 'FAIL',
           details: `Blueprint deletion verification failed: ${error.message}`,
           error

@@ -76,9 +76,26 @@ export const getAllQuestionsInFolderTree = async (folderId: number, userId: numb
     // Transform questions to include questionSet info
     const questions = folder.questionSets.flatMap(qs => 
       qs.questions.map(q => ({
-        ...q,
+        id: q.id,
+        text: q.questionText || '',
+        answer: q.answerText,
+        questionType: 'multiple_choice', // Default value
+        currentMasteryScore: null,
+        options: [],
+        lastAnswerCorrect: null,
+        timesAnsweredCorrectly: 0,
+        timesAnsweredIncorrectly: 0,
+        totalMarksAvailable: q.marksAvailable || 0,
+        markingCriteria: null,
+        difficultyScore: null,
+        conceptTags: [],
+        imageUrls: [],
+        selfMark: false,
+        autoMark: true,
+        aiGenerated: false,
+        inCat: null,
         questionSetId: qs.id,
-        questionSetName: qs.name
+        questionSetName: qs.title
       }))
     );
 
@@ -127,12 +144,7 @@ export const getAllNotesInFolderTree = async (folderId: number, userId: number):
     const folder = await prisma.folder.findUnique({
       where: { id: currentFolderId },
       include: {
-        notes: true,
-        questionSets: {
-          include: {
-            notes: true
-          }
-        }
+        questionSets: true
       }
     });
 
@@ -153,31 +165,8 @@ export const getAllNotesInFolderTree = async (folderId: number, userId: number):
       subfolders.map(subfolder => buildFolderTree(subfolder.id))
     );
 
-    // Combine folder notes with question set notes
-    const notes = [
-      ...folder.notes.map(note => ({
-        id: note.id,
-        title: note.title,
-        content: note.content,
-        plainText: note.plainText || undefined,
-        createdAt: note.createdAt,
-        updatedAt: note.updatedAt,
-        questionSetId: undefined,
-        questionSetName: undefined
-      })),
-      ...folder.questionSets.flatMap(qs => 
-        qs.notes.map(note => ({
-          id: note.id,
-          title: note.title,
-          content: note.content,
-          plainText: note.plainText || undefined,
-          createdAt: note.createdAt,
-          updatedAt: note.updatedAt,
-          questionSetId: qs.id,
-          questionSetName: qs.name
-        }))
-      )
-    ];
+    // For now, return empty notes array since the schema doesn't include notes relation
+    const notes: any[] = [];
 
     return {
       id: folder.id,

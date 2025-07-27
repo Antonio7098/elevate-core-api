@@ -42,11 +42,6 @@ export const getQuestionSetsByFolder = async (req: AuthRequest, res: Response): 
       },
       include: {
         questions: true,
-        notes: {
-          orderBy: {
-            updatedAt: 'desc',
-          },
-        },
       },
       orderBy: {
         updatedAt: 'desc',
@@ -94,11 +89,6 @@ export const getQuestionSetById = async (req: AuthRequest, res: Response): Promi
       },
       include: {
         questions: true,
-        notes: {
-          orderBy: {
-            updatedAt: 'desc',
-          },
-        },
       },
     });
 
@@ -128,7 +118,7 @@ export const getQuestionSetById = async (req: AuthRequest, res: Response): Promi
  */
 export const createQuestionSet = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   const { folderId } = req.params;
-  const { name } = req.body;
+  const { title } = req.body;
   const userId = req.user?.userId;
 
   if (!userId) {
@@ -158,9 +148,9 @@ export const createQuestionSet = async (req: AuthRequest, res: Response, next: N
     // Create the new question set
     const newQuestionSet = await prisma.questionSet.create({
       data: {
-        name,
+        title,
         folderId: parseInt(folderId),
-        nextReviewAt: new Date(), // Set nextReviewAt to today by default
+        userId: userId, // Add required userId field
       },
     });
 
@@ -185,7 +175,7 @@ export const createQuestionSet = async (req: AuthRequest, res: Response, next: N
  */
 export const updateQuestionSet = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   const { folderId, id: setId } = req.params;
-  const { name } = req.body;
+  const { title } = req.body;
   const userId = req.user?.userId;
 
   if (!userId) {
@@ -221,7 +211,7 @@ export const updateQuestionSet = async (req: AuthRequest, res: Response, next: N
         id: parseInt(setId),
       },
       data: {
-        name,
+        title,
       },
     });
 

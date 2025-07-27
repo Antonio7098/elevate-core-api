@@ -8,17 +8,17 @@ export interface AuthRequest extends Request {
 }
 
 export const protect = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  // console.log('🔑 [Auth] All Request Headers:', JSON.stringify(req.headers, null, 2)); // Log all headers
-  // console.log(`🔒 [Auth] Protecting route: ${req.method} ${req.originalUrl}`);
+  console.log('🔑 [Auth] PROTECT MIDDLEWARE: All Request Headers:', JSON.stringify(req.headers, null, 2)); // Log all headers
+  console.log(`🔒 [Auth] PROTECT MIDDLEWARE: Protecting route: ${req.method} ${req.originalUrl}`);
   const authHeader = req.headers['authorization'];
   const testUserIdHeader = req.headers['x-test-user-id'];
-  // console.log(`🔑 [Auth] Authorization header value: ${authHeader}`);
-  // console.log(`🔑 [Auth] Type of authHeader: ${typeof authHeader}`);
+  console.log(`🔑 [Auth] PROTECT MIDDLEWARE: Authorization header value: ${authHeader}`);
+  console.log(`🔑 [Auth] PROTECT MIDDLEWARE: Type of authHeader: ${typeof authHeader}`);
   if (typeof authHeader === 'string') {
-    // console.log(`🔑 [Auth] Length of authHeader: ${authHeader.length}`);
+    console.log(`🔑 [Auth] PROTECT MIDDLEWARE: Length of authHeader: ${authHeader.length}`);
   }
   const cascadeTestHeader = req.headers['x-cascade-test'];
-  // console.log(`🧪 [Auth] X-Cascade-Test header: ${cascadeTestHeader || 'None'}`);
+  console.log(`🧪 [Auth] PROTECT MIDDLEWARE: X-Cascade-Test header: ${cascadeTestHeader || 'None'}`);
 
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.split(' ')[1];

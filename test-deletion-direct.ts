@@ -12,7 +12,7 @@ async function testDirectDeletion() {
     console.log('\n1. Creating test user...');
     const user = await prisma.user.create({
       data: {
-        email: 'test-deletion@example.com',
+        email: `test-deletion-${Date.now()}@example.com`,
         name: 'Test User for Deletion',
         password: 'test-password'
       }

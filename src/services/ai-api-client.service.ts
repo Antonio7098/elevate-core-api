@@ -46,6 +46,7 @@ export interface IndexingResponse extends AIAPIResponse {
   blueprint_id: string;
   indexed_at: string;
   vector_count?: number;
+  source_id?: string;
 }
 
 export interface UpdateResponse extends AIAPIResponse {
@@ -54,9 +55,12 @@ export interface UpdateResponse extends AIAPIResponse {
   strategy_used: string;
 }
 
-export interface DeleteResponse extends AIAPIResponse {
+export interface DeleteResponse {
+  status: string;
+  message: string;
   deleted_at: string;
-  vectors_removed?: number;
+  nodes_deleted?: number;
+  nodes_remaining?: number;
 }
 
 export interface StatusResponse extends AIAPIResponse {
@@ -142,7 +146,9 @@ export class AIAPIClientService {
 
     // Add request interceptor for logging
     this.axiosInstance.interceptors.request.use((config) => {
-      this.logger.debug(`Making AI API request: ${config.method?.toUpperCase()} ${config.url}`);
+      const timeout = this.getDynamicTimeout(config.url);
+      this.logger.debug(`Making AI API request: ${config.method?.toUpperCase()} ${config.url} with timeout ${timeout}ms`);
+      config.timeout = timeout;
       return config;
     });
 
@@ -210,7 +216,8 @@ export class AIAPIClientService {
    */
   async indexBlueprint(payload: BlueprintIndexRequest): Promise<IndexingResponse> {
     try {
-      const response = await this.axiosInstance.post('/api/v1/index-blueprint', payload);
+      // Use a longer timeout for potentially large indexing operations (default axios timeout may be too low)
+    const response = await this.axiosInstance.post('/api/v1/index-blueprint', payload, { timeout: 120000 });
       const result = response.data as IndexingResponse;
       
       this.logger.log(`Successfully indexed blueprint ${payload.blueprint_id}`);
@@ -284,11 +291,25 @@ export class AIAPIClientService {
    */
   async deleteBlueprint(blueprintId: string): Promise<DeleteResponse> {
     try {
-      const response = await this.axiosInstance.delete(`/api/v1/index-blueprint/${blueprintId}`);
-      const result = response.data as DeleteResponse;
+      // Use the correct lifecycle endpoint for deletion
+      const response = await this.axiosInstance.delete(`/api/v1/blueprints/${blueprintId}`);
+      const result = response.data;
       
-      this.logger.log(`Successfully deleted blueprint ${blueprintId} from AI API`);
-      return result;
+      this.logger.log(`Successfully submitted deletion request for blueprint ${blueprintId}`);
+      
+      // The AI API deletion includes verification logic, but we should wait a bit more
+      // for vector database consistency
+      if (result.deletion_completed === false && result.nodes_remaining > 0) {
+        this.logger.warn(`Blueprint ${blueprintId} deletion may not be fully complete. ${result.nodes_remaining} nodes remaining.`);
+      }
+      
+      return {
+        status: result.deletion_completed ? 'deleted' : 'partially_deleted',
+        message: `Deleted ${result.nodes_deleted || 0} nodes for blueprint ${blueprintId}`,
+        deleted_at: new Date().toISOString(),
+        nodes_deleted: result.nodes_deleted || 0,
+        nodes_remaining: result.nodes_remaining || 0
+      };
 
     } catch (error: any) {
       // Handle 404 gracefully - blueprint might already be deleted
@@ -506,6 +527,18 @@ export class AIAPIClientService {
   /**
    * Extract error message from axios error or fallback
    */
+  private getDynamicTimeout(url: string): number {
+    const longTimeoutEndpoints = [
+      '/deconstruct',
+      '/index'
+    ];
+
+    if (longTimeoutEndpoints.some(endpoint => url.includes(endpoint))) {
+      return 120000; // 120 seconds for long-running tasks
+    }
+    return this.timeout; // Default timeout
+  }
+
   private extractErrorMessage(error: any, fallback: string): string {
     if (error.response?.data?.detail) {
       return error.response.data.detail;

@@ -16,7 +16,7 @@ export interface QuestionSetStatsDetails {
   understandScore: number;
   useScore: number;
   exploreScore: number;
-  currentTotalMasteryScore: number;
+  // currentTotalMasteryScore: number; // Field removed from schema
 }
 
 export const fetchQuestionSetStatsDetails = async (
@@ -85,14 +85,14 @@ export const fetchQuestionSetStatsDetails = async (
     understandScore: questionSet.understandScore,
     useScore: questionSet.useScore,
     exploreScore: questionSet.exploreScore,
-    currentTotalMasteryScore: questionSet.currentTotalMasteryScore,
+    // currentTotalMasteryScore: questionSet.currentTotalMasteryScore,
   };
 };
 
 export interface QuestionSetSummary {
   id: number;
   name: string;
-  currentTotalMasteryScore: number | null;
+  // currentTotalMasteryScore: number | null; // Field removed from schema
   nextReviewAt: Date | null;
 }
 
@@ -172,12 +172,12 @@ export const getOverallStats = async (userId: number): Promise<OverallStats> => 
   const now = new Date();
 
   allQuestionSets.forEach(qs => {
-    totalMasteryScoreSum += qs.currentTotalMasteryScore || 0;
+    // totalMasteryScoreSum += qs.currentTotalMasteryScore || 0; // Field removed from schema
     totalUnderstandScoreSum += qs.understandScore || 0;
     totalUseScoreSum += qs.useScore || 0;
     totalExploreScoreSum += qs.exploreScore || 0;
 
-    const mastery = qs.currentTotalMasteryScore || 0;
+    // const mastery = qs.currentTotalMasteryScore || 0; // Field removed from schema
     if (mastery >= 90) {
       masteredSets++;
     } else if (mastery > 0 && mastery < 90) {
@@ -270,7 +270,7 @@ export const fetchFolderStatsDetails = async (
     select: {
       id: true,
       name: true,
-      currentTotalMasteryScore: true,
+      // currentTotalMasteryScore: true, // Field removed from schema
       nextReviewAt: true,
     },
   });

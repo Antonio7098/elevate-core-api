@@ -43,7 +43,7 @@ export const createNote = async (req: AuthRequest, res: Response): Promise<void>
       data: {
         title,
         content,
-        plainText,
+        // plainText field doesn't exist in schema
         userId,
         folderId: folderId || null,
         questionSetId: questionSetId || null,
@@ -209,7 +209,7 @@ export const updateNote = async (req: AuthRequest, res: Response): Promise<void>
       data: {
         title,
         content,
-        plainText,
+        // plainText field doesn't exist in schema
         folderId: folderId || null,
         questionSetId: questionSetId || null,
       },

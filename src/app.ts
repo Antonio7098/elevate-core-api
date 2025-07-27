@@ -7,8 +7,8 @@ import { authRouter } from './routes/auth';
 import userRouter from './routes/user.routes';
 import folderRouter from './routes/folder.routes';
 import aiRouter from './routes/ai.routes';
-import reviewRouter from './routes/review.routes';
-import standaloneQuestionSetRouter from './routes/standalone-questionset.routes';
+// import reviewRouter from './routes/review.routes';
+// import standaloneQuestionSetRouter from './routes/standalone-questionset.routes';
 import standaloneQuestionRouter from './routes/standalone-question.routes';
 import dashboardRouter from './routes/dashboard.routes';
 import todaysTasksRoutes from './routes/todaysTasks.routes';
@@ -147,10 +147,12 @@ import { protect, AuthRequest } from './middleware/auth.middleware';
 // Public auth routes
 app.use('/api/auth', authRouter);
 
-// Apply protect middleware to all subsequent /api routes
-// This middleware will check for JWT and populate req.user if valid
-// or send 401 if not.
+// Apply protect middleware to all subsequent /api routes EXCEPT auth
 app.use('/api', (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  // Skip authentication for auth routes
+  if (req.path.startsWith('/api/auth/')) {
+    return next();
+  }
   // Type assertion for req to include 'user' property potentially added by 'protect'
   protect(req as AuthRequest, res, next);
 });
@@ -160,7 +162,7 @@ app.use('/api', (req: express.Request, res: express.Response, next: express.Next
 app.use('/api/users', userRouter);
 app.use('/api/folders', folderRouter);
 app.use('/api/ai', aiRouter);
-app.use('/api/reviews', reviewRouter);
+// app.use('/api/reviews', reviewRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/todays-tasks', todaysTasksRoutes);
 app.use('/api/stats', statsRouter);
@@ -172,7 +174,7 @@ app.use('/api/chat', chatRouter);
 app.use('/api/ai-rag', aiRagRouter);
 
 // Additional standalone routes for direct access
-app.use('/api/questionsets', standaloneQuestionSetRouter);
+// app.use('/api/question-sets', standaloneQuestionSetRouter);
 app.use('/api/questions', standaloneQuestionRouter);
 
 // Error handling middleware

@@ -9,7 +9,7 @@ import {
 import { AIAPIClientService } from './ai-api-client.service';
 
 // TODO: Move to environment variables
-const AI_SERVICE_URL = 'http://localhost:8001';
+const AI_SERVICE_URL = process.env.AI_API_BASE_URL || 'http://localhost:8000';
 
 class AiRAGService {
   constructor(private aiApiClient: AIAPIClientService) {}
@@ -20,11 +20,32 @@ class AiRAGService {
     const { sourceText } = dto;
 
     // 1. Call AI Service to deconstruct the source text
-    const response = await axios.post(`${AI_SERVICE_URL}/deconstruct`, {
-      source_text: sourceText,
-    });
-
-    const blueprintJson = response.data.blueprint_json;
+    console.log('=== SERVICES AI RAG: BLUEPRINT CREATION STARTED ===');
+    console.log(`Calling AI service at ${AI_SERVICE_URL}/api/v1/deconstruct`);
+    console.log(`Using API key: ${process.env.AI_SERVICE_API_KEY ? '***' + process.env.AI_SERVICE_API_KEY.slice(-4) : 'undefined'}`);
+  
+    let blueprintJson: any;
+    try {
+      const response = await axios.post(`${AI_SERVICE_URL}/api/v1/deconstruct`, {
+        source_text: sourceText,
+      }, {
+        headers: {
+          'Authorization': `Bearer ${process.env.AI_SERVICE_API_KEY || 'test_api_key_123'}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      blueprintJson = response.data.blueprint_json;
+      console.log('✅ AI service /deconstruct call successful');
+    } catch (error: any) {
+      console.error('❌ AI service /deconstruct call failed:');
+      console.error('Error message:', error.message);
+      if (error.response) {
+        console.error('Status:', error.response.status);
+        console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+      }
+      throw new Error('Failed to deconstruct text via AI service.');
+    }
 
     // 2. Save the new LearningBlueprint to the database
     const newBlueprint = await prisma.learningBlueprint.create({
@@ -35,14 +56,33 @@ class AiRAGService {
       },
     });
 
-    // 3. Index the blueprint in the vector database
+    // 3. Index the blueprint in the vector database and store sourceId
     try {
-      await this.aiApiClient.indexBlueprint({
+      const indexResponse = await this.aiApiClient.indexBlueprint({
         blueprint_id: newBlueprint.id.toString(),
         blueprint_json: newBlueprint.blueprintJson as Record<string, any>,
         force_reindex: false
       });
       console.log(`✅ Blueprint ${newBlueprint.id} indexed in vector database`);
+      
+      // Extract and store sourceId
+      let sourceId = indexResponse.source_id;
+      
+      // If not in the response, try to get it from the blueprintJson
+      if (!sourceId && newBlueprint.blueprintJson && (newBlueprint.blueprintJson as any).source_id) {
+        sourceId = (newBlueprint.blueprintJson as any).source_id;
+        console.log(`Using sourceId from blueprintJson: ${sourceId}`);
+      }
+      
+      if (sourceId) {
+        await prisma.learningBlueprint.update({
+          where: { id: newBlueprint.id },
+          data: { sourceId: sourceId }
+        });
+        console.log(`✅ Stored sourceId ${sourceId} for blueprint ${newBlueprint.id}`);
+      } else {
+        console.warn(`⚠️ No sourceId found for blueprint ${newBlueprint.id}`);
+      }
     } catch (error) {
       console.error(`❌ Failed to index blueprint ${newBlueprint.id} in vector database:`, error);
       // Don't throw here - blueprint creation should succeed even if indexing fails

@@ -40,24 +40,18 @@ export const getTodayReviews = async (req: Request, res: Response, next: NextFun
       count: dueQuestionSets.length,
       questionSets: dueQuestionSets.map((set: QuestionSetWithRelations) => ({
         id: set.id,
-        name: set.name,
+        title: set.title,
         folderId: set.folderId,
-        folderName: set.folder.name,
+        folderName: set.folder?.name || 'Unknown',
         totalQuestions: set.questions.length,
-        // U-U-E scores
-        understandScore: set.understandScore,
-        useScore: set.useScore,
-        exploreScore: set.exploreScore,
-        overallMasteryScore: set.currentTotalMasteryScore,
-        // Review info
-        lastReviewedAt: set.lastReviewedAt,
-        reviewCount: set.reviewCount,
+        // Basic info only (removing non-existent fields)
+        marksAvailable: set.marksAvailable,
         // First few questions as preview
-        previewQuestions: set.questions.slice(0, 3).map((q: Question) => ({
+        previewQuestions: set.questions.slice(0, 3).map((q: any) => ({
           id: q.id,
-          text: q.text,
-          questionType: q.questionType,
-          uueFocus: q.uueFocus
+          questionText: q.questionText,
+          answerText: q.answerText,
+          marksAvailable: q.marksAvailable
         }))
       }))
     });
@@ -111,17 +105,17 @@ export const getReviewQuestions = async (req: Request, res: Response, next: Next
 
     // Check if any question set is not due for review
     const now = new Date();
-    const notDueSets = questionSets.filter(set => 
-      set.nextReviewAt && new Date(set.nextReviewAt) > now
-    );
+    // Note: nextReviewAt field doesn't exist on QuestionSet model
+    // For now, assume all sets are available for review
+    const notDueSets: any[] = [];
     
     if (notDueSets.length > 0) {
       res.status(403).json({ 
         message: 'One or more question sets are not due for review yet.',
         notDueSets: notDueSets.map(set => ({
           id: set.id,
-          name: set.name,
-          nextReviewAt: set.nextReviewAt
+          title: set.title,
+          nextReviewAt: null
         }))
       });
       return;

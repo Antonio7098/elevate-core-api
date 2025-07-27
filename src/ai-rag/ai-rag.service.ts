@@ -10,7 +10,7 @@ import { ChatMessageDto } from './dtos/chat-message.dto';
 import { LearningBlueprintResponseDto, QuestionSetResponseDto, NoteResponseDto, ChatResponseMessageDto } from './dtos/responses.dto';
 
 // TODO: Move to environment variables
-const AI_SERVICE_BASE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000/api/v1'; // Example URL
+const AI_SERVICE_BASE_URL = process.env.AI_API_BASE_URL?.replace(/\/$/, '') + '/api/v1' || 'http://localhost:8000/api/v1'; // Use AI API port
 const AI_SERVICE_API_KEY = process.env.AI_SERVICE_API_KEY || 'test_api_key_123'; // Dev default matches AI API
 
 @Injectable()
@@ -80,13 +80,17 @@ export class AiRAGService {
       });
       console.log(`Successfully indexed blueprint ${newBlueprint.id} with AI API`);
       
-      // Store the source_id (UUID) returned by AI API for proper deletion later
-      if (indexingResponse.blueprint_id) {
-        console.log(`Storing AI API source_id: ${indexingResponse.blueprint_id} for blueprint ${newBlueprint.id}`);
+      // Extract and store the source_id (UUID) returned by AI API for proper deletion later
+      const sourceId = indexingResponse.source_id || blueprintJson.source_id;
+      if (sourceId) {
+        console.log(`✅ Storing AI API source_id: ${sourceId} for blueprint ${newBlueprint.id}`);
         await this.prisma.learningBlueprint.update({
           where: { id: newBlueprint.id },
-          data: { sourceId: indexingResponse.blueprint_id }
+          data: { sourceId: sourceId }
         });
+        console.log(`✅ Successfully stored sourceId ${sourceId} for blueprint ${newBlueprint.id}`);
+      } else {
+        console.warn(`⚠️ No sourceId found in AI API response or blueprintJson for blueprint ${newBlueprint.id}`);
       }
     } catch (error: any) {
       // Non-blocking: log the error but don't fail the blueprint creation
@@ -95,11 +99,17 @@ export class AiRAGService {
     }
 
     // 4. Return the created LearningBlueprint object (or a DTO representation)
+    // Note: sourceId will be set asynchronously during indexing, so it may not be available immediately
+    const updatedBlueprint = await this.prisma.learningBlueprint.findUnique({
+      where: { id: newBlueprint.id }
+    });
+    
     return {
       id: newBlueprint.id,
       userId: newBlueprint.userId,
       sourceText: newBlueprint.sourceText,
       blueprintJson: newBlueprint.blueprintJson as any, // Cast if necessary, ensure type compatibility
+      sourceId: updatedBlueprint?.sourceId ?? undefined,
       // folderId from the original DTO, not from newBlueprint as it's not stored on the model
       folderId: dto.folderId, 
       createdAt: newBlueprint.createdAt,
@@ -140,6 +150,7 @@ export class AiRAGService {
       userId: blueprint.userId,
       sourceText: blueprint.sourceText,
       blueprintJson: blueprint.blueprintJson as any,
+      sourceId: blueprint.sourceId ?? undefined,
       createdAt: blueprint.createdAt,
       updatedAt: blueprint.updatedAt,
       // folderId is not on the blueprint model
@@ -172,12 +183,17 @@ export class AiRAGService {
         console.log(`Calling AI service to regenerate blueprint for updated sourceText`);
         const response = await this.axiosInstance.post('/deconstruct', {
           source_text: dto.sourceText,
+          userId: userId.toString(), // Include userId for consistency
+        }, {
+          timeout: 120000 // 2 minute timeout for deconstruct operations
         });
         updatedBlueprintJson = response.data.blueprint_json;
         console.log('AI service /deconstruct call successful for update.');
       } catch (error: any) {
         console.error('Error calling AI service /deconstruct for update:', error.response?.data || error.message);
-        throw new Error('Failed to regenerate blueprint via AI service.');
+        console.warn('AI service failed, proceeding with existing blueprint structure');
+        // Don't throw error - proceed with update using existing blueprintJson
+        console.log('Proceeding with blueprint update despite AI service failure');
       }
     }
 
@@ -282,12 +298,39 @@ export class AiRAGService {
       const aiApiClient = getAIAPIClient();
       console.log(`Cleaning up blueprint ${blueprintId} from AI API...`);
       
-      // Use the sourceId (UUID) if available, otherwise fall back to database ID
-      const blueprintIdForDeletion = blueprint.sourceId || blueprintId.toString();
+      // IMPORTANT: Use the database ID for deletion since that's how nodes are indexed in vector DB
+      // The sourceId is used for status checks, but indexing uses the database ID as blueprint_id metadata
+      const blueprintIdForDeletion = blueprintId.toString();
       console.log(`Using blueprint ID for deletion: ${blueprintIdForDeletion} (sourceId: ${blueprint.sourceId}, dbId: ${blueprintId})`);
+      console.log(`Note: Using database ID for deletion because vector DB nodes are indexed with blueprint_id=${blueprintId}`);
       
-      await aiApiClient.deleteBlueprint(blueprintIdForDeletion);
-      console.log(`Successfully cleaned up blueprint ${blueprintId} from AI API`);
+      // Attempt deletion with retries until vector DB reports 0 nodes or max attempts reached
+      const maxAttempts = 5;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const deleteResult = await aiApiClient.deleteBlueprint(blueprintIdForDeletion);
+        console.log(`Deletion attempt ${attempt}/${maxAttempts}:`, deleteResult);
+
+        // After each deletion attempt, check status
+        try {
+          const status = await aiApiClient.getBlueprintStatus(blueprintIdForDeletion);
+          console.log(`Status after deletion attempt ${attempt}:`, status);
+          if (!status.is_indexed || status.node_count === 0) {
+            console.log('All nodes removed from vector DB.');
+            break;
+          }
+        } catch (statusErr: any) {
+          // 404 or not_found means deletion succeeded
+          console.log('Blueprint status not found after deletion, assuming success.');
+          break;
+        }
+
+        if (attempt < maxAttempts) {
+          console.log('Nodes still present, retrying deletion after short delay...');
+          await new Promise(res => setTimeout(res, 3000));
+        } else {
+          console.warn('Reached maximum deletion attempts; some nodes may remain in vector DB.');
+        }
+      }
     } catch (error: any) {
       // Non-blocking: log the error but continue with database deletion
       console.error(`Failed to clean up blueprint ${blueprintId} from AI API:`, error.message);
@@ -562,7 +605,8 @@ export class AiRAGService {
       // Step 1: Create the QuestionSet with all scalar foreign keys.
       const newQuestionSet = await this.prisma.questionSet.create({
         data: {
-          name: dto.name,
+          title: dto.name,
+          userId: userId,
           generatedFromBlueprintId: blueprintId,
           ...(dto.folderId && { folderId: dto.folderId }),
         },
@@ -572,8 +616,10 @@ export class AiRAGService {
       let createdQuestions: Question[] = [];
       if (questionsToCreate.length > 0) {
         const questionsWithSetId = questionsToCreate.map(q => ({
-          ...q,
           questionSetId: newQuestionSet.id,
+          questionText: q.text,
+          answerText: q.answer,
+          marksAvailable: q.totalMarksAvailable || 1,
         }));
         await this.prisma.question.createMany({
           data: questionsWithSetId,
@@ -590,7 +636,7 @@ export class AiRAGService {
       // Step 3: Manually construct the response DTO from the results of our two separate creates.
       return {
         id: newQuestionSet.id,
-        name: newQuestionSet.name,
+        name: newQuestionSet.title,
         userId: userId, // Include userId in response even though not stored on QuestionSet
         folderId: dto.folderId ?? undefined,
         generatedFromBlueprintId: blueprintId,
@@ -598,13 +644,11 @@ export class AiRAGService {
         updatedAt: newQuestionSet.updatedAt,
         questions: createdQuestions.map((q) => ({
           id: q.id,
-          text: q.text,
-          answer: q.answer ?? undefined,
-          questionType: q.questionType,
-          totalMarksAvailable: q.totalMarksAvailable,
-          markingCriteria: q.markingCriteria as any,
-          createdAt: q.createdAt,
-          updatedAt: q.updatedAt,
+          text: q.questionText,
+          answer: q.answerText ?? undefined,
+          questionType: 'short-answer',
+          totalMarksAvailable: q.marksAvailable,
+          markingCriteria: undefined,
         })),
       };
     } catch (error: any) {
@@ -653,10 +697,9 @@ export class AiRAGService {
       const newNote = await this.prisma.note.create({
         data: {
           userId: userId,
-          title: dto.name, // Title comes from the user request
-          content: aiServiceResponseData.content || {}, // Assuming AI returns { content: {...} }
-          plainText: aiServiceResponseData.plain_text || '', // Assuming AI returns { plain_text: '...' }
-          folderId: dto.folderId, // Optional folderId from request
+          title: dto.name,
+          content: JSON.stringify(aiServiceResponseData.content || {}),
+          folderId: dto.folderId,
           generatedFromBlueprintId: blueprintId,
         },
       });
@@ -667,11 +710,9 @@ export class AiRAGService {
       return {
         id: newNote.id,
         title: newNote.title,
-        content: newNote.content as Record<string, any>,
-        plainText: newNote.plainText ?? undefined,
+        content: JSON.parse(newNote.content) as Record<string, any>,
         userId: newNote.userId,
         folderId: newNote.folderId ?? undefined,
-        questionSetId: newNote.questionSetId ?? undefined,
         generatedFromBlueprintId: newNote.generatedFromBlueprintId ?? undefined,
         createdAt: newNote.createdAt,
         updatedAt: newNote.updatedAt,

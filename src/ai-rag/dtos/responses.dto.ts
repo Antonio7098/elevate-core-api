@@ -19,6 +19,11 @@ export class LearningBlueprintResponseDto {
   @IsObject()
   blueprintJson!: Record<string, any>; // Or a more specific type if defined
 
+  @ApiPropertyOptional({ description: 'Source ID from the vector database after indexing.' })
+  @IsString()
+  @IsOptional()
+  sourceId?: string;
+
   @ApiPropertyOptional({ description: 'ID of the folder this blueprint might be associated with (passed from request).' })
   @IsNumber()
   folderId?: number;

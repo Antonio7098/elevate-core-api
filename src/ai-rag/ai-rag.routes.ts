@@ -18,23 +18,40 @@ interface RequestWithUser extends Request {
 }
 
 const aiRagRouter = Router();
+console.log('🚀 AI RAG ROUTER: Loading aiRagRouter module');
 const aiRagService = new AiRAGService(prisma);
+console.log('🚀 AI RAG ROUTER: aiRagService instance created');
 
 // Instantiate the service
 
 // Middleware to check for authenticated user (basic example)
 // You'll likely have a more robust auth middleware already in use via app.ts
 const ensureAuthenticated = (req: Request, res: Response, next: NextFunction) => {
+  console.log('=== AI RAG AUTH MIDDLEWARE: Checking authentication ===');
+  console.log('Request URL:', req.url);
+  console.log('Request method:', req.method);
+  
   const requestWithUser = req as RequestWithUser;
+  console.log('req.user exists:', !!requestWithUser.user);
+  console.log('req.user.userId:', requestWithUser.user?.userId);
+  
   // Standardize on req.user.userId as defined in RequestWithUser interface
   if (requestWithUser.user && typeof requestWithUser.user.userId === 'number') { 
+    console.log('✅ Authentication successful, proceeding to route handler');
     next();
   } else {
-    console.warn('AiRAG Routes: req.user or req.user.userId is missing or invalid. Ensure auth middleware runs before these routes and populates req.user correctly.');
+    console.warn('❌ AiRAG Routes: req.user or req.user.userId is missing or invalid. Ensure auth middleware runs before these routes and populates req.user correctly.');
     res.status(401).json({ message: 'User not authenticated' });
     // Do NOT call next() here, as the request should be terminated.
   }
 };
+
+// Add logging middleware to trace all requests to this router
+aiRagRouter.use((req, res, next) => {
+  console.log(`🔍 AI RAG ROUTER: Incoming request - ${req.method} ${req.originalUrl}`);
+  console.log(`🔍 AI RAG ROUTER: Request path: ${req.path}`);
+  next();
+});
 
 aiRagRouter.use(ensureAuthenticated); // Apply to all RAG routes
 
@@ -89,6 +106,7 @@ aiRagRouter.post(
   validationMiddleware(CreateLearningBlueprintDto),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
+      console.log('=== EXPRESS AI RAG ROUTE: BLUEPRINT CREATION STARTED ===');
       const createDto = req.body as CreateLearningBlueprintDto; // req.body is now validated and transformed
       const requestWithUser = req as RequestWithUser;
 
@@ -99,6 +117,7 @@ aiRagRouter.post(
         return; // Explicitly return to satisfy Promise<void>
       }
       const userId = requestWithUser.user.userId;
+      console.log(`Calling aiRagService.createLearningBlueprint for user ${userId}`);
       const result = await aiRagService.createLearningBlueprint(createDto, userId);
       res.status(201).json(result);
     } catch (error) {

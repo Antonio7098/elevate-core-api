@@ -16,6 +16,7 @@ interface GeneratedQuestion {
   answer: string | null;
   questionType: string;
   options: string[];
+  marksAvailable?: number;
 }
 
 interface AIGenerationResult {
@@ -186,7 +187,7 @@ export const generateQuestionsFromSource = async (req: AuthRequest, res: Respons
       return;
     }
     
-    const sourceText = note.plainText ?? '';
+    const sourceText = note.content ?? '';
     const name = `Questions from ${note.title}`;
     const folderId = note.folderId;
     
@@ -219,7 +220,8 @@ export const generateQuestionsFromSource = async (req: AuthRequest, res: Respons
     // 4. Persist QuestionSet & Questions via Prisma (these are mocked in unit tests)
     const questionSet = await prisma.questionSet.create({
       data: {
-        name: name ?? generated.title,
+        title: generated.title,
+        userId: req.user.userId,
         folderId: folder ? folder.id : null,
       },
     });
@@ -227,22 +229,10 @@ export const generateQuestionsFromSource = async (req: AuthRequest, res: Respons
     for (const q of generated.questions) {
       await prisma.question.create({
         data: {
-          text: q.text,
-          answer: q.answer ?? '',
-          questionType: q.questionType,
-          options: { set: q.options?.map(opt => String(opt)) || [] },
+          questionText: q.text,
+          answerText: q.answer ?? '',
+          marksAvailable: q.marksAvailable || 1,
           questionSetId: questionSet.id,
-          totalMarksAvailable: q.questionType === 'multiple-choice' ? 3 : 5, // dummy values for tests
-          markingCriteria: q.questionType === 'multiple-choice'
-            ? [
-                { criterion: 'Correct identification of capital', marks: 1 },
-                { criterion: 'Explanation of significance', marks: 2 },
-              ]
-            : [
-                { criterion: 'Correct formula', marks: 2 },
-                { criterion: 'Accurate calculation', marks: 2 },
-                { criterion: 'Clear explanation', marks: 1 },
-              ],
         },
       });
     }
@@ -351,17 +341,15 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
     const evaluationRequest: EvaluateAnswerRequest = {
       questionContext: {
         questionId: question.id,
-        questionText: question.text,
-        expectedAnswer: question.answer || "No expected answer provided",
-        questionType: question.questionType,
-        options: question.options,
-        marksAvailable: question.totalMarksAvailable,
-        markingCriteria: question.markingCriteria ? JSON.stringify(question.markingCriteria) : "Award marks based on accuracy and completeness",
-        uueFocus: question.uueFocus
+        questionText: question.questionText,
+        expectedAnswer: question.answerText || "No expected answer provided",
+        marksAvailable: question.marksAvailable,
+        questionType: 'short-answer', // Assuming a default type, as it's not in the Question model
+        // markingCriteria field doesn't exist in schema
       },
       userAnswer: userAnswer,
       context: {
-        questionSetName: question.questionSet.name,
+        questionSetName: question.questionSet.title,
         folderName: question.questionSet.folder?.name || 'Unknown'
       }
     };
@@ -372,9 +360,9 @@ export const evaluateAnswer = async (req: AuthRequest, res: Response, next: Next
     // Return the AI service response in the format the frontend expects
     res.status(200).json({
       correctedAnswer: aiResponse.corrected_answer,
-      marksAvailable: question.totalMarksAvailable,
+      marksAvailable: question.marksAvailable,
       marksAchieved: aiResponse.marks_achieved,
-      feedback: aiResponse.feedback || `You achieved ${aiResponse.marks_achieved} out of ${question.totalMarksAvailable} marks. ${aiResponse.corrected_answer}`
+      feedback: aiResponse.feedback || `You achieved ${aiResponse.marks_achieved} out of ${question.marksAvailable} marks. ${aiResponse.corrected_answer}`
     });
 
   } catch (error) {

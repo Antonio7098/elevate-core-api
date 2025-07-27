@@ -104,7 +104,7 @@ model Question {
   // ... existing fields
   
   masteryCriterionIds Int[]?
-  masteryCriterion   MasteryCriterion @relation(fields: [masteryCriterionId], references: [id])
+  masteryCriterions   MasteryCriterion[] @relation(fields: [masteryCriterionId], references: [id])
 }
 ```
 

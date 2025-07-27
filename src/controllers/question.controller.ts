@@ -38,47 +38,24 @@ export const getQuestionsBySetId = async (req: AuthRequest, res: Response, next:
       return;
     }
 
-    // Get all questions for this question set with all fields including spaced repetition data
+    // Get all questions for this question set
     const questions = await prisma.question.findMany({
       where: {
         questionSetId: parseInt(questionSetId),
       },
-      // Temporarily remove include until Prisma types are updated
-      // include: {
-      //   userAnswers: {
-      //     where: {
-      //       userId: userId
-      //     },
-      //     orderBy: [
-      //       { createdAt: 'desc' }
-      //     ],
-      //     take: 5 // Include the 5 most recent answers for context
-      //   }
-      // },
-      select: {
-        id: true,
-        text: true,
-        answer: true,
-        options: true,
-        questionType: true,
-        uueFocus: true,
-        currentMasteryScore: true,
-        lastAnswerCorrect: true,
-        timesAnsweredCorrectly: true,
-        timesAnsweredIncorrectly: true,
-        difficultyScore: true,
-        conceptTags: true,
-        totalMarksAvailable: true,
-        markingCriteria: true,
-        questionSetId: true,
-        createdAt: true,
-        updatedAt: true
+      include: {
+        userQuestionAnswers: {
+          where: {
+            userId: userId
+          },
+          orderBy: {
+            id: 'asc'
+          },
+          take: 5 // Include the 5 most recent answers for context
+        }
       },
       orderBy: {
-        // Temporarily using only createdAt until Prisma types are updated
-        createdAt: 'asc'
-        // TODO: Add these back after Prisma types are updated:
-        // difficultyScore: 'desc',
+        id: 'asc'
       },
     });
 
@@ -122,47 +99,24 @@ export const getQuestionsBySet = async (req: AuthRequest, res: Response, next: N
       return;
     }
 
-    // 3. Fetch questions for the given question set with all fields including spaced repetition data
+    // 3. Fetch questions for the given question set
     const questions = await prisma.question.findMany({
       where: {
         questionSetId: parseInt(setId, 10),
       },
-      // Temporarily remove include until Prisma types are updated
-      // include: {
-      //   userAnswers: {
-      //     where: {
-      //       userId
-      //     },
-      //     orderBy: [
-      //       { createdAt: 'desc' }
-      //     ],
-      //     take: 5 // Include the 5 most recent answers for context
-      //   }
-      // },
-      select: {
-        id: true,
-        text: true,
-        answer: true,
-        options: true,
-        questionType: true,
-        uueFocus: true,
-        currentMasteryScore: true,
-        lastAnswerCorrect: true,
-        timesAnsweredCorrectly: true,
-        timesAnsweredIncorrectly: true,
-        difficultyScore: true,
-        conceptTags: true,
-        totalMarksAvailable: true,
-        markingCriteria: true,
-        questionSetId: true,
-        createdAt: true,
-        updatedAt: true
+      include: {
+        userQuestionAnswers: {
+          where: {
+            userId
+          },
+          orderBy: {
+            id: 'asc'
+          },
+          take: 5 // Include the 5 most recent answers for context
+        }
       },
       orderBy: {
-        // Temporarily using only createdAt until Prisma types are updated
-        createdAt: 'asc'
-        // TODO: Add these back after Prisma types are updated:
-        // difficultyScore: 'desc',
+        id: 'asc'
       },
     });
 
@@ -206,13 +160,9 @@ export const createQuestion = async (req: AuthRequest, res: Response, next: Next
     // Create the new question
     const newQuestion = await prisma.question.create({
       data: {
-        text,
-        answer,
-        options: Array.isArray(options) ? options : [],
-        questionType,
-        uueFocus: uueFocus || 'Understand',
-        totalMarksAvailable: totalMarksAvailable || 1,
-        markingCriteria: markingCriteria || null,
+        questionText: text,
+        answerText: answer,
+        marksAvailable: totalMarksAvailable || 1,
         questionSetId: questionSet.id,
       },
     });
