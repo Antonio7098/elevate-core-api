@@ -29,10 +29,11 @@ describe('Note Routes', () => {
       },
     });
 
-    // Create test question set
+    // Create test question set (schema requires title and userId)
     testQuestionSet = await prisma.questionSet.create({
       data: {
-        name: 'Test Question Set',
+        title: 'Test Question Set',
+        userId: testUser.id,
         folderId: testFolder.id,
       },
     });
@@ -65,15 +66,7 @@ describe('Note Routes', () => {
         .set('Authorization', `Bearer ${authToken}`)
         .send({
           title: 'Test Note',
-          content: {
-            blocks: [
-              {
-                type: 'paragraph',
-                content: 'Test content'
-              }
-            ]
-          },
-          plainText: 'Test content',
+          content: '<p>Test content</p>',
           folderId: testFolder.id,
         });
 
@@ -81,7 +74,8 @@ describe('Note Routes', () => {
       expect(response.body).toHaveProperty('id');
       expect(response.body.title).toBe('Test Note');
       expect(response.body.folderId).toBe(testFolder.id);
-      expect(response.body.content).toHaveProperty('blocks');
+      // content is stored as string per schema; ensure it's echoed back
+      expect(typeof response.body.content).toBe('string');
     });
 
     it('should create a new note in a question set', async () => {
@@ -90,16 +84,7 @@ describe('Note Routes', () => {
         .set('Authorization', `Bearer ${authToken}`)
         .send({
           title: 'Test Note in Question Set',
-          content: {
-            type: 'doc',
-            content: [
-              {
-                type: 'paragraph',
-                content: [{ type: 'text', text: 'Test content' }],
-              },
-            ],
-          },
-          plainText: 'Test content',
+          content: '<p>Test content</p>',
           questionSetId: testQuestionSet.id,
         });
 
@@ -110,36 +95,14 @@ describe('Note Routes', () => {
     });
 
     it('should create a new note with BlockNote content', async () => {
-      const blockNoteContent = {
-        blocks: [
-          {
-            type: 'heading',
-            content: 'Introduction',
-            level: 1
-          },
-          {
-            type: 'paragraph',
-            content: 'This is a test note with multiple blocks.'
-          },
-          {
-            type: 'list',
-            content: [
-              'First item',
-              'Second item',
-              'Third item'
-            ],
-            style: 'bullet'
-          }
-        ]
-      };
+      const blockNoteContent = '<h1>Introduction</h1><p>This is a test note with multiple blocks.</p><ul><li>First item</li><li>Second item</li><li>Third item</li></ul>';
 
       const response = await request(app)
         .post('/api/notes')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
           title: 'BlockNote Test',
-          content: blockNoteContent,
-          plainText: 'Introduction\nThis is a test note with multiple blocks.\n• First item\n• Second item\n• Third item',
+           content: blockNoteContent,
           folderId: testFolder.id,
         });
 
@@ -147,8 +110,6 @@ describe('Note Routes', () => {
       expect(response.body).toHaveProperty('id');
       expect(response.body.title).toBe('BlockNote Test');
       expect(response.body.content).toEqual(blockNoteContent);
-      expect(response.body.plainText).toContain('Introduction');
-      expect(response.body.plainText).toContain('First item');
     });
 
     it('should return 400 if neither folderId nor questionSetId is provided', async () => {
@@ -158,7 +119,6 @@ describe('Note Routes', () => {
         .send({
           title: 'Test Note',
           content: '<p>Test content</p>',
-          plainText: 'Test content',
         });
 
       expect(response.status).toBe(400);
@@ -210,7 +170,6 @@ describe('Note Routes', () => {
         data: {
           title: 'Test Note for Get',
           content: '<p>Test content</p>',
-          plainText: 'Test content',
           userId: testUser.id,
           folderId: testFolder.id,
         },
@@ -244,7 +203,6 @@ describe('Note Routes', () => {
         data: {
           title: 'Test Note for Update',
           content: '<p>Test content</p>',
-          plainText: 'Test content',
           userId: testUser.id,
           folderId: testFolder.id,
         },
@@ -257,21 +215,12 @@ describe('Note Routes', () => {
         .set('Authorization', `Bearer ${authToken}`)
         .send({
           title: 'Updated Note Title',
-          content: {
-            blocks: [
-              {
-                type: 'paragraph',
-                content: 'Updated content'
-              }
-            ]
-          },
-          plainText: 'Updated content',
+          content: '<p>Updated content</p>',
         });
 
       expect(response.status).toBe(200);
       expect(response.body.title).toBe('Updated Note Title');
-      expect(response.body.content).toHaveProperty('blocks');
-      expect(response.body.content.blocks[0].content).toBe('Updated content');
+      expect(typeof response.body.content).toBe('string');
     });
 
     it('should return 404 for non-existent note', async () => {
@@ -294,7 +243,6 @@ describe('Note Routes', () => {
         data: {
           title: 'Test Note for Delete',
           content: '<p>Test content</p>',
-          plainText: 'Test content',
           userId: testUser.id,
           folderId: testFolder.id,
         },

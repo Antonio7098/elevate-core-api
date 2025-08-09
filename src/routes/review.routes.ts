@@ -7,13 +7,13 @@ import {
   getReviewStats,
   getReviewQuestions
 } from '../controllers/review.controller';
-import {
-  scheduleNewReview,
-  getScheduledReviewsList,
-  updateScheduledReviewById,
-  cancelScheduledReviewById,
-  getUpcomingReviewsList
-} from '../controllers/reviewScheduling.controller';
+// import {
+//   scheduleNewReview,
+//   getScheduledReviewsList,
+//   updateScheduledReviewById,
+//   cancelScheduledReviewById,
+//   getUpcomingReviewsList
+// } from '../controllers/reviewScheduling.controller'; // Controller disabled due to schema compatibility issues
 
 const router = express.Router();
 
@@ -33,10 +33,10 @@ router.post('/', submitReview);
 router.get('/stats', getReviewStats);
 
 // New scheduling endpoints
-router.post('/schedule', scheduleNewReview);
-router.get('/scheduled', getScheduledReviewsList);
-router.put('/scheduled/:id', updateScheduledReviewById);
-router.delete('/scheduled/:id', cancelScheduledReviewById);
-router.get('/upcoming', getUpcomingReviewsList);
+// router.post('/schedule', scheduleNewReview); // Disabled due to schema compatibility issues
+// router.get('/scheduled', getScheduledReviewsList); // Disabled due to schema compatibility issues
+// router.put('/scheduled/:id', updateScheduledReviewById); // Disabled due to schema compatibility issues
+// router.delete('/scheduled/:id', cancelScheduledReviewById); // Disabled due to schema compatibility issues
+// router.get('/upcoming', getUpcomingReviewsList); // Disabled due to schema compatibility issues
 
 export default router;

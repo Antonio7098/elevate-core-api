@@ -37,6 +37,18 @@ export interface AIServiceErrorResponse extends AIServiceBaseResponse {
 // Question Generation Types
 
 /**
+ * Request to generate questions from content
+ */
+export interface GenerateQuestionsRequest {
+  content: string;
+  questionType?: 'multiple-choice' | 'true-false' | 'short-answer' | 'mixed';
+  difficulty?: string;
+  count?: number;
+  uueFocus?: 'Understand' | 'Use' | 'Explore';
+  language?: string;
+}
+
+/**
  * A generated question
  */
 export interface GeneratedQuestion {

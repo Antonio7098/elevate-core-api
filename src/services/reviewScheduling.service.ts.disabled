@@ -1,7 +1,7 @@
 import { PrismaClient, ScheduledReview, QuestionSet } from '@prisma/client';
 
 
-const prisma = new PrismaClient();
+import prisma from '../lib/prisma';
 
 interface ReviewUpdateData {
   reviewDate?: Date;
@@ -46,9 +46,9 @@ export const scheduleReview = async (
     data: {
       userId,
       questionSetId,
-      reviewDate: reviewDate || defaultReviewDate,
-      type,
-      status: 'PENDING'
+      // reviewDate: reviewDate || defaultReviewDate, // Field doesn't exist in current schema
+      // type, // Field doesn't exist in current schema
+      // status: 'PENDING' // Field doesn't exist in current schema
     },
     include: {
       questionSet: {

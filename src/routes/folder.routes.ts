@@ -14,6 +14,9 @@ router.post('/', protect, ...validateFolderCreate, createFolder);
 // GET /api/folders - Get all folders for the authenticated user
 router.get('/', protect, getFolders);
 
+// GET /api/folders/tree - Get folders in tree structure (alias for GET / with tree=true)
+router.get('/tree', protect, getFolders);
+
 // GET /api/folders/:id - Get a single folder by ID
 router.get('/:id', protect, getFolderById);
 

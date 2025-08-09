@@ -1,7 +1,7 @@
 import { PrismaClient, UserMemory, CognitiveApproach, ExplanationStyle, InteractionStyle } from '@prisma/client';
 import { AppError } from '../utils/errorHandler';
 
-const prisma = new PrismaClient();
+import prisma from '../lib/prisma';
 
 export interface UserMemoryUpdateData {
   cognitiveApproach?: CognitiveApproach | null;

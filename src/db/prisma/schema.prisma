@@ -20,16 +20,41 @@ model KnowledgePrimitive {
   estimatedTimeMinutes      Int?
   userId                    Int
   blueprintId               Int // Reference to the LearningBlueprint
+  trackingIntensity         TrackingIntensity @default(NORMAL)
   createdAt                 DateTime                  @default(now())
   updatedAt                 DateTime                  @updatedAt
+  
+  // Premium Knowledge Graph Fields
+  conceptTags               String[]                  @default([]) // For semantic grouping
+  prerequisiteIds           String[]                  @default([]) // Direct prerequisites
+  relatedConceptIds         String[]                  @default([]) // Related concepts
+  complexityScore           Float?                    // AI-calculated complexity (1-10)
+  estimatedPrerequisites    Int?                      // Number of concepts needed before this
+  isCoreConcept            Boolean                   @default(false) // Essential for domain mastery
+  
   user                      User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
   masteryCriteria           MasteryCriterion[]
   userPrimitiveProgresses   UserPrimitiveProgress[]
   userCriterionMasteries    UserCriterionMastery[]
+  pinnedReviews            PinnedReview[]
+  userQuestionAnswers     UserQuestionAnswer[]
+  scheduledReviews        ScheduledReview[]
+  insightCatalysts        InsightCatalyst[]
+  dailySummaries         UserPrimitiveDailySummary[]
+  
+  // Premium Relationship Tracking
+  prerequisiteFor          KnowledgePrimitive[]       @relation("Prerequisites")
+  prerequisites            KnowledgePrimitive[]       @relation("Prerequisites")
+  relatedConcepts          KnowledgePrimitive[]       @relation("RelatedConcepts")
+  relatedToConcepts        KnowledgePrimitive[]       @relation("RelatedConcepts")
+  learningPathSteps        LearningPathStep[]
 
   @@index([userId])
   @@index([blueprintId])
   @@index([primitiveId])
+  @@index([conceptTags]) // Premium: Fast semantic search
+  @@index([isCoreConcept]) // Premium: Core concept filtering
+  @@index([complexityScore]) // Premium: Complexity-based sorting
 }
 
 model MasteryCriterion {
@@ -46,6 +71,8 @@ model MasteryCriterion {
   updatedAt                 DateTime                  @updatedAt
   user                      User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
   userCriterionMasteries    UserCriterionMastery[]
+  questions                 Question[]
+  weight                    Float                     // Weight of the criterion for weighted progression
 
   @@index([userId])
   @@index([primitiveId])
@@ -58,11 +85,11 @@ model UserPrimitiveProgress {
   primitiveId           String   // Reference to the primitive in the blueprint JSON
   blueprintId           Int      // Reference to the LearningBlueprint
   masteryLevel          String   @default("NOT_STARTED") // NOT_STARTED, UNDERSTAND, USE, EXPLORE
+  trackingIntensity     TrackingIntensity @default(NORMAL)
   lastReviewedAt        DateTime?
   nextReviewAt          DateTime?
   reviewCount           Int      @default(0)
   successfulReviews     Int      @default(0)
-  difficultyMultiplier  Float    @default(1.0)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
@@ -107,6 +134,8 @@ model UserQuestionAnswer {
   userId        Int
   questionSetId Int
   questionId    Int
+  primitiveId   String?
+  blueprintId   Int?
   userAnswer    String?
   isCorrect     Boolean?
   marksAwarded  Int?
@@ -116,10 +145,12 @@ model UserQuestionAnswer {
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   questionSet QuestionSet @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
   question    Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  knowledgePrimitive KnowledgePrimitive? @relation(fields: [primitiveId], references: [primitiveId], onDelete: SetNull)
 
   @@index([userId])
   @@index([questionSetId])
   @@index([questionId])
+  @@index([primitiveId])
 }
 
 model UserStudySession {
@@ -165,6 +196,7 @@ model ScheduledReview {
   id            Int      @id @default(autoincrement())
   userId        Int
   questionSetId Int
+  primitiveId   String?
   scheduledFor  DateTime
   completed     Boolean  @default(false)
   completedAt   DateTime?
@@ -173,10 +205,12 @@ model ScheduledReview {
 
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   questionSet QuestionSet @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
+  knowledgePrimitive KnowledgePrimitive? @relation(fields: [primitiveId], references: [primitiveId], onDelete: SetNull)
 
   @@index([userId])
   @@index([questionSetId])
   @@index([scheduledFor])
+  @@index([primitiveId])
 }
 
 model Note {
@@ -207,14 +241,17 @@ model InsightCatalyst {
   content   String
   userId    Int
   noteId    Int
+  primitiveId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   note Note @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  knowledgePrimitive KnowledgePrimitive? @relation(fields: [primitiveId], references: [primitiveId], onDelete: SetNull)
 
   @@index([userId])
   @@index([noteId])
+  @@index([primitiveId])
 }
 
 model Question {
@@ -223,11 +260,14 @@ model Question {
   questionText   String
   answerText     String?
   marksAvailable Int     @default(1)
+  criterionId    String?
 
   questionSet         QuestionSet          @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
+  masteryCriterion    MasteryCriterion?    @relation(fields: [criterionId], references: [criterionId], onDelete: SetNull)
   userQuestionAnswers UserQuestionAnswer[]
 
   @@index([questionSetId])
+  @@index([criterionId])
 }
 
 model QuestionSet {
@@ -241,6 +281,7 @@ model QuestionSet {
   generatedFromBlueprintId Int?
   imageUrls                String[]
   isPinned                 Boolean                   @default(false)
+  isTracked                Boolean                   @default(false) // Indicates inclusion in SR
 
   user                     User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
   folder                   Folder?                   @relation(fields: [folderId], references: [id], onDelete: SetNull)
@@ -276,10 +317,43 @@ model User {
   knowledgePrimitives      KnowledgePrimitive[]
   masteryCriteria          MasteryCriterion[]
   userPrimitiveProgresses  UserPrimitiveProgress[]
+  userPrimitiveDailySummaries UserPrimitiveDailySummary[]
   userCriterionMasteries   UserCriterionMastery[]
   questionSets             QuestionSet[]
+  pinnedReviews             PinnedReview[]
+  bucketPreferences         UserBucketPreferences?
+  
+  // Stripe subscription fields
+  stripeCustomerId         String?                   @unique
+  subscriptionStatus       String?
+  subscriptionId           String?                   @unique
+  plan                     String?                   @default("free")
+  subscriptionEndDate      DateTime?
+  
+  // Google & Email verification
+  googleId                 String?                   @unique
+  isVerified               Boolean                   @default(false)
+  verificationTokens       VerificationToken[]
+  
+  // Premium Features
+  learningPaths            LearningPath[]
+  memoryInsights           UserMemoryInsight[]
+  learningAnalytics        UserLearningAnalytics[]
 
   @@index([email])
+}
+
+model VerificationToken {
+  id         Int      @id @default(autoincrement())
+  token      String   @unique
+  userId     Int
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Folder {
@@ -321,7 +395,62 @@ model LearningBlueprint {
   @@index([userId])
 }
 
+model PinnedReview {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  primitiveId String
+  reviewAt    DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  knowledgePrimitive KnowledgePrimitive @relation(fields: [primitiveId], references: [primitiveId], onDelete: Cascade)
+
+  @@unique([userId, primitiveId])
+  @@index([userId])
+}
+
+model UserBucketPreferences {
+  id                   Int      @id @default(autoincrement())
+  userId               Int      @unique
+
+  criticalSize         Int      @default(10)
+  coreSize             Int      @default(15)
+  plusSize             Int      @default(5)
+
+  addMoreIncrement     Int      @default(5)
+  maxDailyLimit        Int      @default(50)
+
+  masteryThresholdLevel MasteryThresholdLevel @default(PROFICIENT)
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 // Enums for UserMemory
+model UserPrimitiveDailySummary {
+  id                   Int      @id @default(autoincrement())
+  userId               Int
+  primitiveId          String
+  primitiveTitle       String
+  masteryLevel         String
+  nextReviewAt         DateTime?
+  totalCriteria        Int
+  masteredCriteria     Int
+  weightedMasteryScore Float
+  canProgressToNext    Boolean
+  lastCalculated       DateTime @default(now())
+
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  knowledgePrimitive  KnowledgePrimitive @relation(fields: [primitiveId], references: [primitiveId], onDelete: Cascade)
+
+  @@unique([userId, primitiveId])
+  @@index([userId, nextReviewAt])
+  @@index([userId, weightedMasteryScore])
+}
+
 enum CognitiveApproach {
   TOP_DOWN
   BOTTOM_UP
@@ -351,4 +480,88 @@ model UserMemory {
   updatedAt         DateTime            @updatedAt
 
   @@index([userId])
+}
+
+enum TrackingIntensity {
+  DENSE   // More frequent reviews (0.75× interval)
+  NORMAL  // Standard review frequency
+  SPARSE  // Less frequent reviews (1.5× interval)
+}
+
+enum MasteryThresholdLevel {
+  SURVEY      // 60%+ mastery
+  PROFICIENT  // 80%+ mastery
+  EXPERT      // 95%+ mastery
+}
+
+// Premium: Advanced Learning Path Tracking
+model LearningPath {
+  id                    Int      @id @default(autoincrement())
+  userId                Int
+  pathName              String
+  description           String?
+  targetMasteryLevel    String   // "UNDERSTAND", "USE", "EXPLORE"
+  estimatedDurationDays Int?
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pathSteps             LearningPathStep[]
+  
+  @@index([userId, isActive])
+}
+
+model LearningPathStep {
+  id                    Int      @id @default(autoincrement())
+  learningPathId        Int
+  primitiveId           String
+  stepOrder             Int
+  isCompleted           Boolean  @default(false)
+  completedAt           DateTime?
+  estimatedTimeMinutes  Int?
+  
+  learningPath          LearningPath @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
+  knowledgePrimitive    KnowledgePrimitive @relation(fields: [primitiveId], references: [primitiveId], onDelete: Cascade)
+  
+  @@unique([learningPathId, stepOrder])
+  @@index([learningPathId, isCompleted])
+}
+
+// Premium: Advanced Memory System
+model UserMemoryInsight {
+  id                    Int      @id @default(autoincrement())
+  userId                Int
+  insightType           String   // "LEARNING_PATTERN", "STRUGGLE_POINT", "BREAKTHROUGH"
+  title                 String
+  content               String
+  relatedPrimitiveIds   String[] @default([])
+  confidenceScore       Float    // AI confidence in this insight (0-1)
+  isActionable          Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, insightType])
+  @@index([userId, confidenceScore])
+}
+
+// Premium: Advanced Analytics
+model UserLearningAnalytics {
+  id                    Int      @id @default(autoincrement())
+  userId                Int
+  date                  DateTime @default(now())
+  totalStudyTimeMinutes Int      @default(0)
+  conceptsReviewed      Int      @default(0)
+  conceptsMastered      Int      @default(0)
+  averageMasteryScore   Float    @default(0)
+  learningEfficiency    Float?   // AI-calculated efficiency score
+  focusAreas            String[] @default([]) // Areas needing attention
+  achievements          String[] @default([]) // Daily achievements
+  
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, date])
+  @@index([userId, date])
 }

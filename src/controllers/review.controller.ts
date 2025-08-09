@@ -141,16 +141,16 @@ export const getReviewQuestions = async (req: Request, res: Response, next: Next
       const questionSet = questionSets[0];
       res.status(200).json({
         questionSetId: questionSet.id,
-        questionSetName: questionSet.name,
+        questionSetName: questionSet.title,
         count: sortedQuestions.length,
         questions: sortedQuestions.map((q: PrioritizedQuestion) => ({
           id: q.id,
-          text: q.text,
-          questionType: q.questionType,
-          options: q.options,
-          uueFocus: q.uueFocus,
-          conceptTags: q.conceptTags,
-          totalMarksAvailable: q.totalMarksAvailable,
+          text: q.questionText,
+          questionType: 'multiple_choice', // Default since questionType doesn't exist
+          options: [], // Default since options don't exist in current schema
+          uueFocus: 'Understand', // Default since uueFocus doesn't exist
+          conceptTags: [], // Default since conceptTags don't exist
+          totalMarksAvailable: q.marksAvailable,
           priorityScore: q.priorityScore
         }))
       });
@@ -160,20 +160,20 @@ export const getReviewQuestions = async (req: Request, res: Response, next: Next
         questionSetIds,
         questionSets: questionSets.map(set => ({
           id: set.id,
-          name: set.name,
-          currentInterval: set.currentIntervalDays,
-          masteryScore: set.currentTotalMasteryScore,
-          nextReviewAt: set.nextReviewAt
+          name: set.title,
+          currentInterval: 1, // Default since currentIntervalDays doesn't exist
+          masteryScore: 0, // Default since currentTotalMasteryScore doesn't exist
+          nextReviewAt: null // Default since nextReviewAt doesn't exist
         })),
         count: sortedQuestions.length,
         questions: sortedQuestions.map((q: PrioritizedQuestion) => ({
           id: q.id,
-          text: q.text,
-          questionType: q.questionType,
-          options: q.options,
-          uueFocus: q.uueFocus,
-          conceptTags: q.conceptTags,
-          totalMarksAvailable: q.totalMarksAvailable,
+          text: q.questionText,
+          questionType: 'multiple_choice', // Default since questionType doesn't exist
+          options: [], // Default since options don't exist in current schema
+          uueFocus: 'Understand', // Default since uueFocus doesn't exist
+          conceptTags: [], // Default since conceptTags don't exist
+          totalMarksAvailable: q.marksAvailable,
           priorityScore: q.priorityScore,
           questionSetId: q.questionSetId // Include which set this question belongs to
         }))
@@ -306,12 +306,13 @@ export const startReview = async (req: Request, res: Response) => {
     }
 
     const now = new Date();
-    if (questionSet.nextReviewAt && new Date(questionSet.nextReviewAt) > now) {
-      return res.status(403).json({ 
-        message: 'This question set is not due for review yet.',
-        nextReviewAt: questionSet.nextReviewAt
-      });
-    }
+    // Note: nextReviewAt doesn't exist in current schema, so we skip the due date check
+    // if (questionSet.nextReviewAt && new Date(questionSet.nextReviewAt) > now) {
+    //   return res.status(403).json({ 
+    //     message: 'This question set is not due for review yet.',
+    //     nextReviewAt: questionSet.nextReviewAt
+    //   });
+    // }
 
     const questions = await getPrioritizedQuestions(
       parseInt(questionSetId),
@@ -322,10 +323,10 @@ export const startReview = async (req: Request, res: Response) => {
     res.json({
       questionSet: {
         id: questionSet.id,
-        name: questionSet.name,
-        currentInterval: questionSet.currentIntervalDays,
-        masteryScore: questionSet.currentTotalMasteryScore,
-        nextReviewAt: questionSet.nextReviewAt
+        name: questionSet.title,
+        currentInterval: 1, // Default since currentIntervalDays doesn't exist
+        masteryScore: 0, // Default since currentTotalMasteryScore doesn't exist
+        nextReviewAt: null // Default since nextReviewAt doesn't exist
       },
       questions
     });

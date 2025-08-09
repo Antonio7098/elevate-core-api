@@ -42,102 +42,32 @@ type QuestionSetWithCount = QuestionSet & {
 
 // Type for Prisma's result for calculating overall stats (no _count needed here)
 type UserSetForStats = Prisma.QuestionSetGetPayload<{
-  select: { currentTotalMasteryScore: true };
+  select: { 
+    id: true;
+    title: true;
+  };
 }>;
 
 const fetchDashboardDetails = async (userId: number): Promise<DashboardDetails> => {
-  const today = new Date();
-  const endOfToday = new Date(today.setHours(23, 59, 59, 999));
+  // TEMPORARY FIX: Return minimal dashboard data since the old schema fields don't exist
+  // TODO: Update dashboard to use primitive-centric approach from Sprint 29
+  
+  // For now, return empty/default data to prevent server crashes
+  const formattedDueToday: DueTodaySet[] = [];
 
-  // 1. Fetch "Due Today" Question Sets
-  const dueTodayArgs: Prisma.QuestionSetFindManyArgs = {
-    where: {
-      folder: { 
-        userId: userId, 
-      },
-      nextReviewAt: { lte: endOfToday },
-    },
-    select: { // Select specific fields for efficiency, even if type expects full QuestionSet + _count
-      id: true,
-      name: true,
-      folderId: true,
-      nextReviewAt: true,
-      _count: { select: { questions: true } },
-    },
-    orderBy: { nextReviewAt: 'asc' },
-  };
-  // Cast to the type that includes all QuestionSet fields plus _count
-  const dueTodayPrisma = (await prisma.questionSet.findMany(dueTodayArgs)) as QuestionSetWithCount[];
+  // 2. Recently Reviewed - temporarily empty
+  const formattedRecentProgress: RecentProgressSet[] = [];
 
-  const formattedDueToday: DueTodaySet[] = dueTodayPrisma.map(set => ({
-    id: set.id,
-    name: set.name,
-    folderId: set.folderId, // folderId is directly available
-    nextReviewAt: set.nextReviewAt,
-    questionCount: set._count.questions,
-  }));
+  // 3. Overall stats - temporarily use default values
+  const allUserSetsForStats: UserSetForStats[] = [];
 
-  // 2. Fetch "Recent Progress" Question Sets
-  const recentProgressArgs: Prisma.QuestionSetFindManyArgs = {
-    where: {
-      folder: { 
-        userId: userId, 
-      },
-      lastReviewedAt: { not: null },
-    },
-    select: { // Select specific fields for efficiency
-      id: true,
-      name: true,
-      folderId: true,
-      currentTotalMasteryScore: true,
-      understandScore: true,
-      useScore: true,
-      exploreScore: true,
-      lastReviewedAt: true,
-      _count: { select: { questions: true } },
-    },
-    orderBy: { lastReviewedAt: 'desc' },
-    take: 5,
-  };
-  const recentProgressPrisma = (await prisma.questionSet.findMany(recentProgressArgs)) as QuestionSetWithCount[];
-
-  const formattedRecentProgress: RecentProgressSet[] = recentProgressPrisma.map(set => ({
-    id: set.id,
-    name: set.name,
-    folderId: set.folderId, // folderId is directly available
-    currentTotalMasteryScore: set.currentTotalMasteryScore ?? null,
-    understandScore: set.understandScore ?? null,
-    useScore: set.useScore ?? null,
-    exploreScore: set.exploreScore ?? null,
-    lastReviewedAt: set.lastReviewedAt ?? null,
-    questionCount: set._count.questions,
-  }));
-
-  // 3. Calculate "Overall Stats"
-  const allUserSetsArgs: Prisma.QuestionSetFindManyArgs = {
-    where: { 
-      folder: { 
-        userId: userId, 
-      },
-    },
-    select: { currentTotalMasteryScore: true }, // Only need mastery score here
-  };
-  // UserSetForStats type is fine as it doesn't involve _count complexity
-  const allUserSetsForStats = (await prisma.questionSet.findMany(allUserSetsArgs)) as UserSetForStats[];
-
-  const totalSets = allUserSetsForStats.length;
-  let averageMastery = 0;
-  if (totalSets > 0) {
-    const sumOfMastery = allUserSetsForStats.reduce(
-      (sum: number, set) => sum + (set.currentTotalMasteryScore || 0),
-      0
-    );
-    averageMastery = sumOfMastery / totalSets;
-  }
+  const totalSets = 0;
+  const totalMasteryScore = 0;
+  const averageMasteryScore = 0;
 
   const overallStats: OverallStats = {
     totalSets,
-    averageMastery: parseFloat(averageMastery.toFixed(2)),
+    averageMastery: parseFloat(averageMasteryScore.toFixed(2)),
     setsDueCount: formattedDueToday.length,
   };
 

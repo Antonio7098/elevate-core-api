@@ -1,9 +1,7 @@
 // src/controllers/folder.controller.ts
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware'; // For req.user
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../lib/prisma';
 
 export const createFolder = async (req: AuthRequest, res: Response): Promise<void> => {
   const { name, description, parentId } = req.body;
@@ -70,6 +68,7 @@ function buildFolderTree(folders: any[]): any[] {
 export const getFolders = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.userId;
   const parentId = req.query.parentId ? parseInt(req.query.parentId as string) : undefined;
+  const treeParam = req.query.tree;
 
   if (!userId) {
     res.status(401).json({ message: 'User not authenticated' });

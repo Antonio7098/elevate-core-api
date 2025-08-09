@@ -15,6 +15,10 @@ router.delete('/:id', protect, learningBlueprintsController.deleteLearningBluepr
 router.get('/:id/status', protect, learningBlueprintsController.getBlueprintIndexingStatus);
 router.post('/:id/reindex', protect, learningBlueprintsController.reindexBlueprint);
 
+// Mindmap Endpoints
+router.get('/:id/mindmap', protect, learningBlueprintsController.getBlueprintMindmap);
+router.put('/:id/mindmap', protect, learningBlueprintsController.updateBlueprintMindmap);
+
 // Content Generation from Blueprints
 router.post(
   '/:blueprintId/question-sets',

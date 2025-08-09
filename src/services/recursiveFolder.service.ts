@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+import prisma from '../lib/prisma';
 
 interface FolderWithQuestions {
   id: number;
@@ -78,8 +78,8 @@ export const getAllQuestionsInFolderTree = async (folderId: number, userId: numb
       qs.questions.map(q => ({
         id: q.id,
         text: q.questionText || '',
-        answer: q.answerText,
-        questionType: 'multiple_choice', // Default value
+        answer: q.answerText || null,
+        questionType: 'flashcard',
         currentMasteryScore: null,
         options: [],
         lastAnswerCorrect: null,
@@ -165,8 +165,18 @@ export const getAllNotesInFolderTree = async (folderId: number, userId: number):
       subfolders.map(subfolder => buildFolderTree(subfolder.id))
     );
 
-    // For now, return empty notes array since the schema doesn't include notes relation
-    const notes: any[] = [];
+    // Aggregate notes under this folder from user (schema has Note with folderId and no relation includes here)
+    const notesRaw = await prisma.note.findMany({
+      where: { folderId: currentFolderId, userId: userId },
+      orderBy: { updatedAt: 'desc' }
+    });
+    const notes = notesRaw.map(n => ({
+      id: n.id,
+      title: n.title,
+      content: n.content,
+      createdAt: n.createdAt,
+      updatedAt: n.updatedAt
+    }));
 
     return {
       id: folder.id,

@@ -1,8 +1,6 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../lib/prisma';
 
 export const createNote = async (req: AuthRequest, res: Response): Promise<void> => {
   const { title, content, plainText, folderId, questionSetId } = req.body;
@@ -25,32 +23,22 @@ export const createNote = async (req: AuthRequest, res: Response): Promise<void>
       }
     }
 
-    // Verify question set ownership if questionSetId is provided
-    if (questionSetId) {
-      const questionSet = await prisma.questionSet.findFirst({
-        where: { 
-          id: questionSetId,
-          folder: { userId }
-        },
-      });
-      if (!questionSet) {
-        res.status(404).json({ message: 'Question set not found or access denied' });
-        return;
-      }
-    }
+    // QuestionSet linkage removed from Note schema; ignore questionSetId
 
     const newNote = await prisma.note.create({
       data: {
         title,
         content,
-        // plainText field doesn't exist in schema
         userId,
         folderId: folderId || null,
-        questionSetId: questionSetId || null,
       },
     });
 
-    res.status(201).json(newNote);
+    // Return response with questionSetId for backward compatibility (not stored in DB)
+    res.status(201).json({
+      ...newNote,
+      questionSetId: questionSetId || null,
+    });
   } catch (error) {
     console.error('--- Create Note Error ---');
     if (error instanceof Error) {
@@ -80,9 +68,8 @@ export const getNotes = async (req: AuthRequest, res: Response): Promise<void> =
     if (folderId) {
       where.folderId = parseInt(folderId as string);
     }
-    if (questionSetId) {
-      where.questionSetId = parseInt(questionSetId as string);
-    }
+    // Note: questionSetId filtering is no longer supported as notes are not directly linked to question sets
+    // The questionSetId parameter is ignored for backward compatibility
 
     const notes = await prisma.note.findMany({
       where,
@@ -91,7 +78,12 @@ export const getNotes = async (req: AuthRequest, res: Response): Promise<void> =
       },
     });
 
-    res.status(200).json(notes);
+    // Add questionSetId to each note for backward compatibility (not stored in DB)
+    const notesWithQuestionSetId = notes.map(note => ({
+      ...note,
+      questionSetId: questionSetId ? parseInt(questionSetId as string) : null, // Echo back the requested questionSetId
+    }));
+    res.status(200).json(notesWithQuestionSetId);
   } catch (error) {
     console.error('--- Get Notes Error ---');
     if (error instanceof Error) {
@@ -211,11 +203,14 @@ export const updateNote = async (req: AuthRequest, res: Response): Promise<void>
         content,
         // plainText field doesn't exist in schema
         folderId: folderId || null,
-        questionSetId: questionSetId || null,
       },
     });
 
-    res.status(200).json(updatedNote);
+    // Return response with questionSetId for backward compatibility (not stored in DB)
+    res.status(200).json({
+      ...updatedNote,
+      questionSetId: questionSetId || null,
+    });
   } catch (error) {
     console.error('--- Update Note Error ---');
     if (error instanceof Error) {

@@ -22,17 +22,22 @@ export class AiRAGService {
   ) {
     this.axiosInstance = axios.create({
       baseURL: AI_SERVICE_BASE_URL,
+      timeout: 30000, // 30 second timeout
       headers: {
         'Authorization': `Bearer ${AI_SERVICE_API_KEY}`,
         'Content-Type': 'application/json',
       }
     });
+    console.log(`🔧 AiRAGService: axios configured with baseURL: ${AI_SERVICE_BASE_URL}, timeout: 30s`);
   }
   async createLearningBlueprint(
     dto: CreateLearningBlueprintDto,
     userId: number,
   ): Promise<LearningBlueprintResponseDto> {
-    console.log(`AiRAGService: createLearningBlueprint called for user ${userId} with sourceText: "${dto.sourceText.substring(0, 50)}..."`);
+    console.log(`🚀 AiRAGService: createLearningBlueprint START for user ${userId}`);
+    console.log(`📝 Source text preview: "${dto.sourceText.substring(0, 50)}..."`);
+    console.log(`🔧 Axios baseURL: ${this.axiosInstance.defaults.baseURL}`);
+    console.log(`⏱️ Axios timeout: ${this.axiosInstance.defaults.timeout}ms`);
 
     // 1. Call the AI Service's /deconstruct endpoint
     let blueprintJson: any;

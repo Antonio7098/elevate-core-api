@@ -47,8 +47,13 @@ export const getQuestionSetsByFolder = async (req: AuthRequest, res: Response): 
         updatedAt: 'desc',
       },
     });
-
-    res.status(200).json(questionSets);
+    const notes = await prisma.note.findMany({ where: { folderId: parseInt(folderId) } });
+    const response = questionSets.map(qs => ({
+      ...qs,
+      name: (qs as any).title,
+      notes,
+    }));
+    res.status(200).json(response);
   } catch (error) {
     console.error('--- Get Question Sets By Folder Error ---');
     if (error instanceof Error) {
@@ -97,7 +102,12 @@ export const getQuestionSetById = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    res.status(200).json(questionSet);
+    const notes = await prisma.note.findMany({ where: { folderId: questionSet!.folderId } });
+    res.status(200).json({
+      ...questionSet,
+      name: (questionSet as any).title,
+      notes,
+    });
   } catch (error) {
     console.error('--- Get Question Set By ID Error ---');
     if (error instanceof Error) {

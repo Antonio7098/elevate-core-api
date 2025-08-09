@@ -1,8 +1,6 @@
 // src/controllers/user.controller.ts
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../lib/prisma';
 
 export const getMyProfile = async (req: Request, res: Response): Promise<void> => {
   // We can access req.user because our 'protect' middleware added it

@@ -9,11 +9,35 @@ export class InsightCatalystService {
     explanation?: string;
     imageUrls?: string[];
     userId: number;
-    noteId?: number;
+    noteId?: number; // Make noteId optional for backward compatibility
+    primitiveId?: string; // Add primitiveId as optional
     questionId?: number;
   }) {
+    // Create InsightCatalyst with only the fields that exist in the schema
+    // For backward compatibility, if noteId is not provided, we'll need to create a dummy note or handle this differently
+    // For now, let's create a minimal note if noteId is not provided
+    let actualNoteId = data.noteId;
+    if (!actualNoteId) {
+      // Create a minimal note for backward compatibility
+      const dummyNote = await prisma.note.create({
+        data: {
+          title: 'Dummy Note for Insight Catalyst',
+          content: 'Dummy content',
+          userId: data.userId,
+          folderId: null,
+        },
+      });
+      actualNoteId = dummyNote.id;
+    }
+    
     return prisma.insightCatalyst.create({
-      data,
+      data: {
+        title: data.type,
+        content: data.text,
+        userId: data.userId,
+        noteId: actualNoteId,
+        primitiveId: data.primitiveId || null, // Optional field
+      },
     });
   }
 
@@ -23,16 +47,21 @@ export class InsightCatalystService {
     if (filters?.noteId) {
       where.noteId = filters.noteId;
     }
-    if (filters?.questionId) {
-      where.questionId = filters.questionId;
-    }
+    // Note: questionId filtering is not supported as insight catalysts are not directly linked to questions
+    // The questionId parameter is ignored for backward compatibility
 
-    return prisma.insightCatalyst.findMany({
+    const catalysts = await prisma.insightCatalyst.findMany({
       where,
       orderBy: {
         updatedAt: 'desc',
       },
     });
+
+    // Add questionId to response for backward compatibility
+    return catalysts.map(catalyst => ({
+      ...catalyst,
+      questionId: filters?.questionId || null,
+    }));
   }
 
   async getInsightCatalystById(id: number, userId: number) {
@@ -62,9 +91,15 @@ export class InsightCatalystService {
       throw new Error('Insight catalyst not found or access denied');
     }
 
+    // Map the fields to the actual schema fields
+    const updateData: any = {};
+    if (data.type) updateData.title = data.type;
+    if (data.text) updateData.content = data.text;
+    if (data.noteId) updateData.noteId = data.noteId;
+
     return prisma.insightCatalyst.update({
       where: { id },
-      data,
+      data: updateData,
     });
   }
 

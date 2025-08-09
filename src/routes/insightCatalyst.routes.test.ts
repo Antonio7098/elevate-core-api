@@ -50,7 +50,8 @@ describe('Insight Catalyst Routes', () => {
     // Create test question set
     const testQuestionSet = await prisma.questionSet.create({
       data: {
-        name: 'Test Question Set',
+        title: 'Test Question Set',
+        userId: testUser.id,
         folderId: testFolder.id,
       },
     });
@@ -59,7 +60,7 @@ describe('Insight Catalyst Routes', () => {
     testNote = await prisma.note.create({
       data: {
         title: 'Test Note',
-        content: { text: 'Test content' },
+        content: '<p>Test content</p>',
         userId: testUser.id,
       },
     });
@@ -67,10 +68,8 @@ describe('Insight Catalyst Routes', () => {
     // Create test question
     testQuestion = await prisma.question.create({
       data: {
-        text: 'Test Question',
-        questionType: 'multiple-choice',
-        options: ['Option 1', 'Option 2'],
-        conceptTags: ['test'],
+        questionText: 'Test Question',
+        answerText: 'Answer',
         questionSetId: testQuestionSet.id,
       },
     });
@@ -117,10 +116,8 @@ describe('Insight Catalyst Routes', () => {
 
       expect(response.status).toBe(201);
       expect(response.body).toHaveProperty('id');
-      expect(response.body.type).toBe('test-type');
-      expect(response.body.text).toBe('Test insight catalyst');
-      expect(response.body.explanation).toBe('Test explanation');
-      expect(response.body.imageUrls).toContain('http://example.com/image.jpg');
+      expect(response.body.title).toBe('test-type');
+      expect(response.body.content).toBe('Test insight catalyst');
       expect(response.body.noteId).toBe(testNote.id);
     });
 
@@ -136,8 +133,8 @@ describe('Insight Catalyst Routes', () => {
 
       expect(response.status).toBe(201);
       expect(response.body).toHaveProperty('id');
-      expect(response.body.type).toBe('question-insight');
-      expect(response.body.text).toBe('Question insight');
+      expect(response.body.title).toBe('question-insight');
+      expect(response.body.content).toBe('Question insight');
       expect(response.body.questionId).toBe(testQuestion.id);
     });
 
@@ -195,9 +192,10 @@ describe('Insight Catalyst Routes', () => {
     beforeEach(async () => {
       testCatalyst = await prisma.insightCatalyst.create({
         data: {
-          type: 'test-type',
-          text: 'Test insight catalyst',
+          title: 'test-type',
+          content: 'Test insight catalyst',
           userId: testUser.id,
+          noteId: testNote.id,
         },
       });
     });
@@ -209,8 +207,8 @@ describe('Insight Catalyst Routes', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(testCatalyst.id);
-      expect(response.body.type).toBe('test-type');
-      expect(response.body.text).toBe('Test insight catalyst');
+      expect(response.body.title).toBe('test-type');
+      expect(response.body.content).toBe('Test insight catalyst');
     });
 
     it('should return 404 for non-existent insight catalyst', async () => {
@@ -228,9 +226,10 @@ describe('Insight Catalyst Routes', () => {
     beforeEach(async () => {
       testCatalyst = await prisma.insightCatalyst.create({
         data: {
-          type: 'test-type',
-          text: 'Test insight catalyst',
+          title: 'test-type',
+          content: 'Test insight catalyst',
           userId: testUser.id,
+          noteId: testNote.id,
         },
       });
     });
@@ -242,14 +241,12 @@ describe('Insight Catalyst Routes', () => {
         .send({
           type: 'updated-type',
           text: 'Updated insight catalyst',
-          explanation: 'Updated explanation',
         });
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(testCatalyst.id);
-      expect(response.body.type).toBe('updated-type');
-      expect(response.body.text).toBe('Updated insight catalyst');
-      expect(response.body.explanation).toBe('Updated explanation');
+      expect(response.body.title).toBe('updated-type');
+      expect(response.body.content).toBe('Updated insight catalyst');
     });
 
     it('should return 404 for non-existent insight catalyst', async () => {
@@ -271,9 +268,10 @@ describe('Insight Catalyst Routes', () => {
     beforeEach(async () => {
       testCatalyst = await prisma.insightCatalyst.create({
         data: {
-          type: 'test-type',
-          text: 'Test insight catalyst',
+          title: 'test-type',
+          content: 'Test insight catalyst',
           userId: testUser.id,
+          noteId: testNote.id,
         },
       });
     });

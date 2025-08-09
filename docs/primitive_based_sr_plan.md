@@ -54,6 +54,8 @@ model MasteryCriterion {
   
   description String // e.g., "Can state the definition of Photosynthesis"
   ueeLevel    String   // "Understand", "Use", or "Explore"
+  weight      Int      @default(3) // 1-5 scale (5 = most critical for progression)
+  difficulty  Int      @default(2) // 1-3 scale (3 = hardest to master)
   
   questions   Question[] // Questions that test this criterion
   
@@ -70,12 +72,13 @@ model UserPrimitiveProgress {
   primitiveId Int
   primitive   KnowledgePrimitive @relation(fields: [primitiveId], references: [id])
   
-  currentUeeLevel String   @default("Understand")
-  nextReviewAt    DateTime?
-  lastReviewedAt  DateTime?
+  currentUeeLevel     String   @default("Understand")
+  nextReviewAt        DateTime?
+  lastReviewedAt      DateTime?
+  currentIntervalStep Int      @default(0)  // Position on interval ladder
+  consecutiveFailures Int      @default(0)  // Track repeated failures
+  schedulingMode      String   @default("AUTO") // "AUTO" or "MANUAL"
   
-  // Other SR fields like interval, ease factor, etc.
-
   // The question that was answered to level up to the current UEE level
   answeredQuestionId Int?
   answeredQuestion   Question? @relation(fields: [answeredQuestionId], references: [id])
@@ -85,15 +88,16 @@ model UserPrimitiveProgress {
 
 // New model to track a user's mastery of a specific criterion
 model UserCriterionMastery {
-  id              Int      @id @default(autoincrement())
-  userId          Int
-  user            User     @relation(fields: [userId], references: [id])
-  criterionId     Int
-  criterion       MasteryCriterion @relation(fields: [criterionId], references: [id])
-  isMastered      Boolean  @default(false)
-  masteredAt      DateTime?
-  masteringQuestionId Int? // The question that led to mastery of this criterion
-  masteringQuestion Question? @relation(fields: [masteringQuestionId], references: [id])
+  id                 Int      @id @default(autoincrement())
+  userId             Int
+  user               User     @relation(fields: [userId], references: [id])
+  criterionId        Int
+  criterion          MasteryCriterion @relation(fields: [criterionId], references: [id])
+  isMastered         Boolean  @default(false)
+  masteredAt         DateTime?
+  lastAttemptCorrect Boolean? // null: never answered, false: last was incorrect, true: last was correct
+  masteringQuestionId Int?    // The question that led to mastery of this criterion
+  masteringQuestion  Question? @relation(fields: [masteringQuestionId], references: [id])
 
   @@unique([userId, criterionId])
 }
@@ -103,8 +107,8 @@ model UserCriterionMastery {
 model Question {
   // ... existing fields
   
-  masteryCriterionIds Int[]?
-  masteryCriterions   MasteryCriterion[] @relation(fields: [masteryCriterionId], references: [id])
+  masteryCriterionId Int?
+  masteryCriterion   MasteryCriterion? @relation(fields: [masteryCriterionId], references: [id])
 }
 ```
 
@@ -114,11 +118,12 @@ model Question {
 
 The first step is to modify the Prisma schema (`schema.prisma`) to introduce the new models required for primitive-centric tracking.
 
-1.  **Create `KnowledgePrimitive` Model:** This model will represent the atomic unit of knowledge.
-2.  **Create `MasteryCriterion` Model:** This will define the requirements for mastering a `KnowledgePrimitive`, categorized by the "Understand, Use, Explore" (UEE) ladder.
-3.  **Create `UserPrimitiveProgress` Model:** This new table will track each user's spaced repetition data (e.g., `nextReviewAt`, `currentUeeLevel`) for each `KnowledgePrimitive`.
-4.  **Create `UserCriterionMastery` Model:** This new table will track a user's mastery of individual criteria.
-5.  **Update `Question` Model:** Add a relation from the `Question` model to the `MasteryCriterion` model to link each question to a specific criterion it tests.
+1.  **Create `KnowledgePrimitive` Model:** This model will represent the atomic unit of knowledge, including `isTracking` boolean field for user control.
+2.  **Create `MasteryCriterion` Model:** This will define the requirements for mastering a `KnowledgePrimitive`, categorized by the "Understand, Use, Explore" (UEE) ladder with `ueeLevel` field.
+3.  **Create `UserPrimitiveProgress` Model:** This new table will track each user's spaced repetition data including `currentIntervalStep`, `consecutiveFailures`, and `schedulingMode` fields for enhanced algorithm support.
+4.  **Create `UserCriterionMastery` Model:** This new table will track a user's mastery of individual criteria, including `lastAttemptCorrect` field for tracking attempt history.
+5.  **Update `Question` Model:** Add single `masteryCriterionId` relationship (not array) to link each question to a specific criterion it tests.
+6.  **Update supporting models:** Modify `UserQuestionAnswer`, `ScheduledReview`, and `InsightCatalyst` models with optional primitive links for backwards compatibility.
 
 ### Phase 2: Algorithm and Service Layer Refactoring
 
@@ -165,19 +170,51 @@ This algorithm uses a fixed ladder of intervals. A user's performance on a given
         *   **Action:** Negate the penalty. The interval step is maintained, and the review clock is reset.
         *   **Implementation:** If a user corrects a mistake on the same day, the `currentIntervalStep` is restored to its pre-session value, and `nextReviewAt` is set to `now() + INTERVALS[current_step]`.
 
-#### **3. UEE Ladder Progression Logic**
-*   A user progresses from "Understand" to "Use" for a primitive only after they have met all "Understand"-level `MasteryCriteria` for that primitive.
-*   Meeting a criterion requires correctly answering at least one question associated with it.
-*   When a user meets the final criterion for a given UEE level, the `UserPrimitiveProgress` record is updated. The `currentUeeLevel` is advanced, and the `answeredQuestionId` is set to the ID of the question that triggered the level-up.
-*   A new model, `UserCriterionMastery`, will be needed to track this. When a user levels up a primitive's UEE state, the SR state (`currentIntervalStep`, `nextReviewAt`) for that primitive will be reset to start the new level fresh.
+#### **3. UEE Ladder Progression Logic (Weighted Criteria)**
+*   A user progresses from "Understand" to "Use" for a primitive based on **weighted mastery** rather than requiring ALL criteria to be mastered.
+*   Each `MasteryCriterion` has a `weight` field (1-5 scale) indicating its importance for progression.
+*   **Weighted Mastery Calculation:**
+    ```
+    weightedMastery = (sum of weights for mastered criteria) / (sum of all criteria weights)
+    ```
+*   **Progression Thresholds:**
+    *   "Understand" → "Use": 75% weighted mastery
+    *   "Use" → "Explore": 80% weighted mastery  
+    *   "Explore" → Complete: 85% weighted mastery
+*   When a user meets the weighted threshold for a given UEE level, the `UserPrimitiveProgress` record is updated. The `currentUeeLevel` is advanced, and the `answeredQuestionId` is set to the ID of the question that triggered the level-up.
+*   This approach prevents single difficult criteria from blocking progression indefinitely while maintaining high standards for advancement.
+*   When a user levels up a primitive's UEE state, the SR state (`currentIntervalStep`, `nextReviewAt`) for that primitive will be reset to start the new level fresh.
+
+#### **4. Manual SR Date Management**
+*   Add `schedulingMode` field to `UserPrimitiveProgress` with values "AUTO" or "MANUAL"
+*   When `schedulingMode = "MANUAL"`, the SR algorithm must not automatically update `nextReviewAt`
+*   Create endpoint `/api/primitives/:primitiveId/set-review-date` for manual scheduling
+*   Implement `manuallySetNextReviewDate(userId, primitiveId, newNextReviewAt)` function
+*   Manual scheduling overrides automatic SR calculations until user resets to AUTO mode
+
+#### **5. Enhanced Mastery Logic**
+*   Mastery requires `lastAttemptCorrect = true` AND current attempt correct (consecutive success)
+*   Track `lastAttemptCorrect` in `UserCriterionMastery` for each attempt
+*   Only set `isMastered = true` when both conditions are met consecutively
+*   If the answer is incorrect, set `lastAttemptCorrect = false` and reset mastery status
+*   This ensures consistent mastery rather than single lucky correct answers
 
 ### Phase 3: API and AI Integration
 
 Finally, the API endpoints and the role of the AI API will be adjusted.
 
 1.  **API Endpoint Changes:**
-    *   **New Endpoints:** Create new endpoints (`POST /api/primitives/review`, `GET /api/primitives/due`, `POST /api/primitives/:id/tracking`) to handle the new review workflow.
-    *   **Deprecation:** The existing `QuestionSet`-based review endpoints (`/api/reviews/...`) will be marked for deprecation and eventually phased out.
+    *   **New Endpoints:** Create comprehensive primitive-centric endpoints:
+        *   `GET /api/primitives/due`: Fetches daily prioritized list using three-bucket algorithm
+        *   `POST /api/primitives/review`: Submits review outcomes for primitives  
+        *   `POST /api/primitives/:id/tracking`: Toggles `isTracking` status
+        *   `GET /api/primitives`: Lists all user primitives
+        *   `GET /api/primitives/:id/details`: Detailed primitive info with criteria and progress
+        *   `POST /api/primitives/:id/set-review-date`: Manual review date scheduling
+    *   **Deprecation Strategy:** 
+        *   `/api/reviews/` routes return `410 Gone` status with migration guidance
+        *   Add deprecation logging to monitor continued usage
+        *   Update API documentation with comprehensive migration guide
 2.  **Evolve AI API's Role:**
     *   The AI API's function will be updated. Instead of only generating a blueprint JSON, it will now be responsible for deconstructing source material into the new database models: `KnowledgePrimitive` and their associated `MasteryCriterion`. This makes the primitives a persistent and integral part of the core application.
 
@@ -216,12 +253,21 @@ This section will detail the specific modifications required across the applicat
         *   A deprecation notice will be added to the API documentation. For a transition period, old endpoints can return a `410 Gone` status with a message pointing to the new API.
 
 *   **6.3 Service Layer Refactoring**
-    *   **`todaysTasks.service.ts`:**
-        *   Rewrite `getDueSetsForUser` to `getDuePrimitivesForUser`. This will implement the new three-bucket logic (Critical, Core, Plus) by querying `UserPrimitiveProgress`, `UserQuestionAnswer`, and `KnowledgePrimitive`.
+    *   **`todaysTasksPrimitive.service.ts` (New Service):**
+        *   Replaces `todaysTasks.service.ts` for primitive-based task generation
+        *   Implements three-bucket algorithm (Critical, Core, Plus)
+        *   Handles edge cases for users with no historical data
+        *   Includes tie-breaking logic for equal scores
+        *   Rewrite `getDueSetsForUser` to `getDuePrimitivesForUser` with enhanced querying of `UserPrimitiveProgress`, `UserQuestionAnswer`, and `KnowledgePrimitive`
+    *   **`primitiveSR.service.ts` (New Service):**
+        *   Implements Fixed-Interval v3 algorithm with interval ladder [1, 3, 7, 21]
+        *   Manages `UserPrimitiveProgress` updates based on review outcomes
+        *   Handles UEE progression logic and criterion mastery checking
+        *   Supports manual scheduling mode with `schedulingMode` field
+        *   Tracks `consecutiveFailures` and `lastAttemptCorrect` states
+        *   Replaces core functionality from `advancedSpacedRepetition.service.ts`
     *   **`reviewScheduling.service.ts`:**
         *   This service will be refactored to manage manually scheduled reviews for primitives (`ScheduledReview` model) rather than being the core of the SR system.
-    *   **`advancedSpacedRepetition.service.ts`:**
-        *   This service will be heavily modified or replaced. Its core logic for calculating review schedules will be moved into a new service that implements the "Fixed-Interval v3" algorithm, updating `UserPrimitiveProgress` based on review outcomes.
     *   **`stats.service.ts`:**
         *   Rewrite `fetchQuestionSetStatsDetails` to `fetchPrimitiveStatsDetails`. All stats calculations will now be based on `UserPrimitiveProgress` and `UserCriterionMastery`.
     *   **`ai-rag.service.ts`:**
@@ -245,20 +291,71 @@ This section will detail the specific modifications required across the applicat
     *   **Deprecated:** `DueQuestionSet`, `FrontendReviewSubmission`, `QuestionSetStatsDetails`, and other SR-related `QuestionSet` types.
 
 *   **6.6 Testing Strategy**
-    *   **Unit Tests:** New tests for the "Today's Tasks" bucketing logic, the "Fixed-Interval v3" scheduling algorithm, and UEE ladder progression. Existing tests for services like `todaysTasks.service.ts` will be rewritten.
-    *   **Integration Tests:** New tests for the `/api/primitives/*` endpoints. Tests for deprecated review endpoints will be removed.
-    *   **End-to-End Tests:** A new E2E test scenario for the complete lifecycle of a primitive: creation from a document, appearing in "Today's Tasks", reviewing it, and tracking its progress and mastery over time.
+    *   **Unit Tests:**
+        *   Three-bucket algorithm logic with edge cases (no data, ties, empty pools)
+        *   Fixed-Interval v3 scheduling algorithm with all review outcomes
+        *   UEE progression and mastery logic including rollback scenarios
+        *   Manual scheduling functionality and mode switching
+        *   Migration script validation with various data scenarios
+        *   Enhanced mastery logic with `lastAttemptCorrect` tracking
+    *   **Integration Tests:**
+        *   All `/api/primitives/*` endpoint testing with success and error cases
+        *   Cross-service integration (primitive ↔ algorithm ↔ API)
+        *   Authentication and authorization flows for new endpoints
+        *   Error handling and edge cases (malformed requests, missing data)
+        *   Deprecated endpoint behavior (410 Gone responses)
+    *   **End-to-End Tests:**
+        *   Complete primitive lifecycle: AI generation → Today's Tasks → Review → Progress tracking
+        *   Multi-user scenarios and data isolation verification
+        *   Performance testing for daily task generation with large datasets
+        *   Migration script testing with rollback scenarios on staging environment
+        *   UEE progression across multiple review sessions
 
 *   **6.7 Data Migration Strategy**
-    *   A one-time migration script (`scripts/migrate-sr-data.ts`) will be created.
-    *   **Logic:**
-        1.  Iterate through each `QuestionSet` that has `isTracked = true`.
-        2.  For each such `QuestionSet`, create one `KnowledgePrimitive`.
-        3.  For each `Question` in the set, create a corresponding `MasteryCriterion`, linking it to the new primitive.
-        4.  Create a `UserPrimitiveProgress` record from the `QuestionSet`'s SR data (`nextReviewAt`, `lastReviewedAt`, etc.).
-        5.  Analyze `UserQuestionAnswer` history to populate `UserCriterionMastery` records.
-    *   **Rollback:** A database backup must be performed before running the script. The script should be designed to be runnable multiple times on a staging environment for verification.
+    *   A one-time migration script (`scripts/migrate-to-primitive-sr.ts`) will be created.
+    *   **Enhanced Migration Logic:**
+        1.  Create test database backup before migration
+        2.  Iterate through each `QuestionSet` that has `isTracked = true`
+        3.  Handle `QuestionSet` with `isTracked = false` (skip or archive as needed)
+        4.  For each tracked `QuestionSet`, create one `KnowledgePrimitive`
+        5.  For each `Question` in the set, create a corresponding `MasteryCriterion`, linking it to the new primitive
+        6.  Create a `UserPrimitiveProgress` record from the `QuestionSet`'s SR data
+        7.  Populate `lastAttemptCorrect` based on `UserQuestionAnswer` history analysis
+        8.  Set appropriate `schedulingMode` based on existing manual overrides
+        9.  Initialize `currentIntervalStep` based on existing `currentIntervalDays`
+        10. Validate foreign key relationships post-migration
+        11. Handle orphaned Questions and incomplete data gracefully
+    *   **Rollback Strategy:**
+        *   Maintain backup of pre-migration state with verification
+        *   Create rollback script that can restore previous schema
+        *   Test rollback process on staging environment thoroughly
+        *   Document rollback procedures for production use
+        *   Implement partial rollback capability for failed migrations
+    *   **Migration Verification:**
+        *   Create migration verification tests to ensure data integrity
+        *   Validate that all tracked QuestionSets have corresponding primitives
+        *   Ensure user progress data is accurately transferred
+        *   Test migration script multiple times on staging with various data scenarios
 
 *   **6.8 Frontend Impact (Brief Mention)**
     *   The frontend will need significant updates. This includes creating new UI components for displaying primitive-based tasks, review interfaces, and progress visualizations. All data fetching logic related to spaced repetition will need to be pointed to the new `/api/primitives/*` endpoints. This is a major change that will require coordinated effort with the frontend team.
+
+*   **6.9 Performance and Monitoring Considerations**
+    *   **Database Optimization:**
+        *   Add indexes on `UserPrimitiveProgress.nextReviewAt` and `userId` for efficient due date queries
+        *   Index `UserCriterionMastery.userId` and `criterionId` for fast mastery lookups
+        *   Consider composite indexes for complex daily task queries (userId, nextReviewAt, isTracking)
+        *   Monitor query performance for three-bucket algorithm with large user datasets
+    *   **Caching Strategy:**
+        *   Cache daily task results for repeated requests within same session
+        *   Cache primitive mastery status for quick UEE level progression checks
+        *   Implement query result caching for expensive operations (user stats, progress summaries)
+        *   Consider Redis or in-memory caching for frequently accessed primitive data
+    *   **Monitoring and Metrics:**
+        *   Track daily task generation performance and identify bottlenecks
+        *   Monitor primitive review completion rates and user engagement metrics
+        *   Alert on migration script execution issues and data inconsistencies
+        *   Log deprecated endpoint usage for systematic sunset planning
+        *   Monitor database performance impact of new query patterns
+        *   Track UEE progression rates and mastery achievement statistics
 

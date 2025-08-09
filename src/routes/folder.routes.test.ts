@@ -33,30 +33,29 @@ describe('Folder Routes', () => {
       }
     });
 
-    // Create test question set
+    // Create test question set (schema requires title and userId)
     testQuestionSet = await prisma.questionSet.create({
       data: {
-        name: 'Test Question Set',
+        title: 'Test Question Set',
+        userId: testUser.id,
         folderId: testFolder.id
       }
     });
 
-    // Create test question
+    // Create test question (schema fields: questionText, answerText)
     testQuestion = await prisma.question.create({
       data: {
-        text: 'Test Question',
-        answer: 'Test Answer',
-        questionType: 'multiple_choice',
-        options: ['A', 'B', 'C'],
+        questionText: 'Test Question',
+        answerText: 'Test Answer',
         questionSetId: testQuestionSet.id
       }
     });
 
-    // Create test note
+    // Create test note (content is a string per schema)
     testNote = await prisma.note.create({
       data: {
         title: 'Test Note',
-        content: { text: 'Test content' },
+        content: '<p>Test content</p>',
         folderId: testFolder.id,
         userId: testUser.id
       }

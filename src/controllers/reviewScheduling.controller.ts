@@ -1,12 +1,12 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import {
-  scheduleReview,
-  getScheduledReviews,
-  updateScheduledReview,
-  cancelScheduledReview,
-  getUpcomingReviews
-} from '../services/reviewScheduling.service';
+// import {
+//   scheduleReview,
+//   getScheduledReviews,
+//   updateScheduledReview,
+//   cancelScheduledReview,
+//   getUpcomingReviews
+// } from '../services/reviewScheduling.service'; // Service disabled due to schema compatibility issues
 
 const prisma = new PrismaClient();
 
@@ -24,14 +24,15 @@ export const scheduleNewReview = async (req: Request, res: Response): Promise<vo
   }
 
   try {
-    const scheduledReview = await scheduleReview(
-      userId,
-      questionSetId,
-      reviewDate ? new Date(reviewDate) : undefined,
-      type
-    );
+    // const scheduledReview = await scheduleReview(
+    //   userId,
+    //   questionSetId,
+    //   reviewDate ? new Date(reviewDate) : undefined,
+    //   type
+    // );
 
-    res.status(201).json(scheduledReview);
+    // res.status(201).json(scheduledReview);
+    res.status(501).json({ error: 'Review scheduling temporarily disabled due to schema compatibility issues' });
   } catch (error) {
     console.error('Error scheduling review:', error);
     if (error instanceof Error) {
@@ -56,12 +57,13 @@ export const getScheduledReviewsList = async (req: Request, res: Response): Prom
   }
 
   try {
-    const reviews = await getScheduledReviews(
-      userId,
-      status as 'PENDING' | 'COMPLETED' | undefined
-    );
+    // const reviews = await getScheduledReviews(
+    //   userId,
+    //   status as 'PENDING' | 'COMPLETED' | undefined
+    // );
 
-    res.json(reviews);
+    // res.json(reviews);
+    res.status(501).json({ error: 'Review scheduling temporarily disabled due to schema compatibility issues' });
   } catch (error) {
     console.error('Error getting scheduled reviews:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -83,17 +85,18 @@ export const updateScheduledReviewById = async (req: Request, res: Response): Pr
   }
 
   try {
-    const updatedReview = await updateScheduledReview(
-      userId,
-      parseInt(id),
-      {
-        reviewDate: reviewDate ? new Date(reviewDate) : undefined,
-        status,
-        type
-      }
-    );
+    // const updatedReview = await updateScheduledReview(
+    //   userId,
+    //   parseInt(id),
+    //   {
+    //     reviewDate: reviewDate ? new Date(reviewDate) : undefined,
+    //     status,
+    //     type
+    //   }
+    // );
 
-    res.json(updatedReview);
+    // res.json(updatedReview);
+    res.status(501).json({ error: 'Review scheduling temporarily disabled due to schema compatibility issues' });
   } catch (error) {
     console.error('Error updating scheduled review:', error);
     if (error instanceof Error) {
@@ -118,8 +121,9 @@ export const cancelScheduledReviewById = async (req: Request, res: Response): Pr
   }
 
   try {
-    const deletedReview = await cancelScheduledReview(userId, parseInt(id));
-    res.json(deletedReview);
+    // const deletedReview = await cancelScheduledReview(userId, parseInt(id));
+    // res.json(deletedReview);
+    res.status(501).json({ error: 'Review scheduling temporarily disabled due to schema compatibility issues' });
   } catch (error) {
     console.error('Error canceling scheduled review:', error);
     if (error instanceof Error) {
@@ -144,12 +148,13 @@ export const getUpcomingReviewsList = async (req: Request, res: Response): Promi
   }
 
   try {
-    const reviews = await getUpcomingReviews(
-      userId,
-      days ? parseInt(days as string) : undefined
-    );
+    // const reviews = await getUpcomingReviews(
+    //   userId,
+    //   days ? parseInt(days as string) : undefined
+    // );
 
-    res.json(reviews);
+    // res.json(reviews);
+    res.status(501).json({ error: 'Review scheduling temporarily disabled due to schema compatibility issues' });
   } catch (error) {
     console.error('Error getting upcoming reviews:', error);
     res.status(500).json({ error: 'Internal server error' });

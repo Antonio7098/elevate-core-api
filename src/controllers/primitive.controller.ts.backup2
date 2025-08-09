@@ -1,0 +1,399 @@
+import { Request, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
+import * as primitiveSRService from '../services/primitiveSR.service';
+import { cachedPrimitiveService } from '../services/cachedPrimitiveSR.service';
+
+let prisma = new PrismaClient();
+
+// Function to set prisma client for testing
+export function setPrismaClient(client: PrismaClient) {
+  prisma = client;
+}
+
+// Reset to default prisma client
+export function resetPrismaClient() {
+  prisma = new PrismaClient();
+}
+
+// Interface for primitive details response
+interface PrimitiveDetailsResponse {
+  id: number;
+  title: string;
+  description: string;
+  primitiveType: string;
+  difficultyLevel: string;
+  estimatedTimeMinutes: number;
+  trackingIntensity: string;
+  currentUeeLevel: string;
+  nextReviewAt: Date | null;
+  lastReviewedAt: Date | null;
+  reviewCount: number;
+  successfulReviews: number;
+  difficultyMultiplier: number;
+  criteria: {
+    id: string;
+    description: string;
+    ueeLevel: string;
+    weight: number;
+    difficulty: number;
+    isMastered: boolean;
+    attemptCount: number;
+    successfulAttempts: number;
+    lastAttemptedAt: Date | null;
+    masteredAt: Date | null;
+  }[];
+  weightedMasteryScore: number;
+  canProgressToNext: boolean;
+}
+
+// POST /api/primitives/review - Process review outcomes for primitives
+export const submitReview = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'User not authenticated' });
+      return;
+    }
+
+    const { outcomes } = req.body;
+    
+    if (!outcomes || !Array.isArray(outcomes) || outcomes.length === 0) {
+      res.status(400).json({ 
+        success: false, 
+        error: 'Invalid request. Expected array of review outcomes.' 
+      });
+      return;
+    }
+
+    // Validate outcome structure
+    for (const outcome of outcomes) {
+      if (!outcome.primitiveId || !outcome.blueprintId || typeof outcome.isCorrect !== 'boolean') {
+        res.status(400).json({ 
+          success: false, 
+          error: 'Invalid outcome structure. Required: primitiveId, blueprintId, isCorrect' 
+        });
+        return;
+      }
+    }
+
+    const startTime = Date.now();
+
+    // Process review outcomes using the primitive SR service
+    const results = await primitiveSRService.processBatchReviewOutcomes(userId, outcomes);
+    
+    // Invalidate the user's cache
+    cachedPrimitiveService.invalidateUserCache(userId);
+    
+    const processingTime = Date.now() - startTime;
+
+    res.json({
+      success: true,
+      data: {
+        message: `Processed ${results.length} review outcomes`,
+        totalProcessed: results.length,
+        outcomes: results
+      }
+    });
+
+  } catch (error) {
+    console.error('Error processing primitive review:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to process review outcomes',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+  async listPrimitives(req: Request, res: Response) {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        res.status(401).json({ success: false, error: 'User not authenticated' });
+        return;
+      }
+
+      const { page = 1, limit = 50, trackingOnly = false } = req.query;
+      const pageNum = parseInt(page as string);
+      const limitNum = parseInt(limit as string);
+      const skip = (pageNum - 1) * limitNum;
+
+      // Build where clause for filtering
+      const whereClause: any = {
+        userPrimitiveProgresses: {
+          some: {
+            userId
+          }
+        }
+      };
+
+      // Apply tracking filter if specified
+      if (trackingOnly === 'true') {
+        whereClause.userPrimitiveProgresses.some.nextReviewAt = {
+          not: null
+        };
+      }
+
+      // Get total count for pagination
+      const totalCount = await this.dependencies.prisma.knowledgePrimitive.count({
+        where: whereClause
+      });
+
+      // Fetch primitives with related data
+      const primitives = await this.dependencies.prisma.knowledgePrimitive.findMany({
+        where: whereClause,
+        include: {
+          userPrimitiveProgresses: { 
+            where: { userId } 
+          },
+          masteryCriteria: { 
+            include: { 
+              userCriterionMasteries: { 
+                where: { userId } 
+              } 
+            } 
+          }
+        },
+        skip,
+        take: limitNum,
+        orderBy: [
+          { userPrimitiveProgresses: { nextReviewAt: 'asc' } },
+          { createdAt: 'desc' }
+        ]
+      });
+
+      res.json({
+        success: true,
+        data: {
+          primitives,
+          pagination: {
+            page: pageNum,
+            limit: limitNum,
+            total: totalCount,
+            pages: Math.ceil(totalCount / limitNum)
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error listing primitives:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: 'Failed to retrieve primitives',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  async getPrimitiveDetails(req: Request, res: Response) {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        res.status(401).json({ success: false, error: 'User not authenticated' });
+        return;
+      }
+
+      const primitiveId = req.params.id;
+
+      // Fetch the primitive with related data
+      const primitive = await this.dependencies.prisma.knowledgePrimitive.findFirst({
+        where: {
+          id: parseInt(primitiveId)
+        },
+        include: {
+          userPrimitiveProgresses: { 
+            where: { userId } 
+          },
+          masteryCriteria: { 
+            include: { 
+              userCriterionMasteries: { 
+                where: { userId } 
+              } 
+            } 
+          }
+        }
+      });
+
+      if (!primitive) {
+        res.status(404).json({ 
+          success: false, 
+          error: 'Primitive not found or not accessible to user' 
+        });
+        return;
+      }
+
+      const progress = primitive.userPrimitiveProgresses[0];
+
+      // Calculate weighted mastery
+      const totalWeight = primitive.masteryCriteria.reduce((sum, criterion) => sum + criterion.weight, 0);
+      const masteredWeight = primitive.masteryCriteria.reduce((sum, criterion) => {
+        const mastery = criterion.userCriterionMasteries.find(m => m.userId === userId);
+        return sum + (mastery?.isMastered ? criterion.weight : 0);
+      }, 0);
+      
+      const weightedMasteryScore = totalWeight > 0 ? masteredWeight / totalWeight : 0;
+
+      // Check if can progress to next level
+      const canProgressToNext = await this.dependencies.primitiveSRService.checkUeeProgression(
+        userId, 
+        primitiveId, 
+        progress?.blueprintId || 0
+      );
+
+      // Transform criteria data
+      const criteria = primitive.masteryCriteria.map(criterion => {
+        const mastery = criterion.userCriterionMasteries.find(m => m.userId === userId);
+        
+        return {
+          id: criterion.criterionId,
+          description: criterion.title,
+          ueeLevel: criterion.ueeLevel,
+          weight: criterion.weight,
+          difficulty: criterion.difficulty,
+          isMastered: mastery?.isMastered || false,
+          attemptCount: mastery?.attemptCount || 0,
+          successfulAttempts: mastery?.successfulAttempts || 0,
+          lastAttemptedAt: mastery?.lastAttemptedAt,
+          masteredAt: mastery?.masteredAt
+        };
+      });
+
+      const response: PrimitiveDetailsResponse = {
+        id: primitive.id,
+        title: primitive.title,
+        description: primitive.description,
+        primitiveType: primitive.primitiveType,
+        difficultyLevel: primitive.difficultyLevel,
+        estimatedTimeMinutes: primitive.estimatedTimeMinutes,
+        trackingIntensity: primitive.trackingIntensity,
+        currentUeeLevel: progress?.masteryLevel || 'SURVEY',
+        nextReviewAt: progress?.nextReviewAt || null,
+        lastReviewedAt: progress?.lastReviewedAt || null,
+        reviewCount: progress?.reviewCount || 0,
+        successfulReviews: progress?.successfulReviews || 0,
+        difficultyMultiplier: progress?.difficultyMultiplier || 1.0,
+        criteria,
+        weightedMasteryScore,
+        canProgressToNext: canProgressToNext.canProgress
+      };
+
+      res.json({
+        success: true,
+        data: response
+      });
+    } catch (error) {
+      console.error('Error getting primitive details:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: 'Failed to retrieve primitive details',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  async setTrackingIntensity(req: Request, res: Response) {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        res.status(401).json({ success: false, error: 'User not authenticated' });
+        return;
+      }
+
+      const primitiveId = req.params.id;
+      const { intensity } = req.body;
+
+      // Validate intensity value
+      if (!['LOW', 'NORMAL', 'HIGH'].includes(intensity)) {
+        res.status(400).json({ 
+          success: false, 
+          error: 'Invalid intensity value. Must be LOW, NORMAL, or HIGH.' 
+        });
+        return;
+      }
+
+      // Find the user's progress record for this primitive
+      const progress = await this.dependencies.prisma.userPrimitiveProgress.findFirst({
+        where: {
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to retrieve tracking intensity',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+// DELETE /api/primitives/:id/tracking-intensity - Reset tracking intensity to default (NORMAL)
+export const deleteTrackingIntensity = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'User not authenticated' });
+      return;
+    }
+
+    const primitiveId = req.params.id;
+
+    // Find the user's progress record for this primitive
+    const progress = await prisma.userPrimitiveProgress.findFirst({
+      where: {
+        userId,
+        primitiveId
+      }
+    });
+
+    if (!progress) {
+      res.status(404).json({ 
+        success: false, 
+        error: 'Primitive progress not found for user' 
+      });
+      return;
+    }
+
+    // Reset tracking intensity to NORMAL
+    await prisma.userPrimitiveProgress.update({
+      where: {
+        userId_primitiveId_blueprintId: {
+          userId,
+          primitiveId,
+          blueprintId: progress.blueprintId
+        }
+      },
+      data: {
+        trackingIntensity: 'NORMAL',
+        updatedAt: new Date()
+      }
+    });
+
+    // Invalidate caches
+    cachedPrimitiveService.invalidateUserCache(userId);
+
+    res.json({
+      success: true,
+      data: {
+        primitiveId,
+        intensity: 'NORMAL',
+        message: 'Tracking intensity reset to NORMAL'
+      }
+    });
+
+  } catch (error) {
+    console.error('Error deleting tracking intensity:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to reset tracking intensity',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+// Export all functions
+export {
+  submitReview,
+  toggleTracking,
+  listPrimitives,
+  getPrimitiveDetails,
+  setTrackingIntensity,
+  getTrackingIntensity,
+  deleteTrackingIntensity,
+  setPrismaClient,
+  resetPrismaClient
+};

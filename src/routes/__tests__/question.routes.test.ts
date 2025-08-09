@@ -50,15 +50,9 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
     // Create a question set in user1Folder1
     user1Qs1 = await prisma.questionSet.create({
       data: {
-        name: 'User1 QS1 in Folder1',
-        folderId: user1Folder1.id,
-        understandScore: 0,
-        useScore: 0,
-        exploreScore: 0,
-        currentTotalMasteryScore: 0,
-        currentIntervalDays: 1,
-        nextReviewAt: null,
-        lastReviewedAt: null
+        title: 'User1 QS1 in Folder1',
+        userId: user1.id,
+        folderId: user1Folder1.id
       },
     });
   });
@@ -85,46 +79,18 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
       // Create test questions one by one to handle the JSON field properly
       await prisma.question.create({
         data: { 
-          text: 'Q1 Text', 
-          answer: 'A1', 
-          questionSetId: user1Qs1.id, 
-          questionType: 'flashcard',
-          uueFocus: 'Understand',
-          conceptTags: ['concept1', 'concept2'],
-          difficultyScore: 0.5,
-          timesAnsweredCorrectly: 0,
-          timesAnsweredIncorrectly: 0,
-          lastAnswerCorrect: null,
-          // In the schema, totalMarksAvailable is mapped to marksAvailable in the database
-          // but we need to use totalMarksAvailable in the Prisma client
-          totalMarksAvailable: 2, 
-          markingCriteria: [
-            { criterion: 'Basic understanding', marks: 1 },
-            { criterion: 'Detailed explanation', marks: 1 }
-          ]
-        } as any
+          questionText: 'Q1 Text', 
+          answerText: 'A1', 
+          questionSetId: user1Qs1.id
+        }
       });
       
       await prisma.question.create({
         data: { 
-          text: 'Q2 Text', 
-          answer: 'A2', 
           questionSetId: user1Qs1.id, 
-          questionType: 'flashcard',
-          uueFocus: 'Use',
-          conceptTags: ['concept2', 'concept3'],
-          difficultyScore: 0.7,
-          timesAnsweredCorrectly: 0,
-          timesAnsweredIncorrectly: 0,
-          lastAnswerCorrect: null,
-          // In the schema, totalMarksAvailable is mapped to marksAvailable in the database
-          // but we need to use totalMarksAvailable in the Prisma client
-          totalMarksAvailable: 4, 
-          markingCriteria: [
-            { criterion: 'Correct application', marks: 2 },
-            { criterion: 'Clear reasoning', marks: 2 }
-          ]
-        } as any
+          questionText: 'Q2 Text', 
+          answerText: 'A2'
+        }
       });
 
       const res = await request(app)
@@ -134,18 +100,8 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
       expect(res.statusCode).toEqual(200);
       expect(res.body).toBeInstanceOf(Array);
       expect(res.body.length).toBe(2);
-      expect(res.body[0]).toHaveProperty('text', 'Q1 Text');
-      expect(res.body[1]).toHaveProperty('text', 'Q2 Text');
-      // Verify new question attributes are returned
-      expect(res.body[0]).toHaveProperty('totalMarksAvailable', 2);
-      expect(res.body[0]).toHaveProperty('markingCriteria');
-      expect(res.body[0].markingCriteria).toHaveLength(2);
-      expect(res.body[0].markingCriteria[0]).toHaveProperty('criterion', 'Basic understanding');
-      
-      expect(res.body[1]).toHaveProperty('totalMarksAvailable', 4);
-      expect(res.body[1]).toHaveProperty('markingCriteria');
-      expect(res.body[1].markingCriteria).toHaveLength(2);
-      expect(res.body[1].markingCriteria[1]).toHaveProperty('marks', 2);
+      expect(res.body[0]).toHaveProperty('questionText', 'Q1 Text');
+      expect(res.body[1]).toHaveProperty('questionText', 'Q2 Text');
     });
 
     it('should return an empty array if the question set has no questions', async () => {
@@ -398,11 +354,9 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
       // Create a test question for user1
       testQuestion = await prisma.question.create({
         data: {
-          text: 'Test Question for GET by ID',
-          answer: 'Test Answer',
-          questionType: 'flashcard',
-          options: [],
-          questionSetId: user1Qs1.id // Direct assignment instead of connect
+          questionText: 'Test Question for GET by ID',
+          answerText: 'Test Answer',
+          questionSetId: user1Qs1.id
         }
       });
       
@@ -420,18 +374,17 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
       
       otherUserQuestionSet = await prisma.questionSet.create({
         data: { 
-          name: 'Other User Question Set', 
-          folder: { connect: { id: otherUserFolder.id } }
+          title: 'Other User Question Set', 
+          userId: user2.id,
+          folderId: otherUserFolder.id
         }
       });
       
       otherUserQuestion = await prisma.question.create({
         data: {
-          text: 'Other User Question',
-          answer: 'Other Answer',
-          questionType: 'flashcard',
-          options: [],
-          questionSet: { connect: { id: otherUserQuestionSet.id } }
+          questionText: 'Other User Question',
+          answerText: 'Other Answer',
+          questionSetId: otherUserQuestionSet.id
         }
       });
       
@@ -444,12 +397,10 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
       // Create a test question specifically for this test
       const testQuestion = await prisma.question.create({
         data: {
-          text: 'Test Question for GET by ID',
-          answer: 'Test Answer',
-          questionType: 'flashcard',
-          options: [],
-          questionSet: { connect: { id: user1Qs1.id } }
-        } as any // Type assertion to bypass TypeScript error
+          questionText: 'Test Question for GET by ID',
+          answerText: 'Test Answer',
+          questionSetId: user1Qs1.id
+        }
       });
       
 
@@ -513,10 +464,8 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
       // Create a test question for updating
       updateTestQuestion = await prisma.question.create({
         data: {
-          text: 'Test Question for Update',
-          answer: 'Original Answer',
-          questionType: 'flashcard',
-          options: ['Option 1', 'Option 2'],
+          questionText: 'Test Question for Update',
+          answerText: 'Original Answer',
           questionSetId: user1Qs1.id // Direct assignment instead of connect
         }
       });
@@ -544,12 +493,10 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
       // Create a test question specifically for this test
       const updateTestQuestion = await prisma.question.create({
         data: {
-          text: 'Original Question Text',
-          answer: 'Original Answer',
-          questionType: 'flashcard',
-          options: [],
-          questionSet: { connect: { id: user1Qs1.id } }
-        } as any // Type assertion to bypass TypeScript error
+          questionText: 'Original Question Text',
+          answerText: 'Original Answer',
+          questionSetId: user1Qs1.id
+        }
       });
       
 
@@ -580,11 +527,9 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
       // Create another question for partial update test
       const partialUpdateQuestion = await prisma.question.create({
         data: {
-          text: 'Question for Partial Update',
-          answer: 'Original Answer',
-          questionType: 'flashcard',
-          options: [],
-          questionSet: { connect: { id: user1Qs1.id } }
+          questionText: 'Question for Partial Update',
+          answerText: 'Original Answer',
+          questionSetId: user1Qs1.id
         }
       });
       
@@ -629,18 +574,17 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
       
       const otherUserQuestionSet = await prisma.questionSet.create({
         data: { 
-          name: 'Other User Question Set for PUT', 
-          folder: { connect: { id: otherUserFolder.id } }
+          title: 'Other User Question Set for PUT', 
+          userId: user2.id,
+          folderId: otherUserFolder.id
         }
       });
       
       const otherUserQuestion = await prisma.question.create({
         data: {
-          text: 'Other User Question for PUT',
-          answer: 'Other Answer',
-          questionType: 'flashcard',
-          options: [],
-          questionSet: { connect: { id: otherUserQuestionSet.id } }
+          questionText: 'Other User Question for PUT',
+          answerText: 'Other Answer',
+          questionSetId: otherUserQuestionSet.id
         }
       });
       
@@ -699,11 +643,9 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
       // Create a question for deletion testing
       deleteTestQuestion = await prisma.question.create({
         data: {
-          text: 'Question for Deletion Test',
-          answer: 'Delete Test Answer',
-          questionType: 'flashcard',
-          options: [],
-          questionSetId: user1Qs1.id // Direct assignment instead of connect
+          questionText: 'Question for Deletion Test',
+          answerText: 'Delete Test Answer',
+          questionSetId: user1Qs1.id
         }
       });
       
@@ -721,18 +663,17 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
       
       const otherUserQuestionSet = await prisma.questionSet.create({
         data: { 
-          name: 'Other User Question Set for DELETE', 
-          folder: { connect: { id: otherUserFolder.id } }
+          title: 'Other User Question Set for DELETE', 
+          userId: user2.id,
+          folderId: otherUserFolder.id
         }
       });
       
       otherUserDeleteQuestion = await prisma.question.create({
         data: {
-          text: 'Other User Question for DELETE',
-          answer: 'Other Answer',
-          questionType: 'flashcard',
-          options: [],
-          questionSet: { connect: { id: otherUserQuestionSet.id } }
+          questionText: 'Other User Question for DELETE',
+          answerText: 'Other Answer',
+          questionSetId: otherUserQuestionSet.id
         }
       });
       
@@ -745,12 +686,10 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
       // Create a test question specifically for this test
       const deleteTestQuestion = await prisma.question.create({
         data: {
-          text: 'Question to be deleted',
-          answer: 'Answer to be deleted',
-          questionType: 'flashcard',
-          options: [],
-          questionSet: { connect: { id: user1Qs1.id } }
-        } as any // Type assertion to bypass TypeScript error
+          questionText: 'Question to be deleted',
+          answerText: 'Answer to be deleted',
+          questionSetId: user1Qs1.id
+        }
       });
       
 
@@ -785,11 +724,9 @@ describe('Question API - GET /api/folders/:folderId/questionsets/:setId/question
       // Create another question for this test
       const authTestQuestion = await prisma.question.create({
         data: {
-          text: 'Question for Auth Test',
-          answer: 'Auth Test Answer',
-          questionType: 'flashcard',
-          options: [],
-          questionSet: { connect: { id: user1Qs1.id } }
+          questionText: 'Question for Auth Test',
+          answerText: 'Auth Test Answer',
+          questionSetId: user1Qs1.id
         }
       });
 

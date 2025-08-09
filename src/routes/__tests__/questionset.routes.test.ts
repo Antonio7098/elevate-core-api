@@ -29,10 +29,11 @@ describe('Question Set Routes', () => {
       },
     });
 
-    // Create test question set
+    // Create test question set (schema requires title and userId)
     testQuestionSet = await prisma.questionSet.create({
       data: {
-        name: 'Test Question Set',
+        title: 'Test Question Set',
+        userId: testUser.id,
         folderId: testFolder.id,
       },
     });
@@ -65,9 +66,8 @@ describe('Question Set Routes', () => {
         data: {
           title: 'Test Note',
           content: '<p>Test content</p>',
-          plainText: 'Test content',
           userId: testUser.id,
-          questionSetId: testQuestionSet.id,
+          folderId: testFolder.id,
         },
       });
 
@@ -77,7 +77,7 @@ describe('Question Set Routes', () => {
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('id', testQuestionSet.id);
-      expect(response.body).toHaveProperty('name', testQuestionSet.name);
+      expect(response.body).toHaveProperty('title', testQuestionSet.title);
       expect(Array.isArray(response.body.questions)).toBe(true);
       expect(Array.isArray(response.body.notes)).toBe(true);
       expect(response.body.notes).toHaveLength(1);
@@ -89,7 +89,7 @@ describe('Question Set Routes', () => {
   describe('GET /api/folders/:folderId/questionsets', () => {
     beforeEach(async () => {
       await prisma.note.deleteMany({
-        where: { questionSetId: testQuestionSet.id },
+        where: { folderId: testFolder.id },
       });
     });
     it('should get all question sets in a folder with their questions and notes', async () => {
@@ -98,9 +98,8 @@ describe('Question Set Routes', () => {
         data: {
           title: 'Test Note for GET all',
           content: '<p>Test content for GET all</p>',
-          plainText: 'Test content for GET all',
           userId: testUser.id,
-          questionSetId: testQuestionSet.id,
+          folderId: testFolder.id,
         },
       });
 
@@ -112,7 +111,7 @@ describe('Question Set Routes', () => {
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body).toHaveLength(1);
       expect(response.body[0]).toHaveProperty('id', testQuestionSet.id);
-      expect(response.body[0]).toHaveProperty('name', testQuestionSet.name);
+      expect(response.body[0]).toHaveProperty('title', testQuestionSet.title);
       expect(Array.isArray(response.body[0].questions)).toBe(true);
       expect(Array.isArray(response.body[0].notes)).toBe(true);
       expect(response.body[0].notes).toHaveLength(1);

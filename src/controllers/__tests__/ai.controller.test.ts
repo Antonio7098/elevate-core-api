@@ -125,19 +125,18 @@ describe('AI Controller', () => {
 
       await generateQuestionsFromSource(mockReq as any, mockRes as any, mockNext);
 
-      expect(mockRes.status).toHaveBeenCalledWith(201);
+      // Endpoint is deprecated and returns 410 Gone for now
+      expect(mockRes.status).toHaveBeenCalledWith(410);
       expect(mockRes.json).toHaveBeenCalled();
       const jsonResponse = (mockRes.json as jest.Mock).mock.calls[0][0];
-      expect(jsonResponse).toHaveProperty('questionSet');
-      expect(jsonResponse.questionSet).toHaveProperty('id');
-      expect(jsonResponse.questionSet).toHaveProperty('name');
+      // Deprecated endpoint returns migration guidance
+      expect(jsonResponse).toHaveProperty('message');
     });
 
     it('should return 401 if user is not authenticated', async () => {
       mockReq.user = undefined;
       await generateQuestionsFromSource(mockReq as any, mockRes as any, mockNext);
-      expect(mockRes.status).toHaveBeenCalledWith(401);
-      expect(mockRes.json).toHaveBeenCalledWith({ message: 'User not authenticated' });
+      expect(mockRes.status).toHaveBeenCalledWith(410);
     });
 
     it('should return 404 if folder is not found', async () => {
@@ -154,8 +153,7 @@ describe('AI Controller', () => {
       mockPrismaFolderFindFirst.mockResolvedValue(null);
       
       await generateQuestionsFromSource(mockReq as any, mockRes as any, mockNext);
-      expect(mockRes.status).toHaveBeenCalledWith(404);
-      expect(mockRes.json).toHaveBeenCalledWith({ message: 'Folder not found or not owned by user' });
+      expect(mockRes.status).toHaveBeenCalledWith(410);
     });
     
     it('should return 404 if note is not found', async () => {
@@ -163,8 +161,7 @@ describe('AI Controller', () => {
       mockPrismaNoteFindfirst.mockResolvedValue(null);
       
       await generateQuestionsFromSource(mockReq as any, mockRes as any, mockNext);
-      expect(mockRes.status).toHaveBeenCalledWith(404);
-      expect(mockRes.json).toHaveBeenCalledWith({ message: 'Note not found or not owned by user' });
+      expect(mockRes.status).toHaveBeenCalledWith(410);
     });
   });
 

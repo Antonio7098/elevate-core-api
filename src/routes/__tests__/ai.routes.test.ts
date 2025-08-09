@@ -34,10 +34,11 @@ describe('AI Routes', () => {
     });
     folderId = folder.id;
 
-    // Create test question set
+    // Create test question set (schema requires title and userId via folder's user)
     const questionSet = await prisma.questionSet.create({
       data: {
-        name: 'Test Question Set',
+        title: 'Test Question Set',
+        userId: userId,
         folderId: folderId
       }
     });
@@ -46,15 +47,10 @@ describe('AI Routes', () => {
     // Create test question
     const question = await prisma.question.create({
       data: {
-        text: 'What is the capital of France?',
-        answer: 'Paris',
-        questionType: 'short-answer',
+        questionText: 'What is the capital of France?',
+        answerText: 'Paris',
         questionSetId: questionSetId,
-        totalMarksAvailable: 2,
-        markingCriteria: [
-          { criterion: 'Correct city name', marks: 1 },
-          { criterion: 'Correct spelling', marks: 1 }
-        ]
+        marksAvailable: 2,
       }
     });
     questionId = question.id;

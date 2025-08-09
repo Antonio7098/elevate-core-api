@@ -7,8 +7,8 @@ import { authRouter } from './routes/auth';
 import userRouter from './routes/user.routes';
 import folderRouter from './routes/folder.routes';
 import aiRouter from './routes/ai.routes';
-// import reviewRouter from './routes/review.routes';
-// import standaloneQuestionSetRouter from './routes/standalone-questionset.routes';
+import reviewRouter from './routes/review.routes';
+import standaloneQuestionSetRouter from './routes/standalone-questionset.routes';
 import standaloneQuestionRouter from './routes/standalone-question.routes';
 import dashboardRouter from './routes/dashboard.routes';
 import todaysTasksRoutes from './routes/todaysTasks.routes';
@@ -18,7 +18,13 @@ import insightCatalystRouter from './routes/insightCatalyst.routes';
 import userMemoryRouter from './routes/userMemory.routes';
 import learningBlueprintsRouter from './routes/learning-blueprints.routes';
 import chatRouter from './routes/chat.routes';
+import primitiveRouter from './routes/primitive.routes';
+import primitiveAIRouter from './routes/primitiveAI.routes';
+import blueprintsAliasRouter from './routes/blueprints.routes';
 import { aiRagRouter } from './ai-rag/ai-rag.routes';
+import premiumRouter from './routes/premium.routes';
+import paymentRouter from './routes/payment.routes';
+import stripeWebhookRouter from './routes/stripe-webhook.routes';
 import { initializeAIAPIClient, shutdownAIAPIClient, getAIAPIClient } from './services/ai-api-client.service';
 import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -38,17 +44,19 @@ dotenv.config();
 
 const app = express();
 
-// Initialize AI API Client on application startup
+// Stripe webhook must be mounted BEFORE express.json() so raw body is available
+app.use('/api', stripeWebhookRouter);
+
 async function initializeApplication() {
   try {
-    console.log('🚀 Initializing AI API client...');
+    console.log('🚀 Initializing application and AI API client...');
     await initializeAIAPIClient();
-    
-    // Perform health check
     const client = getAIAPIClient();
     if (client) {
       const healthStatus = await client.healthCheck();
       console.log(`✅ AI API client initialized successfully. Status: ${healthStatus.status}`);
+    } else {
+      console.log('AI API client not available.');
     }
   } catch (error) {
     console.error('❌ Failed to initialize AI API client:', error);
@@ -137,6 +145,20 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 
+// Emergency test route (before any middleware)
+app.get('/ping', (req: express.Request, res: express.Response) => {
+  console.log('🔥 PING route hit - Express is working!');
+  res.json({ status: 'pong', timestamp: new Date().toISOString() });
+});
+
+// Basic request logging at the top level
+app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.log(`🌐 [SERVER] INCOMING REQUEST: ${req.method} ${req.url}`);
+  console.log(`🌐 [SERVER] Headers: ${JSON.stringify(req.headers, null, 2)}`);
+  console.log(`🌐 [SERVER] Body: ${JSON.stringify(req.body, null, 2)}`);
+  next();
+});
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -147,13 +169,29 @@ import { protect, AuthRequest } from './middleware/auth.middleware';
 // Public auth routes
 app.use('/api/auth', authRouter);
 
-// Apply protect middleware to all subsequent /api routes EXCEPT auth
+// Health check endpoint (public)
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Apply protect middleware to all subsequent /api routes EXCEPT public ones
 app.use('/api', (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  // Skip authentication for auth routes
-  if (req.path.startsWith('/api/auth/')) {
+  const publicPaths = [
+    '/api/auth/',
+    '/api/v1/health',
+    '/health',
+    '/ping'
+  ];
+
+  const isPublicPath = publicPaths.some(path => req.path.startsWith(path));
+
+  // In development, allow public paths to be accessed without authentication
+  if (process.env.NODE_ENV !== 'production' && isPublicPath) {
+    console.log(`[AUTH SKIP] Skipping auth for public path in non-prod env: ${req.path}`);
     return next();
   }
-  // Type assertion for req to include 'user' property potentially added by 'protect'
+
+  // For all other routes, apply the protect middleware
   protect(req as AuthRequest, res, next);
 });
 
@@ -162,7 +200,7 @@ app.use('/api', (req: express.Request, res: express.Response, next: express.Next
 app.use('/api/users', userRouter);
 app.use('/api/folders', folderRouter);
 app.use('/api/ai', aiRouter);
-// app.use('/api/reviews', reviewRouter);
+app.use('/api/reviews', reviewRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/todays-tasks', todaysTasksRoutes);
 app.use('/api/stats', statsRouter);
@@ -170,11 +208,17 @@ app.use('/api/notes', noteRouter);
 app.use('/api/insight-catalysts', insightCatalystRouter);
 app.use('/api/user/memory', userMemoryRouter);
 app.use('/api/learning-blueprints', learningBlueprintsRouter);
+app.use('/api/blueprints', blueprintsAliasRouter);
 app.use('/api/chat', chatRouter);
+app.use('/api/primitives', primitiveRouter);
+app.use('/api/ai/primitives', primitiveAIRouter);
 app.use('/api/ai-rag', aiRagRouter);
+app.use('/api/premium', premiumRouter);
+app.use('/api/payments', paymentRouter);
 
 // Additional standalone routes for direct access
 // app.use('/api/question-sets', standaloneQuestionSetRouter);
+app.use('/api/questionsets', standaloneQuestionSetRouter);
 app.use('/api/questions', standaloneQuestionRouter);
 
 // Error handling middleware

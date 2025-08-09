@@ -96,23 +96,25 @@ export const getStandaloneQuestionSetQuestions = async (req: AuthRequest, res: R
       where: {
         questionSetId: parseInt(id),
       },
-      orderBy: {
-        createdAt: 'asc',
-      },
+      // Note: createdAt doesn't exist in current schema, so we skip ordering
+      // orderBy: {
+      //   createdAt: 'asc',
+      // },
       select: {
         id: true,
         questionText: true,
         answerText: true,
         marksAvailable: true,
-        lastAnswerCorrect: true,
-        timesAnsweredCorrectly: true,
-        timesAnsweredIncorrectly: true,
-        difficultyScore: true,
-        conceptTags: true,
-        totalMarksAvailable: true,
+        // Note: These fields don't exist in current schema
+        // lastAnswerCorrect: true,
+        // timesAnsweredCorrectly: true,
+        // timesAnsweredIncorrectly: true,
+        // difficultyScore: true,
+        // conceptTags: true,
+        // totalMarksAvailable: true,
         questionSetId: true,
-        createdAt: true,
-        updatedAt: true
+        // createdAt: true,
+        // updatedAt: true
       },
     });
 
@@ -166,12 +168,13 @@ export const getAllQuestionSetsForUser = async (req: AuthRequest, res: Response,
             marksAvailable: true,
           },
         },
-        notes: {
-          orderBy: {
-            updatedAt: 'desc',
-          },
-          take: 1, // Only get the most recent note
-        },
+        // Note: notes relation doesn't exist in current schema
+        // notes: {
+        //   orderBy: {
+        //     updatedAt: 'desc',
+        //   },
+        //   take: 1, // Only get the most recent note
+        // },
       },
       orderBy: {
         updatedAt: 'desc',

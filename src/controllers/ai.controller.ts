@@ -152,8 +152,25 @@ const simulateNoteGeneration = (sourceText: string, noteStyle: string, sourceFid
 /**
  * Generate questions from source text and create a question set
  * POST /api/ai/generate-from-source
+ * 
+ * @deprecated This endpoint is deprecated. Use POST /api/ai/primitives/from-source instead.
  */
 export const generateQuestionsFromSource = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  // DEPRECATED: Return 410 Gone with migration guidance
+  res.status(410).json({
+    success: false,
+    error: 'This endpoint has been deprecated',
+    message: 'Question set-based AI generation has been replaced with primitive-centric generation',
+    alternatives: [
+      'POST /api/ai/primitives/from-source - Create primitives directly from source text',
+      'POST /api/ai/primitives/from-blueprint - Generate primitives from learning blueprints'
+    ],
+    migrationGuide: 'https://docs.elevate.com/api/migration/primitive-ai'
+  });
+  return;
+
+  // OLD IMPLEMENTATION BELOW (kept for reference)
+  /*
   // Return 401 if user is not authenticated (for unit tests)
   if (!req.user) {
     res.status(401).json({ message: 'User not authenticated' });
@@ -241,19 +258,37 @@ export const generateQuestionsFromSource = async (req: AuthRequest, res: Respons
   } catch (error) {
     next(error);
   }
+  */
 };
 
 /**
  * Generate a note from source text (another note)
  * POST /api/ai/generate-note
+ * 
+ * @deprecated This endpoint is deprecated. Use the new primitive-centric AI endpoints instead.
  */
 export const generateNoteFromSource = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  // DEPRECATED: Return 410 Gone with migration guidance
+  res.status(410).json({
+    success: false,
+    error: 'This endpoint has been deprecated',
+    message: 'Note generation from AI has been replaced with primitive-centric content creation',
+    alternatives: [
+      'POST /api/ai/primitives/from-source - Create structured primitives with criteria',
+      'POST /api/ai/primitives/batch-create - Generate multiple primitives from sources'
+    ]
+  });
+  return;
+
+  // OLD IMPLEMENTATION BELOW (kept for reference)
+  /*
   try {
     res.status(501).json({ message: 'AI note generation is temporarily disabled.' });
     return;
   } catch (error) {
     next(error);
   }
+  */
 };
 
 /**

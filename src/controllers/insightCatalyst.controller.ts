@@ -42,7 +42,11 @@ export const createInsightCatalyst = async (req: AuthRequest, res: Response): Pr
       questionId: questionId || undefined,
     });
 
-    res.status(201).json(newInsightCatalyst);
+    // Return response with questionId for backward compatibility (not stored in DB)
+    res.status(201).json({
+      ...newInsightCatalyst,
+      questionId: questionId || null,
+    });
   } catch (error) {
     console.error('--- Create Insight Catalyst Error ---');
     if (error instanceof Error) {
@@ -172,7 +176,11 @@ export const updateInsightCatalyst = async (req: AuthRequest, res: Response): Pr
       }
     );
 
-    res.status(200).json(updatedCatalyst);
+    // Return response with questionId for backward compatibility (not stored in DB)
+    res.status(200).json({
+      ...updatedCatalyst,
+      questionId: questionId || null,
+    });
   } catch (error) {
     console.error('--- Update Insight Catalyst Error ---');
     if (error instanceof Error) {

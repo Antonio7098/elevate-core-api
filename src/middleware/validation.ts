@@ -90,18 +90,14 @@ export const validateQuestionCreate = [
     .isString()
     .withMessage('Answer, if provided, must be a string')
     .trim(),
-  // 'options' is an array of strings (String[])
   check('options')
     .optional()
     .isArray()
     .withMessage('Options, if provided, must be an array'),
-  check('options.*') // Validate each item in the options array
-    .if((value, { req }) => req.body.options && Array.isArray(req.body.options)) // only run if options is an array
-    .isString()
-    .withMessage('Each option must be a string')
+  check('options.*')
+    .optional()
     .notEmpty()
-    .withMessage('Options cannot contain empty strings')
-    .trim(),
+    .withMessage('Options cannot contain empty strings'),
   handleValidationErrors,
 ];
 
@@ -119,11 +115,6 @@ export const validateQuestionUpdate = [
     .isString()
     .withMessage('Question text must be a string')
     .trim(),
-  check('questionType')
-    .optional()
-    .isString()
-    .withMessage('Question type must be a string')
-    .trim(),
   check('answer')
     .optional()
     .isString()
@@ -132,17 +123,7 @@ export const validateQuestionUpdate = [
   check('options')
     .optional()
     .isArray()
-    .withMessage('Options must be an array')
-    .custom((options) => {
-      if (options && options.length > 0) {
-        for (const option of options) {
-          if (typeof option !== 'string' || option.trim() === '') {
-            throw new Error('Options must be non-empty strings');
-          }
-        }
-      }
-      return true;
-    }),
+    .withMessage('Options, if provided, must be an array'),
   handleValidationErrors,
 ];
 
@@ -220,21 +201,21 @@ export const validateSubmitReview = [
 ];
 
 export const validateQuestionSetCreate = [
-  check('name')
+  check('title')
     .notEmpty()
-    .withMessage('Question set name is required')
+    .withMessage('Question set title is required')
     .isString()
-    .withMessage('Question set name must be a string')
+    .withMessage('Question set title must be a string')
     .trim(),
   handleValidationErrors,
 ];
 
 export const validateQuestionSetUpdate = [
-  check('name')
+  check('title')
     .notEmpty()
-    .withMessage('Question set name is required')
+    .withMessage('Question set title is required')
     .isString()
-    .withMessage('Question set name must be a string')
+    .withMessage('Question set title must be a string')
     .trim(),
   handleValidationErrors,
 ];
@@ -271,17 +252,13 @@ export const validateNoteCreate = (req: Request, res: Response, next: NextFuncti
     return;
   }
 
-  // Validate content
-  if (!content || typeof content !== 'object') {
-    res.status(400).json({ message: 'Content is required and must be a valid JSON object' });
+  // Validate content (string)
+  if (!content || typeof content !== 'string') {
+    res.status(400).json({ message: 'Content is required and must be a string' });
     return;
   }
 
-  // Validate plainText
-  if (!plainText || typeof plainText !== 'string') {
-    res.status(400).json({ message: 'Plain text is required and must be a string' });
-    return;
-  }
+  // Plain text no longer required
 
   // Validate folderId if provided
   if (folderId !== undefined && (isNaN(Number(folderId)) || Number(folderId) <= 0)) {
@@ -289,13 +266,9 @@ export const validateNoteCreate = (req: Request, res: Response, next: NextFuncti
     return;
   }
 
-  // Validate questionSetId if provided
-  if (questionSetId !== undefined && (isNaN(Number(questionSetId)) || Number(questionSetId) <= 0)) {
-    res.status(400).json({ message: 'Question Set ID must be a positive number' });
-    return;
-  }
+  // Ignore questionSetId in schema
 
-  // Ensure at least one of folderId or questionSetId is provided
+  // Allow either folderId or questionSetId for backward compatibility
   if (folderId === undefined && questionSetId === undefined) {
     res.status(400).json({ message: 'Either folderId or questionSetId must be provided' });
     return;
@@ -313,9 +286,9 @@ export const validateNoteUpdate = (req: Request, res: Response, next: NextFuncti
     return;
   }
 
-  // Validate content if provided
-  if (content !== undefined && typeof content !== 'object') {
-    res.status(400).json({ message: 'Content must be a valid JSON object' });
+  // Validate content if provided (can be string or object for backward compatibility)
+  if (content !== undefined && typeof content !== 'string' && typeof content !== 'object') {
+    res.status(400).json({ message: 'Content must be a string or valid JSON object' });
     return;
   }
 
@@ -331,7 +304,7 @@ export const validateNoteUpdate = (req: Request, res: Response, next: NextFuncti
     return;
   }
 
-  // Validate questionSetId if provided
+  // Validate questionSetId if provided (for backward compatibility)
   if (questionSetId !== undefined && (isNaN(Number(questionSetId)) || Number(questionSetId) <= 0)) {
     res.status(400).json({ message: 'Question Set ID must be a positive number' });
     return;

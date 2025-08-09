@@ -51,7 +51,7 @@ describe('AIAPIClientService', () => {
       delete process.env.AI_API_TIMEOUT;
       
       const defaultService = new AIAPIClientService();
-      expect(defaultService['baseUrl']).toBe('http://localhost:8001');
+      expect(defaultService['baseUrl']).toBe('http://localhost:8000');
       expect(defaultService['timeout']).toBe(30000);
     });
 
@@ -124,7 +124,7 @@ describe('AIAPIClientService', () => {
 
         const result = await service.indexBlueprint(mockPayload);
 
-        expect(mockAxiosInstance.post).toHaveBeenCalledWith('/api/v1/index-blueprint', mockPayload);
+        expect(mockAxiosInstance.post).toHaveBeenCalledWith('/api/v1/index-blueprint', mockPayload, { timeout: 120000 });
         expect(result).toEqual(mockResponse.data);
       });
 
@@ -149,10 +149,9 @@ describe('AIAPIClientService', () => {
         };
         mockAxiosInstance.put.mockResolvedValueOnce(mockResponse);
 
-        const result = await service.updateBlueprint('bp-123', mockBlueprintData);
+        const result = await service.updateBlueprint('bp-123', mockBlueprintData as any);
 
         expect(mockAxiosInstance.put).toHaveBeenCalledWith('/api/v1/blueprints/bp-123', expect.objectContaining({
-          blueprint: mockBlueprintData,
           source: 'core_api',
           strategy: 'incremental',
           timestamp: expect.any(String)
@@ -164,14 +163,20 @@ describe('AIAPIClientService', () => {
     describe('deleteBlueprint', () => {
       it('should successfully delete a blueprint', async () => {
         const mockResponse = {
-          data: { success: true, deleted_at: '2024-01-01T00:00:00Z' }
+          data: { deletion_completed: true, nodes_deleted: 0, nodes_remaining: 0 }
         };
         mockAxiosInstance.delete.mockResolvedValueOnce(mockResponse);
 
         const result = await service.deleteBlueprint('bp-123');
 
         expect(mockAxiosInstance.delete).toHaveBeenCalledWith('/api/v1/blueprints/bp-123');
-        expect(result).toEqual(mockResponse.data);
+        expect(result).toEqual({
+          status: 'deleted',
+          message: 'Deleted 0 nodes for blueprint bp-123',
+          deleted_at: expect.any(String),
+          nodes_deleted: 0,
+          nodes_remaining: 0
+        });
       });
     });
 

@@ -6,10 +6,10 @@ const router = Router();
 
 /**
  * @swagger
- * /reviews/stats:
+ * /stats/overview:
  *   get:
- *     summary: Get overall study statistics for the authenticated user.
- *     tags: [Stats, Reviews]
+ *     summary: Get overall user progress statistics (primitive-centric).
+ *     tags: [Stats, Primitives]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -18,75 +18,118 @@ const router = Router();
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/OverallStats'
+ *               $ref: '#/components/schemas/UserProgressStats'
  *       401:
  *         description: User not authenticated.
- *       404:
- *         description: User not found.
  */
-router.get('/reviews/stats', protect, statsController.getOverallStats);
+router.get('/overview', protect, statsController.getOverallStats);
 
 /**
  * @swagger
- * /stats/questionsets/{setId}/details:
+ * /stats/mastery:
  *   get:
- *     summary: Get mastery history and spaced repetition details for a specific question set.
- *     tags: [Stats]
+ *     summary: Get primitive mastery distribution statistics.
+ *     tags: [Stats, Primitives]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved mastery statistics.
+ *       401:
+ *         description: User not authenticated.
+ */
+router.get('/mastery', protect, statsController.getMasteryStats);
+
+/**
+ * @swagger
+ * /stats/activity:
+ *   get:
+ *     summary: Get review activity statistics.
+ *     tags: [Stats, Primitives]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved activity statistics.
+ *       401:
+ *         description: User not authenticated.
+ */
+router.get('/activity', protect, statsController.getActivityStats);
+
+/**
+ * @swagger
+ * /stats/daily-completion:
+ *   get:
+ *     summary: Get daily task completion statistics.
+ *     tags: [Stats, Primitives]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved daily completion statistics.
+ *       401:
+ *         description: User not authenticated.
+ */
+router.get('/daily-completion', protect, statsController.getDailyCompletionStats);
+
+/**
+ * @swagger
+ * /stats/primitives/{primitiveId}:
+ *   get:
+ *     summary: Get detailed statistics for a specific primitive.
+ *     tags: [Stats, Primitives]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: setId
+ *         name: primitiveId
  *         required: true
  *         schema:
- *           type: integer
- *         description: The ID of the question set.
+ *           type: string
+ *         description: The ID of the primitive.
  *     responses:
  *       200:
- *         description: Successfully retrieved question set statistics details.
+ *         description: Successfully retrieved primitive statistics details.
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 masteryHistory: 
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       timestamp: { type: string, format: date-time }
- *                       totalMasteryScore: { type: number }
- *                       understandScore: { type: number }
- *                       useScore: { type: number }
- *                       exploreScore: { type: number }
- *                       intervalDays: { type: number, nullable: true }
- *                 reviewCount: { type: integer }
- *                 reviewDates: { type: array, items: { type: string, format: date-time } }
- *                 currentSRStatus:
+ *                 primitive:
+ *                   type: object
+ *                   description: Basic primitive information
+ *                 mastery:
  *                   type: object
  *                   properties:
+ *                     weightedScore: { type: number }
+ *                     totalCriteria: { type: number }
+ *                     masteredCriteria: { type: number }
+ *                     criteriaBreakdown: { type: array }
+ *                 reviewHistory:
+ *                   type: object
+ *                   properties:
+ *                     totalReviews: { type: number }
+ *                     successfulReviews: { type: number }
  *                     lastReviewedAt: { type: string, format: date-time, nullable: true }
  *                     nextReviewAt: { type: string, format: date-time, nullable: true }
- *                     currentIntervalDays: { type: number, nullable: true }
- *                     currentForgottenPercentage: { type: number, nullable: true }
- *                     forgettingCurveParams: { type: object, nullable: true, description: 'Structure depends on implementation' }
+ *                     currentInterval: { type: number }
  *       400:
- *         description: Invalid QuestionSet ID format.
+ *         description: Invalid Primitive ID format.
  *       401:
  *         description: User not authenticated.
- *       403:
- *         description: User does not have access to this QuestionSet.
  *       404:
- *         description: QuestionSet not found.
+ *         description: Primitive not found.
  */
-router.get('/questionsets/:setId/details', protect, statsController.getQuestionSetStatsDetails);
+router.get('/primitives/:primitiveId', protect, statsController.getPrimitiveStatsDetails);
 
+// DEPRECATED: Folder-based stats endpoint - returns 410 Gone
 /**
  * @swagger
  * /stats/folders/{folderId}/details:
  *   get:
- *     summary: Get mastery history and other statistics for a specific folder.
- *     tags: [Stats]
+ *     summary: '[DEPRECATED] Folder statistics have been replaced with primitive-centric stats'
+ *     tags: [Stats, Deprecated]
+ *     deprecated: true
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -97,38 +140,17 @@ router.get('/questionsets/:setId/details', protect, statsController.getQuestionS
  *           type: integer
  *         description: The ID of the folder.
  *     responses:
- *       200:
- *         description: Successfully retrieved folder statistics details.
+ *       410:
+ *         description: This endpoint has been deprecated. Use primitive-centric stats instead.
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 masteryHistory: 
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       timestamp: { type: string, format: date-time }
- *                       aggregatedScore: { type: number }
- *                 totalReviewSessionsInFolder: { type: integer }
- *                 questionSetSummaries:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       id: { type: integer }
- *                       name: { type: string }
- *                       currentTotalMasteryScore: { type: number, nullable: true }
- *                       nextReviewAt: { type: string, format: date-time, nullable: true }
- *       400:
- *         description: Invalid Folder ID format.
- *       401:
- *         description: User not authenticated.
- *       403:
- *         description: User does not have access to this Folder.
- *       404:
- *         description: Folder not found.
+ *                 success: { type: boolean, example: false }
+ *                 error: { type: string, example: 'This endpoint has been deprecated' }
+ *                 message: { type: string }
+ *                 alternatives: { type: array, items: { type: string } }
  */
 router.get('/folders/:folderId/details', protect, statsController.getFolderStatsDetails);
 

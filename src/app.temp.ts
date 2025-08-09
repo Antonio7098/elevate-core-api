@@ -8,7 +8,7 @@ import userRouter from './routes/user.routes.ts';
 import folderRouter from './routes/folder.routes.ts';
 import aiRouter from './routes/ai.routes.ts';
 import reviewRouter from './routes/review.routes.ts';
-import evaluationRouter from './routes/evaluation.routes.ts';
+// import evaluationRouter from './routes/evaluation.routes.ts'; // File doesn't exist
 import standaloneQuestionSetRouter from './routes/standalone-questionset.routes.ts';
 import standaloneQuestionRouter from './routes/standalone-question.routes.ts';
 import questionSetQuestionsRouter from './routes/temp/question-set-questions.routes';
@@ -29,7 +29,7 @@ app.use('/api/users', userRouter);
 app.use('/api/folders', folderRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/reviews', reviewRouter);
-app.use('/api/ai', evaluationRouter);
+// app.use('/api/ai', evaluationRouter); // Router doesn't exist
 
 // Additional standalone routes for direct access
 app.use('/api/questionsets', standaloneQuestionSetRouter);

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import { generateTodaysTasksForUser } from '../services/todaysTasks.service';
-import { AuthRequest } from '../middleware/auth.middleware'; // Corrected import
+import { generateDailyTasks } from '../services/primitiveSR.service';
+import { cachedPrimitiveService } from '../services/cachedPrimitiveSR.service';
+import { AuthRequest } from '../middleware/auth.middleware';
 
 export const getTodaysTasksController = async (
   req: AuthRequest, // Corrected type
@@ -24,12 +25,27 @@ export const getTodaysTasksController = async (
       }
     }
 
-    const todaysTasks = await generateTodaysTasksForUser(userId, mockTodayDate);
-    res.status(200).json(todaysTasks);
+    // Generate primitive-based daily tasks using SR service (mocked in tests)
+    const dailyTasks = await generateDailyTasks(userId);
+    
+    // Transform to match expected response format
+    const response = {
+      success: true,
+      data: {
+        tasks: dailyTasks,
+        totalTasks: dailyTasks.length,
+        bucketDistribution: {
+          critical: dailyTasks.filter(t => t.bucket === 'critical').length,
+          core: dailyTasks.filter(t => t.bucket === 'core').length,
+          plus: dailyTasks.filter(t => t.bucket === 'plus').length
+        },
+        generatedAt: new Date().toISOString()
+      }
+    };
+    
+    res.status(200).json(response);
   } catch (error) {
-    // Log the error for server-side inspection
     console.error('Error in getTodaysTasksController:', error);
-    // Pass to the centralized error handler
-    next(error);
+    res.status(500).json({ success: false, error: 'Failed to retrieve daily tasks', details: error instanceof Error ? error.message : 'Unknown error' });
   }
 };
