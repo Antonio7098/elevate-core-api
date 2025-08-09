@@ -244,7 +244,7 @@ export const validateGenerateFromSource = [
 ];
 
 export const validateNoteCreate = (req: Request, res: Response, next: NextFunction): void => {
-  const { title, content, plainText, folderId, questionSetId } = req.body;
+  const { title, content, contentBlocks, plainText, folderId, questionSetId } = req.body;
 
   // Validate title
   if (!title || typeof title !== 'string' || title.trim().length === 0) {
@@ -252,9 +252,17 @@ export const validateNoteCreate = (req: Request, res: Response, next: NextFuncti
     return;
   }
 
-  // Validate content (string)
-  if (!content || typeof content !== 'string') {
-    res.status(400).json({ message: 'Content is required and must be a string' });
+  // Validate content: accept either contentBlocks (preferred) or legacy content string
+  if (contentBlocks === undefined && content === undefined) {
+    res.status(400).json({ message: 'Either contentBlocks or content is required' });
+    return;
+  }
+  if (contentBlocks !== undefined && typeof contentBlocks !== 'object') {
+    res.status(400).json({ message: 'contentBlocks must be a JSON object/array' });
+    return;
+  }
+  if (content !== undefined && typeof content !== 'string') {
+    res.status(400).json({ message: 'content must be a string when provided' });
     return;
   }
 
@@ -278,7 +286,7 @@ export const validateNoteCreate = (req: Request, res: Response, next: NextFuncti
 };
 
 export const validateNoteUpdate = (req: Request, res: Response, next: NextFunction): void => {
-  const { title, content, plainText, folderId, questionSetId } = req.body;
+  const { title, content, contentBlocks, plainText, folderId, questionSetId } = req.body;
 
   // Validate title if provided
   if (title !== undefined && (typeof title !== 'string' || title.trim().length === 0)) {
@@ -286,9 +294,13 @@ export const validateNoteUpdate = (req: Request, res: Response, next: NextFuncti
     return;
   }
 
-  // Validate content if provided (can be string or object for backward compatibility)
-  if (content !== undefined && typeof content !== 'string' && typeof content !== 'object') {
-    res.status(400).json({ message: 'Content must be a string or valid JSON object' });
+  // Validate content if provided
+  if (content !== undefined && typeof content !== 'string') {
+    res.status(400).json({ message: 'content must be a string when provided' });
+    return;
+  }
+  if (contentBlocks !== undefined && typeof contentBlocks !== 'object') {
+    res.status(400).json({ message: 'contentBlocks must be a JSON object/array' });
     return;
   }
 

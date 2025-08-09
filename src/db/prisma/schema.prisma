@@ -224,6 +224,11 @@ model Note {
   generatedFromBlueprintId  Int?
   imageUrls                 String[]
   isPinned                  Boolean  @default(false)
+  // New structured content fields (BlockNote-first)
+  contentBlocks             Json?
+  contentHtml               String?
+  plainText                 String?
+  contentVersion            Int      @default(1)
 
   user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   folder            Folder?            @relation(fields: [folderId], references: [id], onDelete: SetNull)

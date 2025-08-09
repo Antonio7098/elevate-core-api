@@ -1,9 +1,10 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import prisma from '../lib/prisma';
+import { blocksToHtml, blocksToPlainText, htmlToBlocks } from '../utils/blocknote';
 
 export const createNote = async (req: AuthRequest, res: Response): Promise<void> => {
-  const { title, content, plainText, folderId, questionSetId } = req.body;
+  const { title, content, contentBlocks, plainText, folderId, questionSetId } = req.body as any;
   const userId = req.user?.userId;
 
   if (!userId) {
@@ -23,12 +24,25 @@ export const createNote = async (req: AuthRequest, res: Response): Promise<void>
       }
     }
 
-    // QuestionSet linkage removed from Note schema; ignore questionSetId
+    // Prepare structured content
+    let blocks: any = contentBlocks ?? null;
+    if (!blocks && typeof content === 'string') {
+      // Attempt conversion from legacy HTML (placeholder)
+      blocks = htmlToBlocks(content);
+    }
+
+    const contentHtml = blocks ? blocksToHtml(blocks) : (typeof content === 'string' ? content : null);
+    const contentPlain = blocks ? blocksToPlainText(blocks) : (typeof plainText === 'string' ? plainText : null);
+    const version = blocks ? 2 : 1;
 
     const newNote = await prisma.note.create({
       data: {
         title,
-        content,
+        content: typeof content === 'string' ? content : contentHtml || '',
+        contentBlocks: blocks ?? undefined,
+        contentHtml: contentHtml ?? undefined,
+        plainText: contentPlain ?? undefined,
+        contentVersion: version,
         userId,
         folderId: folderId || null,
       },
@@ -38,6 +52,10 @@ export const createNote = async (req: AuthRequest, res: Response): Promise<void>
     res.status(201).json({
       ...newNote,
       questionSetId: questionSetId || null,
+      contentBlocks: newNote.contentBlocks ?? blocks ?? null,
+      contentHtml: newNote.contentHtml ?? contentHtml ?? null,
+      plainText: newNote.plainText ?? contentPlain ?? null,
+      contentVersion: newNote.contentVersion ?? version,
     });
   } catch (error) {
     console.error('--- Create Note Error ---');
@@ -143,7 +161,7 @@ export const getNoteById = async (req: AuthRequest, res: Response): Promise<void
 export const updateNote = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.userId;
   const { id: noteId } = req.params;
-  let { title, content, plainText, folderId, questionSetId } = req.body;
+  let { title, content, contentBlocks, plainText, folderId, questionSetId } = req.body as any;
 
   if (!userId) {
     res.status(401).json({ message: 'User not authenticated' });
@@ -196,20 +214,39 @@ export const updateNote = async (req: AuthRequest, res: Response): Promise<void>
       }
     }
 
+    // Determine updates
+    const updates: any = {};
+    if (title !== undefined) updates.title = title;
+    if (folderId !== undefined) updates.folderId = folderId || null;
+
+    // Content updates
+    let blocks: any = contentBlocks ?? null;
+    if (!blocks && typeof content === 'string') {
+      blocks = htmlToBlocks(content);
+    }
+    if (content !== undefined || contentBlocks !== undefined || plainText !== undefined) {
+      const contentHtml = blocks ? blocksToHtml(blocks) : (typeof content === 'string' ? content : existingNote.contentHtml ?? null);
+      const contentPlain = blocks ? blocksToPlainText(blocks) : (typeof plainText === 'string' ? plainText : existingNote.plainText ?? null);
+      updates.content = typeof content === 'string' ? content : (contentHtml ?? existingNote.content ?? '');
+      updates.contentBlocks = blocks !== null ? blocks : existingNote.contentBlocks ?? undefined;
+      updates.contentHtml = contentHtml ?? existingNote.contentHtml ?? undefined;
+      updates.plainText = contentPlain ?? existingNote.plainText ?? undefined;
+      updates.contentVersion = blocks ? 2 : (existingNote.contentVersion ?? 1);
+    }
+
     const updatedNote = await prisma.note.update({
       where: { id: parseInt(noteId) },
-      data: {
-        title,
-        content,
-        // plainText field doesn't exist in schema
-        folderId: folderId || null,
-      },
+      data: updates,
     });
 
     // Return response with questionSetId for backward compatibility (not stored in DB)
     res.status(200).json({
       ...updatedNote,
       questionSetId: questionSetId || null,
+      contentBlocks: updatedNote.contentBlocks ?? null,
+      contentHtml: updatedNote.contentHtml ?? null,
+      plainText: updatedNote.plainText ?? null,
+      contentVersion: updatedNote.contentVersion,
     });
   } catch (error) {
     console.error('--- Update Note Error ---');
