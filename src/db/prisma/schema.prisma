@@ -375,6 +375,7 @@ model Folder {
   user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   questionSets        QuestionSet[]
   notes               Note[]
+  learningBlueprints  LearningBlueprint[]
   parent              Folder?       @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children            Folder[]      @relation("FolderHierarchy")
   isPinned            Boolean       @default(false)
@@ -387,17 +388,23 @@ model LearningBlueprint {
   id                    Int           @id @default(autoincrement())
   sourceText            String
   blueprintJson         Json
+  // Library association and display fields
+  folderId              Int?
+  title                 String?
+  description           String?
   sourceId              String?       // AI API's UUID for vector database operations
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
 
   userId                Int
   user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder                Folder?       @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
   generatedNotes        Note[]
   generatedQuestionSets QuestionSet[]
 
   @@index([userId])
+  @@index([folderId])
 }
 
 model PinnedReview {

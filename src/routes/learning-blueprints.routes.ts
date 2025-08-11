@@ -1,8 +1,11 @@
 import { Router } from 'express';
-import learningBlueprintsController from '../controllers/learning-blueprints.controller';
+import LearningBlueprintsController from '../controllers/learning-blueprints.controller';
 import { protect } from '../middleware/auth.middleware';
 
 const router = Router();
+
+// Create controller instance
+const learningBlueprintsController = new LearningBlueprintsController();
 
 // CRUD Operations
 router.get('/', protect, learningBlueprintsController.getAllLearningBlueprints);

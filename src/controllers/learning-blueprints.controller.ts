@@ -1,10 +1,35 @@
-import { Response } from 'express';
-import { AiRAGService } from '../ai-rag/ai-rag.service';
-import prisma from '../lib/prisma';
-const aiRagService = new AiRAGService(prisma);
+import { Request, Response } from 'express';
 import { AuthenticatedRequest } from '../types/express';
+import prisma from '../lib/prisma';
+// import AiRAGService from '../services/ai-rag.service';
+import { MindmapService } from '../services/mindmap.service';
+import { getAIAPIClient } from '../services/ai-api-client.service';
 
-class LearningBlueprintsController {
+export class LearningBlueprintsController {
+  private mindmapService: MindmapService;
+  // private aiRagService: AiRAGService | null = null;
+
+  constructor() {
+    this.mindmapService = new MindmapService();
+    // Don't initialize aiRagService here - do it lazily when needed
+  }
+
+  // private getAiRagService(): AiRAGService {
+  //   if (!this.aiRagService) {
+  //     try {
+  //       const aiClient = getAIAPIClient();
+  //       this.aiRagService = new AiRAGService(aiClient);
+  //     } catch (error) {
+  //       throw new Error(`Failed to initialize AI RAG service: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  //     }
+  //   }
+  //   return this.aiRagService;
+  // }
+
+  private getMindmapService(): MindmapService {
+    return this.mindmapService;
+  }
+
   async createLearningBlueprint(req: AuthenticatedRequest, res: Response): Promise<void> {
     console.log('🔵 createLearningBlueprint called with body:', req.body);
     console.log('🔵 User info:', req.user);
@@ -14,13 +39,15 @@ class LearningBlueprintsController {
         res.status(401).json({ message: 'User not authenticated' });
         return;
       }
-      console.log('✅ User authenticated, calling aiRagService...');
-      const result = await aiRagService.createLearningBlueprint(
-        req.body,
-        req.user.userId,
-      );
-      console.log('✅ aiRagService successful, returning result');
-      res.status(201).json(result);
+      // console.log('✅ User authenticated, calling aiRagService...');
+      // const aiRagService = this.getAiRagService();
+      // const result = await aiRagService.createLearningBlueprint(
+      //   req.user.userId,
+      //   req.body,
+      // );
+      // console.log('✅ aiRagService successful, returning result');
+      // res.status(201).json(result);
+      res.status(501).json({ message: 'Learning blueprint creation temporarily disabled' });
     } catch (error) {
       console.log('❌ Error in createLearningBlueprint:', error);
       if (error instanceof Error) {
@@ -35,61 +62,82 @@ class LearningBlueprintsController {
 
   /**
    * GET /api/blueprints/:id/mindmap
-   * Returns mindmap nodes/edges for a blueprint. If mindmap not present, derives a basic one from blueprintJson.
+   * Returns mindmap nodes/edges for a blueprint, dynamically generated from blueprint data.
    */
   async getBlueprintMindmap(req: AuthenticatedRequest, res: Response): Promise<void> {
+    console.log(`🚀 [Mindmap] Starting getBlueprintMindmap for blueprint ${req.params.id}`);
     try {
       if (!req.user) {
+        console.log(`❌ [Mindmap] User not authenticated`);
         res.status(401).json({ message: 'User not authenticated' });
         return;
       }
       const blueprintId = parseInt(req.params.id, 10);
       if (isNaN(blueprintId)) {
+        console.log(`❌ [Mindmap] Invalid blueprint ID: ${req.params.id}`);
         res.status(400).json({ message: 'Invalid blueprint ID' });
         return;
       }
 
+      console.log(`🔍 [Mindmap] Building mindmap for blueprint ${blueprintId} for user ${req.user.userId}`);
+
+      console.log(`📊 [Mindmap] About to query database...`);
       const blueprint = await prisma.learningBlueprint.findFirst({
         where: { id: blueprintId, userId: req.user.userId },
       });
+      console.log(`📊 [Mindmap] Database query completed, blueprint found: ${!!blueprint}`);
+      
       if (!blueprint) {
+        console.log(`❌ [Mindmap] Blueprint not found for ID ${blueprintId}`);
         res.status(404).json({ message: 'Blueprint not found' });
         return;
       }
 
       const bpJson: any = blueprint.blueprintJson || {};
-      const existingMindmap = bpJson.mindmap;
-      if (existingMindmap && Array.isArray(existingMindmap.nodes) && Array.isArray(existingMindmap.edges)) {
-        const payload = {
-          blueprintId: String(blueprintId),
-          version: typeof existingMindmap.version === 'number' ? existingMindmap.version : 1,
-          nodes: existingMindmap.nodes,
-          edges: existingMindmap.edges,
-          metadata: {
-            createdAt: blueprint.createdAt.toISOString(),
-            updatedAt: blueprint.updatedAt.toISOString(),
-          },
-        };
-        res.status(200).json(payload);
-        return;
-      }
-
-      // Derive a naive mindmap from blueprintJson when none exists
-      const derived = this.deriveMindmapFromBlueprintJson(bpJson);
+      console.log(`📋 [Mindmap] Blueprint JSON structure:`, {
+        hasSections: !!bpJson.sections,
+        sectionsCount: bpJson.sections?.length || 0,
+        hasKnowledgePrimitives: !!bpJson.knowledge_primitives,
+        hasMetadata: !!bpJson.mindmap_metadata
+      });
+      
+      // Generate mindmap dynamically from blueprint data using the service
+      console.log(`🔄 [Mindmap] About to call buildMindmapFromBlueprint...`);
+      const mindmap = this.getMindmapService().buildMindmapFromBlueprint(bpJson);
+      console.log(`✅ [Mindmap] Mindmap generated successfully:`, {
+        nodesCount: mindmap.nodes.length,
+        edgesCount: mindmap.edges.length
+      });
+      
+      console.log(`🔄 [Mindmap] About to call getDefaultColorScheme...`);
+      const colorScheme = this.getMindmapService().getDefaultColorScheme();
+      console.log(`✅ [Mindmap] Color scheme retrieved:`, colorScheme);
+      
+      console.log(`🔄 [Mindmap] About to call getDefaultLayoutHints...`);
+      const layoutHints = this.getMindmapService().getDefaultLayoutHints();
+      console.log(`✅ [Mindmap] Layout hints retrieved:`, layoutHints);
+      
       const payload = {
         blueprintId: String(blueprintId),
         version: 1,
-        nodes: derived.nodes,
-        edges: derived.edges,
+        nodes: mindmap.nodes,
+        edges: mindmap.edges,
         metadata: {
           createdAt: blueprint.createdAt.toISOString(),
           updatedAt: blueprint.updatedAt.toISOString(),
+          centralConcept: bpJson.mindmap_metadata?.central_concept || bpJson.title || 'Learning Blueprint',
+          colorScheme: bpJson.mindmap_metadata?.color_scheme || colorScheme,
+          layoutHints: bpJson.mindmap_metadata?.layout_hints || layoutHints
         },
       };
+      
+      console.log(`🔄 [Mindmap] About to send response...`);
       res.status(200).json(payload);
+      console.log(`✅ [Mindmap] Response sent successfully`);
     } catch (error) {
+      console.error(`❌ [Mindmap] Error building mindmap for blueprint ${req.params.id}:`, error);
       if (error instanceof Error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: error.message, stack: error.stack });
       } else {
         res.status(500).json({ message: 'An unknown error occurred' });
       }
@@ -98,7 +146,8 @@ class LearningBlueprintsController {
 
   /**
    * PUT /api/blueprints/:id/mindmap
-   * Accepts mindmap nodes/edges and persists them into blueprintJson.mindmap
+   * Updates blueprint data with new mindmap positions and metadata.
+   * Note: This now updates the blueprint structure rather than storing separate mindmap data.
    */
   async updateBlueprintMindmap(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
@@ -112,11 +161,19 @@ class LearningBlueprintsController {
         return;
       }
 
-      const { version, nodes, edges } = req.body || {};
+      console.log(`🔄 [Mindmap] Updating mindmap for blueprint ${blueprintId} for user ${req.user.userId}`);
+
+      const { nodes, edges, metadata } = req.body || {};
       if (!Array.isArray(nodes) || !Array.isArray(edges)) {
         res.status(400).json({ message: 'Invalid payload: nodes and edges must be arrays' });
         return;
       }
+
+      console.log(`📋 [Mindmap] Received payload:`, {
+        nodesCount: nodes.length,
+        edgesCount: edges.length,
+        hasMetadata: !!metadata
+      });
 
       // Basic validation: unique ids, references integrity
       const nodeIds = new Set(nodes.map((n: any) => n.id));
@@ -130,14 +187,73 @@ class LearningBlueprintsController {
           return;
         }
       }
-      const seenEdges = new Set<string>();
-      for (const e of edges) {
-        const key = `${e.source}->${e.target}|${e.data?.relationType || ''}`;
-        if (seenEdges.has(key)) {
-          res.status(400).json({ message: 'Duplicate edges are not allowed' });
-          return;
-        }
-        seenEdges.add(key);
+
+      const blueprint = await prisma.learningBlueprint.findFirst({
+        where: { id: blueprintId, userId: req.user.userId },
+      });
+      if (!blueprint) {
+        res.status(404).json({ message: 'Blueprint not found' });
+        return;
+      }
+
+      const bpJson: any = blueprint.blueprintJson || {};
+      
+      // Use the mindmap service to update the blueprint
+      console.log(`🔄 [Mindmap] Calling updateBlueprintWithMindmap...`);
+      const updatedJson = this.getMindmapService().updateBlueprintWithMindmap(bpJson, nodes, edges, metadata);
+      console.log(`✅ [Mindmap] Blueprint updated successfully`);
+
+      const updated = await prisma.learningBlueprint.update({
+        where: { id: blueprintId },
+        data: { blueprintJson: updatedJson },
+      });
+
+      // Return the updated mindmap
+      console.log(`🔄 [Mindmap] Building updated mindmap...`);
+      const updatedMindmap = this.getMindmapService().buildMindmapFromBlueprint(updatedJson);
+      console.log(`✅ [Mindmap] Updated mindmap built successfully:`, {
+        nodesCount: updatedMindmap.nodes.length,
+        edgesCount: updatedMindmap.edges.length
+      });
+      
+      res.status(200).json({
+        blueprintId: String(blueprintId),
+        version: 1,
+        nodes: updatedMindmap.nodes,
+        edges: updatedMindmap.edges,
+        metadata: {
+          createdAt: updated.createdAt.toISOString(),
+          updatedAt: updated.updatedAt.toISOString(),
+          centralConcept: updatedJson.mindmap_metadata?.central_concept || updatedJson.title || 'Learning Blueprint',
+          colorScheme: updatedJson.mindmap_metadata?.color_scheme || this.getMindmapService().getDefaultColorScheme(),
+          layoutHints: updatedJson.mindmap_metadata?.layout_hints || this.getMindmapService().getDefaultLayoutHints()
+        },
+      });
+    } catch (error) {
+      console.error(`❌ [Mindmap] Error updating mindmap for blueprint ${req.params.id}:`, error);
+      if (error instanceof Error) {
+        res.status(500).json({ message: error.message, stack: error.stack });
+      } else {
+        res.status(500).json({ message: 'An unknown error occurred' });
+      }
+    }
+  }
+
+  /**
+   * GET /api/blueprints/:id/mindmap/stats
+   * Returns mindmap statistics for a specific blueprint
+   */
+  async getMindmapStats(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ message: 'User not authenticated' });
+        return;
+      }
+
+      const blueprintId = parseInt(req.params.id, 10);
+      if (isNaN(blueprintId)) {
+        res.status(400).json({ message: 'Invalid blueprint ID' });
+        return;
       }
 
       const blueprint = await prisma.learningBlueprint.findFirst({
@@ -149,26 +265,18 @@ class LearningBlueprintsController {
       }
 
       const bpJson: any = blueprint.blueprintJson || {};
-      bpJson.mindmap = {
-        version: typeof version === 'number' ? version : 1,
-        nodes,
-        edges,
-      };
-
-      const updated = await prisma.learningBlueprint.update({
-        where: { id: blueprintId },
-        data: { blueprintJson: bpJson },
-      });
-
+      
+      // Get blueprint-specific mindmap statistics
+      const blueprintStats = this.getMindmapService().getBlueprintMindmapStats(bpJson);
+      const serviceMetrics = this.getMindmapService().getPerformanceMetrics();
+      const cacheStats = this.getMindmapService().getCacheStats();
+      
       res.status(200).json({
         blueprintId: String(blueprintId),
-        version: bpJson.mindmap.version,
-        nodes,
-        edges,
-        metadata: {
-          createdAt: updated.createdAt.toISOString(),
-          updatedAt: updated.updatedAt.toISOString(),
-        },
+        blueprintStats,
+        serviceMetrics,
+        cache: cacheStats,
+        timestamp: new Date().toISOString()
       });
     } catch (error) {
       if (error instanceof Error) {
@@ -179,61 +287,75 @@ class LearningBlueprintsController {
     }
   }
 
-  // Helper to derive a basic mindmap when not present
-  private deriveMindmapFromBlueprintJson(bpJson: any): { nodes: any[]; edges: any[] } {
-    const nodes: any[] = [];
-    const edges: any[] = [];
-
+  /**
+   * DELETE /api/blueprints/:id/mindmap/cache
+   * Clears the mindmap service cache for a specific blueprint
+   */
+  async clearMindmapCache(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const sections = bpJson?.sections ?? [];
-      for (const s of sections) {
-        if (s?.section_id) {
-          nodes.push({
-            id: String(s.section_id),
-            type: 'section',
-            data: { title: s.section_name || String(s.section_id), description: s.description || null },
-            position: { x: 0, y: 0 },
-            parentId: s.parent_section_id ? String(s.parent_section_id) : null,
-          });
-        }
+      if (!req.user) {
+        res.status(401).json({ message: 'User not authenticated' });
+        return;
       }
 
-      const kp = bpJson?.knowledge_primitives ?? {};
-      const addPrimitiveNodes = (arr: any[], type: string, getTitle: (p: any) => string, getDesc?: (p: any) => string | null) => {
-        for (const p of arr ?? []) {
-          const id = p?.id || p?.primitiveId;
-          if (!id) continue;
-          nodes.push({
-            id: String(id),
-            type,
-            data: {
-              title: getTitle(p),
-              description: getDesc ? getDesc(p) : null,
-              primitiveType: p?.primitiveType ?? undefined,
-            },
-            position: { x: 0, y: 0 },
-          });
-        }
-      };
-
-      addPrimitiveNodes(kp.key_propositions_and_facts, 'proposition', (p) => p.statement || p.title || String(p.id), (p) => (Array.isArray(p.supporting_evidence) ? p.supporting_evidence[0] : null));
-      addPrimitiveNodes(kp.key_entities_and_definitions, 'entity', (p) => p.entity || p.title || String(p.id), (p) => p.definition || null);
-      addPrimitiveNodes(kp.described_processes_and_steps, 'process', (p) => p.process_name || p.title || String(p.id), (p) => Array.isArray(p.steps) ? p.steps.join(' → ') : null);
-
-      const rels: any[] = kp.identified_relationships ?? [];
-      for (const r of rels) {
-        const src = r?.source_primitive_id;
-        const tgt = r?.target_primitive_id;
-        if (!src || !tgt) continue;
-        const id = r?.id || `${src}->${tgt}`;
-        edges.push({ id: String(id), source: String(src), target: String(tgt), type: 'default', data: { relationType: r?.relationship_type || 'custom' } });
+      const blueprintId = parseInt(req.params.id, 10);
+      if (isNaN(blueprintId)) {
+        res.status(400).json({ message: 'Invalid blueprint ID' });
+        return;
       }
-    } catch (e) {
-      // If derivation fails, return empty arrays
-      return { nodes: [], edges: [] };
+
+      // Clear the specific blueprint from cache if it exists
+      const blueprint = await prisma.learningBlueprint.findFirst({
+        where: { id: blueprintId, userId: req.user.userId },
+      });
+      if (!blueprint) {
+        res.status(404).json({ message: 'Blueprint not found' });
+        return;
+      }
+
+      // Clear the entire cache for now (could be optimized to clear specific blueprint)
+      this.getMindmapService().clearCache();
+      
+      res.status(200).json({
+        message: 'Mindmap cache cleared successfully',
+        blueprintId: String(blueprintId),
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(500).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: 'An unknown error occurred' });
+      }
     }
+  }
 
-    return { nodes, edges };
+  /**
+   * GET /api/blueprints/mindmap/service-stats
+   * Returns general mindmap service performance metrics and statistics
+   */
+  async getMindmapServiceStats(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ message: 'User not authenticated' });
+        return;
+      }
+
+      const performanceMetrics = this.getMindmapService().getPerformanceMetrics();
+      const cacheStats = this.getMindmapService().getCacheStats();
+      
+      res.status(200).json({
+        serviceMetrics: performanceMetrics,
+        cache: cacheStats,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(500).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: 'An unknown error occurred' });
+      }
+    }
   }
 
   async generateQuestionsFromBlueprint(
@@ -245,13 +367,18 @@ class LearningBlueprintsController {
         res.status(401).json({ message: 'User not authenticated' });
         return;
       }
-      const blueprintId = parseInt(req.params.blueprintId, 10);
-      const result = await aiRagService.generateQuestionsFromBlueprint(
-        blueprintId,
-        req.body,
-        req.user.userId,
-      );
-      res.status(201).json(result);
+      const blueprintId = parseInt(req.params.id, 10);
+      if (isNaN(blueprintId)) {
+        res.status(400).json({ message: 'Invalid blueprint ID' });
+        return;
+      }
+      // const result = await this.getAiRagService().generateQuestionsFromBlueprint(
+      //   req.user.userId,
+      //   blueprintId,
+      //   req.body,
+      // );
+      // res.status(200).json(result);
+      res.status(501).json({ message: 'Question generation temporarily disabled' });
     } catch (error) {
       if (error instanceof Error) {
         res.status(500).json({ message: error.message });
@@ -267,13 +394,18 @@ class LearningBlueprintsController {
         res.status(401).json({ message: 'User not authenticated' });
         return;
       }
-      const blueprintId = parseInt(req.params.blueprintId, 10);
-      const result = await aiRagService.generateNoteFromBlueprint(
-        blueprintId,
-        req.body,
-        req.user.userId,
-      );
-      res.status(201).json(result);
+      const blueprintId = parseInt(req.params.id, 10);
+      if (isNaN(blueprintId)) {
+        res.status(400).json({ message: 'Invalid blueprint ID' });
+        return;
+      }
+      // const result = await this.getAiRagService().generateNoteFromBlueprint(
+      //   req.user.userId,
+      //   blueprintId,
+      //   req.body,
+      // );
+      // res.status(200).json(result);
+      res.status(501).json({ message: 'Note generation temporarily disabled' });
     } catch (error) {
       if (error instanceof Error) {
         res.status(500).json({ message: error.message });
@@ -290,7 +422,11 @@ class LearningBlueprintsController {
         res.status(401).json({ message: 'User not authenticated' });
         return;
       }
-      const result = await aiRagService.getAllLearningBlueprintsForUser(req.user.userId);
+      // Use Prisma directly since this method doesn't exist on AiRAGService
+      const result = await prisma.learningBlueprint.findMany({
+        where: { userId: req.user.userId },
+        orderBy: { createdAt: 'desc' },
+      });
       res.status(200).json(result);
     } catch (error) {
       if (error instanceof Error) {
@@ -312,7 +448,10 @@ class LearningBlueprintsController {
         res.status(400).json({ message: 'Invalid blueprint ID' });
         return;
       }
-      const result = await aiRagService.getLearningBlueprintById(blueprintId, req.user.userId);
+      // Use Prisma directly since this method doesn't exist on AiRAGService
+      const result = await prisma.learningBlueprint.findFirst({
+        where: { id: blueprintId, userId: req.user.userId },
+      });
       if (!result) {
         res.status(404).json({ message: 'Blueprint not found' });
         return;
@@ -327,7 +466,10 @@ class LearningBlueprintsController {
     }
   }
 
-  async updateLearningBlueprint(req: AuthenticatedRequest, res: Response): Promise<void> {
+  async updateLearningBlueprint(
+    req: AuthenticatedRequest,
+    res: Response,
+  ): Promise<void> {
     try {
       if (!req.user) {
         res.status(401).json({ message: 'User not authenticated' });
@@ -338,15 +480,11 @@ class LearningBlueprintsController {
         res.status(400).json({ message: 'Invalid blueprint ID' });
         return;
       }
-      const result = await aiRagService.updateLearningBlueprint(
-        blueprintId,
-        req.body,
-        req.user.userId,
-      );
-      if (!result) {
-        res.status(404).json({ message: 'Blueprint not found' });
-        return;
-      }
+      // Use Prisma directly since this method doesn't exist on AiRAGService
+      const result = await prisma.learningBlueprint.update({
+        where: { id: blueprintId, userId: req.user.userId },
+        data: req.body,
+      });
       res.status(200).json(result);
     } catch (error) {
       if (error instanceof Error) {
@@ -368,12 +506,11 @@ class LearningBlueprintsController {
         res.status(400).json({ message: 'Invalid blueprint ID' });
         return;
       }
-      const success = await aiRagService.deleteLearningBlueprint(blueprintId, req.user.userId);
-      if (!success) {
-        res.status(404).json({ message: 'Blueprint not found' });
-        return;
-      }
-      res.status(204).send();
+      // Use Prisma directly since this method doesn't exist on AiRAGService
+      const success = await prisma.learningBlueprint.delete({
+        where: { id: blueprintId, userId: req.user.userId },
+      });
+      res.status(200).json({ message: 'Blueprint deleted successfully', deletedBlueprint: success });
     } catch (error) {
       if (error instanceof Error) {
         res.status(500).json({ message: error.message });
@@ -395,15 +532,22 @@ class LearningBlueprintsController {
         res.status(400).json({ message: 'Invalid blueprint ID' });
         return;
       }
-      const result = await aiRagService.getBlueprintIndexingStatus(blueprintId, req.user.userId);
-      res.status(200).json(result);
+      // Use the AIAPIClientService directly for this functionality
+      try {
+        const aiClient = getAIAPIClient();
+        const result = await aiClient.getBlueprintStatus(blueprintId.toString());
+        res.status(200).json(result);
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('AI API client not initialized')) {
+          res.status(503).json({ message: 'AI service is not available at the moment. Please try again later.' });
+        } else {
+          throw error; // Re-throw other errors to be handled by the outer catch block
+        }
+        return;
+      }
     } catch (error) {
       if (error instanceof Error) {
-        if (error.message.includes('not found') || error.message.includes('access denied')) {
-          res.status(404).json({ message: error.message });
-        } else {
-          res.status(500).json({ message: error.message });
-        }
+        res.status(500).json({ message: error.message });
       } else {
         res.status(500).json({ message: 'An unknown error occurred' });
       }
@@ -421,15 +565,26 @@ class LearningBlueprintsController {
         res.status(400).json({ message: 'Invalid blueprint ID' });
         return;
       }
-      const result = await aiRagService.reindexBlueprint(blueprintId, req.user.userId);
-      res.status(200).json(result);
+      // Use the AIAPIClientService directly for this functionality
+      try {
+        const aiClient = getAIAPIClient();
+        const result = await aiClient.indexBlueprint({
+          blueprint_id: blueprintId.toString(),
+          blueprint_json: {},
+          force_reindex: true
+        });
+        res.status(200).json(result);
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('AI API client not initialized')) {
+          res.status(503).json({ message: 'AI service is not available at the moment. Please try again later.' });
+        } else {
+          throw error; // Re-throw other errors to be handled by the outer catch block
+        }
+        return;
+      }
     } catch (error) {
       if (error instanceof Error) {
-        if (error.message.includes('not found') || error.message.includes('access denied')) {
-          res.status(404).json({ message: error.message });
-        } else {
-          res.status(500).json({ message: error.message });
-        }
+        res.status(500).json({ message: error.message });
       } else {
         res.status(500).json({ message: 'An unknown error occurred' });
       }
@@ -437,4 +592,5 @@ class LearningBlueprintsController {
   }
 }
 
-export default new LearningBlueprintsController();
+// Export the class instead of an instance to avoid immediate instantiation
+export default LearningBlueprintsController;

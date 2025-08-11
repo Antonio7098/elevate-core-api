@@ -134,36 +134,351 @@ export async function createTestUser(options: TestUserOptions = {}): Promise<{ i
   const newtonBlueprint = await prisma.learningBlueprint.create({
     data: {
       userId: user.id,
+      folderId: physicsFolder.id,
+      title: "Newton's Laws of Motion",
+      description: 'Fundamentals of motion: inertia, F=ma, and action-reaction.',
       sourceText: "Newton's laws of motion are three fundamental principles that describe the relationship between forces and motion. The first law states that an object at rest stays at rest and an object in motion stays in motion unless acted upon by an unbalanced force. The second law states that force equals mass times acceleration (F=ma). The third law states that for every action, there is an equal and opposite reaction.",
       blueprintJson: {
         title: "Newton's Laws of Motion",
+        mindmap_metadata: {
+          central_concept: "Newton's Laws of Motion",
+          primary_branches: ["First Law (Inertia)", "Second Law (F=ma)", "Third Law (Action-Reaction)", "Applications", "Mathematical Framework"],
+          color_scheme: {
+            primary: "#3b82f6",
+            secondary: "#10b981", 
+            tertiary: "#f59e0b",
+            applications: "#8b5cf6",
+            math: "#ef4444"
+          },
+          layout_hints: {
+            orientation: "radial",
+            spacing: "balanced",
+            grouping: "thematic"
+          }
+        },
         sections: [
-          { section_id: 's1', section_name: 'First Law (Inertia)', description: 'Objects resist changes in their motion' },
-          { section_id: 's2', section_name: 'Second Law (F=ma)', description: 'Force is proportional to acceleration' },
-          { section_id: 's3', section_name: 'Third Law (Action-Reaction)', description: 'Forces always occur in pairs' },
+          { 
+            section_id: 's1', 
+            section_name: 'First Law (Inertia)', 
+            description: 'Objects resist changes in their motion',
+            mindmap_position: { x: -200, y: -150 },
+            difficulty_level: 'beginner',
+            prerequisites: [],
+            estimated_time_minutes: 30
+          },
+          { 
+            section_id: 's2', 
+            section_name: 'Second Law (F=ma)', 
+            description: 'Force is proportional to acceleration',
+            mindmap_position: { x: 200, y: -150 },
+            difficulty_level: 'intermediate',
+            prerequisites: ['s1'],
+            estimated_time_minutes: 45
+          },
+          { 
+            section_id: 's3', 
+            section_name: 'Third Law (Action-Reaction)', 
+            description: 'Forces always occur in pairs',
+            mindmap_position: { x: 0, y: 150 },
+            difficulty_level: 'intermediate',
+            prerequisites: ['s1'],
+            estimated_time_minutes: 40
+          },
+          {
+            section_id: 's4',
+            section_name: 'Mathematical Framework',
+            description: 'Equations and calculations',
+            mindmap_position: { x: 0, y: -300 },
+            difficulty_level: 'advanced',
+            prerequisites: ['s1', 's2'],
+            estimated_time_minutes: 60
+          },
+          {
+            section_id: 's5',
+            section_name: 'Real-World Applications',
+            description: 'Practical examples and engineering',
+            mindmap_position: { x: 0, y: 300 },
+            difficulty_level: 'intermediate',
+            prerequisites: ['s1', 's2', 's3'],
+            estimated_time_minutes: 50
+          }
         ],
         knowledge_primitives: {
           key_propositions_and_facts: [
             'Inertia is the tendency of objects to resist changes in motion',
-            'Force equals mass times acceleration',
-            'Action and reaction forces are equal and opposite'
+            'Force equals mass times acceleration (F = ma)',
+            'Action and reaction forces are equal and opposite',
+            'Net force determines acceleration direction and magnitude',
+            'Mass is a measure of inertia and resistance to acceleration'
           ],
           key_entities_and_definitions: [
-            'Newton: Unit of force',
+            'Newton: Unit of force (1 N = 1 kg⋅m/s²)',
             'Inertia: Resistance to motion changes',
-            'Acceleration: Rate of velocity change'
+            'Acceleration: Rate of velocity change (m/s²)',
+            'Force: Push or pull that can change motion',
+            'Mass: Measure of matter and inertia',
+            'Net Force: Vector sum of all forces acting on an object'
           ],
           described_processes_and_steps: [
-            'How to calculate force using F=ma',
-            'How to identify action-reaction pairs'
+            'How to calculate force using F = ma',
+            'How to identify action-reaction pairs',
+            'How to analyze forces in free-body diagrams',
+            'How to calculate acceleration from net force',
+            'How to determine direction of motion from forces'
           ],
           identified_relationships: [
             'Mass and acceleration are inversely related for constant force',
-            'Greater mass requires greater force for same acceleration'
+            'Greater mass requires greater force for same acceleration',
+            'Action-reaction pairs act on different objects',
+            'Net force of zero means constant velocity (including zero)',
+            'Friction opposes motion and reduces acceleration'
           ],
           implicit_and_open_questions: [
             'How do Newton\'s laws apply to space travel?',
-            'Why do seatbelts work based on Newton\'s laws?'
+            'Why do seatbelts work based on Newton\'s laws?',
+            'How do Newton\'s laws explain circular motion?',
+            'What happens to Newton\'s laws at relativistic speeds?',
+            'How do Newton\'s laws apply to fluid dynamics?'
+          ]
+        },
+        concept_hierarchy: {
+          root_concept: "Newton's Laws of Motion",
+          branches: [
+            {
+              concept: "First Law (Inertia)",
+              level: 1,
+              children: [
+                { concept: "Static Equilibrium", level: 2, examples: ["Book on table", "Car at traffic light"] },
+                { concept: "Uniform Motion", level: 2, examples: ["Satellite in orbit", "Car on highway"] },
+                { concept: "Inertia in Different Media", level: 2, examples: ["Air resistance", "Water resistance"] }
+              ]
+            },
+            {
+              concept: "Second Law (F = ma)",
+              level: 1,
+              children: [
+                { concept: "Linear Motion", level: 2, examples: ["Car acceleration", "Rocket launch"] },
+                { concept: "Variable Mass", level: 2, examples: ["Rocket fuel consumption", "Raindrop formation"] },
+                { concept: "Force Components", level: 2, examples: ["Inclined plane", "Projectile motion"] }
+              ]
+            },
+            {
+              concept: "Third Law (Action-Reaction)",
+              level: 1,
+              children: [
+                { concept: "Contact Forces", level: 2, examples: ["Walking", "Swimming"] },
+                { concept: "Field Forces", level: 2, examples: ["Gravitational attraction", "Magnetic repulsion"] },
+                { concept: "Momentum Conservation", level: 2, examples: ["Rocket propulsion", "Recoil"] }
+              ]
+            }
+          ]
+        },
+        cross_references: [
+          {
+            from_concept: "Newton's First Law",
+            to_concept: "Galileo's Inertia",
+            relationship: "historical_development",
+            strength: "strong"
+          },
+          {
+            from_concept: "F = ma",
+            to_concept: "Calculus (Derivatives)",
+            relationship: "mathematical_foundation",
+            strength: "strong"
+          },
+          {
+            from_concept: "Action-Reaction",
+            to_concept: "Momentum Conservation",
+            relationship: "derived_principle",
+            strength: "strong"
+          },
+          {
+            from_concept: "Newton's Laws",
+            to_concept: "Einstein's Relativity",
+            relationship: "approximation_limit",
+            strength: "medium"
+          }
+        ],
+        learning_paths: [
+          {
+            path_name: "Fundamentals First",
+            description: "Start with basic concepts and build up",
+            steps: [
+              { step: 1, concept: "First Law", duration: "30 min", mastery_check: "Can explain inertia with examples" },
+              { step: 2, concept: "Second Law", duration: "45 min", mastery_check: "Can solve F=ma problems" },
+              { step: 3, concept: "Third Law", duration: "40 min", mastery_check: "Can identify action-reaction pairs" },
+              { step: 4, concept: "Applications", duration: "50 min", mastery_check: "Can analyze real-world scenarios" }
+            ]
+          },
+          {
+            path_name: "Problem-Solving Focus",
+            description: "Emphasize mathematical applications",
+            steps: [
+              { step: 1, concept: "Mathematical Framework", duration: "60 min", mastery_check: "Can derive equations" },
+              { step: 2, concept: "Free Body Diagrams", duration: "45 min", mastery_check: "Can draw and analyze FBDs" },
+              { step: 3, concept: "Complex Problems", duration: "90 min", mastery_check: "Can solve multi-step problems" }
+            ]
+          }
+        ],
+        real_world_applications: [
+          {
+            category: "Transportation",
+            examples: [
+              {
+                name: "Car Safety Systems",
+                description: "Seatbelts, airbags, and crumple zones",
+                physics_principles: ["First Law", "Second Law"],
+                difficulty: "intermediate"
+              },
+              {
+                name: "Rocket Propulsion",
+                description: "Space travel and satellite launches",
+                physics_principles: ["Third Law", "Second Law"],
+                difficulty: "advanced"
+              }
+            ]
+          },
+          {
+            category: "Sports and Recreation",
+            examples: [
+              {
+                name: "Baseball Pitching",
+                description: "Force application and ball trajectory",
+                physics_principles: ["Second Law", "Third Law"],
+                difficulty: "intermediate"
+              },
+              {
+                name: "Swimming",
+                description: "Water resistance and propulsion",
+                physics_principles: ["Third Law", "Second Law"],
+                difficulty: "beginner"
+              }
+            ]
+          },
+          {
+            category: "Engineering",
+            examples: [
+              {
+                name: "Bridge Design",
+                description: "Force distribution and stability",
+                physics_principles: ["First Law", "Second Law"],
+                difficulty: "advanced"
+              },
+              {
+                name: "Machine Design",
+                description: "Gears, pulleys, and mechanical advantage",
+                physics_principles: ["Second Law", "Third Law"],
+                difficulty: "advanced"
+              }
+            ]
+          }
+        ],
+        assessment_milestones: [
+          {
+            milestone: "Basic Understanding",
+            criteria: ["Can state all three laws", "Can give examples of each"],
+            difficulty: "beginner",
+            estimated_time: "2 hours"
+          },
+          {
+            milestone: "Problem Solving",
+            criteria: ["Can solve F=ma problems", "Can draw free body diagrams"],
+            difficulty: "intermediate", 
+            estimated_time: "4 hours"
+          },
+          {
+            milestone: "Application Mastery",
+            criteria: ["Can analyze complex scenarios", "Can explain to others"],
+            difficulty: "advanced",
+            estimated_time: "6 hours"
+          }
+        ],
+        common_misconceptions: [
+          {
+            misconception: "Objects need a force to keep moving",
+            correct_understanding: "Objects in motion stay in motion unless acted upon by a force",
+            examples: ["Car continues rolling on ice", "Satellite orbits without engine"]
+          },
+          {
+            misconception: "Heavier objects fall faster",
+            correct_understanding: "In vacuum, all objects fall at same rate; air resistance causes differences",
+            examples: ["Feather and hammer on moon", "Paper vs book in air"]
+          },
+          {
+            misconception: "Action-reaction forces cancel out",
+            correct_understanding: "They act on different objects, so they don't cancel for either object",
+            examples: ["Rocket moves forward despite equal backward force", "Person moves forward when walking"]
+          }
+        ],
+        mindmap: {
+          version: 1,
+          nodes: [
+            {
+              id: "1",
+              type: "default",
+              data: { label: "Newton's Laws of Motion" },
+              position: { x: 0, y: 0 },
+              width: 150,
+              height: 40
+            },
+            {
+              id: "2",
+              type: "default", 
+              data: { label: "First Law (Inertia)" },
+              position: { x: -200, y: -150 },
+              width: 150,
+              height: 40
+            },
+            {
+              id: "3",
+              type: "default",
+              data: { label: "Second Law (F=ma)" },
+              position: { x: 200, y: -150 },
+              width: 150,
+              height: 40
+            },
+            {
+              id: "4",
+              type: "default",
+              data: { label: "Third Law (Action-Reaction)" },
+              position: { x: 0, y: 150 },
+              width: 150,
+              height: 40
+            },
+            {
+              id: "5",
+              type: "default",
+              data: { label: "Applications" },
+              position: { x: 0, y: 300 },
+              width: 150,
+              height: 40
+            }
+          ],
+          edges: [
+            {
+              id: "e1-2",
+              source: "1",
+              target: "2",
+              type: "default"
+            },
+            {
+              id: "e1-3", 
+              source: "1",
+              target: "3",
+              type: "default"
+            },
+            {
+              id: "e1-4",
+              source: "1", 
+              target: "4",
+              type: "default"
+            },
+            {
+              id: "e1-5",
+              source: "1",
+              target: "5", 
+              type: "default"
+            }
           ]
         }
       },
@@ -174,38 +489,352 @@ export async function createTestUser(options: TestUserOptions = {}): Promise<{ i
   const energyBlueprint = await prisma.learningBlueprint.create({
     data: {
       userId: user.id,
+      folderId: physicsFolder.id,
+      title: 'Energy Conservation and Transformation',
+      description: 'Conservation of energy, kinetic/potential energy, and transformations.',
       sourceText: "The law of conservation of energy states that energy cannot be created or destroyed, only transformed from one form to another. Kinetic energy is the energy of motion, calculated as KE = 1/2mv². Potential energy is stored energy due to position, such as gravitational potential energy (PE = mgh). In a closed system, the total mechanical energy (kinetic + potential) remains constant.",
       blueprintJson: {
         title: "Energy Conservation and Transformation",
+        mindmap_metadata: {
+          central_concept: "Energy Conservation",
+          primary_branches: ["Conservation Principle", "Kinetic Energy", "Potential Energy", "Energy Transformations", "Real-World Systems"],
+          color_scheme: {
+            primary: "#10b981",
+            secondary: "#3b82f6",
+            tertiary: "#f59e0b",
+            transformations: "#8b5cf6",
+            systems: "#ef4444"
+          },
+          layout_hints: {
+            orientation: "radial",
+            spacing: "balanced",
+            grouping: "energy_types"
+          }
+        },
         sections: [
-          { section_id: 's1', section_name: 'Conservation of Energy', description: 'Energy cannot be created or destroyed' },
-          { section_id: 's2', section_name: 'Kinetic Energy', description: 'Energy of motion' },
-          { section_id: 's3', section_name: 'Potential Energy', description: 'Stored energy due to position' },
-          { section_id: 's4', section_name: 'Energy Transformation', description: 'Converting between energy forms' },
+          { 
+            section_id: 's1', 
+            section_name: 'Conservation of Energy', 
+            description: 'Energy cannot be created or destroyed',
+            mindmap_position: { x: 0, y: -200 },
+            difficulty_level: 'beginner',
+            prerequisites: [],
+            estimated_time_minutes: 25
+          },
+          { 
+            section_id: 's2', 
+            section_name: 'Kinetic Energy', 
+            description: 'Energy of motion',
+            mindmap_position: { x: -200, y: 0 },
+            difficulty_level: 'intermediate',
+            prerequisites: ['s1'],
+            estimated_time_minutes: 35
+          },
+          { 
+            section_id: 's3', 
+            section_name: 'Potential Energy', 
+            description: 'Stored energy due to position',
+            mindmap_position: { x: 200, y: 0 },
+            difficulty_level: 'intermediate',
+            prerequisites: ['s1'],
+            estimated_time_minutes: 35
+          },
+          {
+            section_id: 's4',
+            section_name: 'Energy Transformations',
+            description: 'Converting between energy forms',
+            mindmap_position: { x: 0, y: 200 },
+            difficulty_level: 'intermediate',
+            prerequisites: ['s2', 's3'],
+            estimated_time_minutes: 40
+          },
+          {
+            section_id: 's5',
+            section_name: 'Real-World Energy Systems',
+            description: 'Practical applications and examples',
+            mindmap_position: { x: 0, y: 350 },
+            difficulty_level: 'advanced',
+            prerequisites: ['s1', 's2', 's3', 's4'],
+            estimated_time_minutes: 50
+          }
         ],
         knowledge_primitives: {
           key_propositions_and_facts: [
             'Energy is conserved in closed systems',
             'Kinetic energy = 1/2 × mass × velocity²',
-            'Gravitational potential energy = mass × gravity × height'
+            'Gravitational potential energy = mass × gravity × height',
+            'Total mechanical energy = KE + PE',
+            'Energy can change forms but total amount remains constant'
           ],
           key_entities_and_definitions: [
-            'Kinetic Energy: Energy of motion',
-            'Potential Energy: Stored energy',
-            'Mechanical Energy: Sum of kinetic and potential'
+            'Kinetic Energy: Energy of motion (KE = 1/2mv²)',
+            'Potential Energy: Stored energy due to position',
+            'Mechanical Energy: Sum of kinetic and potential energy',
+            'Conservative Force: Force where work is path-independent',
+            'Non-Conservative Force: Force where work depends on path (e.g., friction)',
+            'Joule: Unit of energy (1 J = 1 kg⋅m²/s²)'
           ],
           described_processes_and_steps: [
-            'How to calculate kinetic energy',
+            'How to calculate kinetic energy from mass and velocity',
             'How to calculate gravitational potential energy',
-            'How to analyze energy transformations'
+            'How to analyze energy transformations in systems',
+            'How to identify energy losses due to friction',
+            'How to use energy conservation to solve problems'
           ],
           identified_relationships: [
-            'Higher velocity means greater kinetic energy',
-            'Higher position means greater potential energy'
+            'Higher velocity means greater kinetic energy (quadratic relationship)',
+            'Higher position means greater potential energy (linear relationship)',
+            'Maximum KE occurs at minimum PE and vice versa',
+            'Friction converts mechanical energy to thermal energy',
+            'Energy efficiency = useful energy output / total energy input'
           ],
           implicit_and_open_questions: [
             'How does friction affect energy conservation?',
-            'What happens to energy in a pendulum?'
+            'What happens to energy in a pendulum?',
+            'How do different types of potential energy relate?',
+            'What is the relationship between energy and power?',
+            'How does energy conservation apply to nuclear reactions?'
+          ]
+        },
+        concept_hierarchy: {
+          root_concept: "Energy Conservation",
+          branches: [
+            {
+              concept: "Forms of Energy",
+              level: 1,
+              children: [
+                { concept: "Mechanical Energy", level: 2, examples: ["Kinetic", "Potential"] },
+                { concept: "Thermal Energy", level: 2, examples: ["Heat", "Temperature"] },
+                { concept: "Chemical Energy", level: 2, examples: ["Batteries", "Food"] },
+                { concept: "Nuclear Energy", level: 2, examples: ["Fusion", "Fission"] }
+              ]
+            },
+            {
+              concept: "Energy Transformations",
+              level: 1,
+              children: [
+                { concept: "Mechanical ↔ Thermal", level: 2, examples: ["Friction", "Engines"] },
+                { concept: "Chemical ↔ Mechanical", level: 2, examples: ["Muscles", "Engines"] },
+                { concept: "Potential ↔ Kinetic", level: 2, examples: ["Falling objects", "Pendulums"] }
+              ]
+            },
+            {
+              concept: "Conservation Principles",
+              level: 1,
+              children: [
+                { concept: "Closed Systems", level: 2, examples: ["Isolated containers", "Space"] },
+                { concept: "Open Systems", level: 2, examples: ["Earth", "Living organisms"] },
+                { concept: "Energy Flow", level: 2, examples: ["Food chains", "Power grids"] }
+              ]
+            }
+          ]
+        },
+        cross_references: [
+          {
+            from_concept: "Energy Conservation",
+            to_concept: "Newton's Laws",
+            relationship: "complementary_principles",
+            strength: "strong"
+          },
+          {
+            from_concept: "Kinetic Energy",
+            to_concept: "Calculus (Derivatives)",
+            relationship: "mathematical_foundation",
+            strength: "strong"
+          },
+          {
+            from_concept: "Potential Energy",
+            to_concept: "Gravitational Fields",
+            relationship: "field_theory",
+            strength: "strong"
+          },
+          {
+            from_concept: "Energy Transformations",
+            to_concept: "Thermodynamics",
+            relationship: "advanced_application",
+            strength: "medium"
+          }
+        ],
+        learning_paths: [
+          {
+            path_name: "Energy Fundamentals",
+            description: "Build understanding from basic principles",
+            steps: [
+              { step: 1, concept: "Conservation Principle", duration: "25 min", mastery_check: "Can state energy conservation law" },
+              { step: 2, concept: "Kinetic Energy", duration: "35 min", mastery_check: "Can calculate KE from mass and velocity" },
+              { step: 3, concept: "Potential Energy", duration: "35 min", mastery_check: "Can calculate PE from mass and height" },
+              { step: 4, concept: "Energy Transformations", duration: "40 min", mastery_check: "Can analyze simple energy conversions" }
+            ]
+          },
+          {
+            path_name: "Applied Energy Systems",
+            description: "Focus on real-world applications",
+            steps: [
+              { step: 1, concept: "Real-World Systems", duration: "50 min", mastery_check: "Can analyze complex energy systems" },
+              { step: 2, concept: "Energy Efficiency", duration: "45 min", mastery_check: "Can calculate efficiency and identify losses" },
+              { step: 3, concept: "Advanced Applications", duration: "60 min", mastery_check: "Can solve complex energy problems" }
+            ]
+          }
+        ],
+        real_world_applications: [
+          {
+            category: "Transportation",
+            examples: [
+              {
+                name: "Roller Coasters",
+                description: "PE to KE conversions and energy conservation",
+                physics_principles: ["Energy Conservation", "PE ↔ KE", "Friction Losses"],
+                difficulty: "intermediate"
+              },
+              {
+                name: "Electric Vehicles",
+                description: "Chemical to electrical to mechanical energy",
+                physics_principles: ["Energy Transformations", "Efficiency", "Storage"],
+                difficulty: "advanced"
+              }
+            ]
+          },
+          {
+            category: "Sports and Recreation",
+            examples: [
+              {
+                name: "Skiing",
+                description: "Gravitational PE converted to KE and thermal",
+                physics_principles: ["PE → KE", "Friction", "Energy Conservation"],
+                difficulty: "intermediate"
+              },
+              {
+                name: "Bouncing Balls",
+                description: "Energy transformations with each bounce",
+                physics_principles: ["PE ↔ KE", "Energy Losses", "Conservation"],
+                difficulty: "beginner"
+              }
+            ]
+          },
+          {
+            category: "Engineering",
+            examples: [
+              {
+                name: "Hydroelectric Dams",
+                description: "Gravitational PE to electrical energy",
+                physics_principles: ["PE → KE", "Energy Conversion", "Efficiency"],
+                difficulty: "advanced"
+              },
+              {
+                name: "Wind Turbines",
+                description: "Kinetic energy of wind to electrical energy",
+                physics_principles: ["KE → Electrical", "Energy Harvesting", "Power"],
+                difficulty: "advanced"
+              }
+            ]
+          }
+        ],
+        assessment_milestones: [
+          {
+            milestone: "Basic Energy Concepts",
+            criteria: ["Can state conservation law", "Can identify energy forms"],
+            difficulty: "beginner",
+            estimated_time: "1.5 hours"
+          },
+          {
+            milestone: "Energy Calculations",
+            criteria: ["Can calculate KE and PE", "Can analyze simple transformations"],
+            difficulty: "intermediate",
+            estimated_time: "3 hours"
+          },
+          {
+            milestone: "Complex Energy Systems",
+            criteria: ["Can analyze real-world systems", "Can calculate efficiency"],
+            difficulty: "advanced",
+            estimated_time: "4.5 hours"
+          }
+        ],
+        common_misconceptions: [
+          {
+            misconception: "Energy is used up or consumed",
+            correct_understanding: "Energy is transformed, not consumed; total amount is conserved",
+            examples: ["Car engine converts chemical to mechanical", "Light bulb converts electrical to light and heat"]
+          },
+          {
+            misconception: "Higher objects always have more energy",
+            correct_understanding: "Energy depends on both height and mass; lighter objects may have less PE",
+            examples: ["Feather vs rock at same height", "Small vs large water droplets"]
+          },
+          {
+            misconception: "Kinetic energy is always positive",
+            correct_understanding: "KE is always positive (depends on velocity²), but velocity can be negative",
+            examples: ["Car moving backward still has KE", "Ball thrown upward has KE even when moving up"]
+          }
+        ],
+        mindmap: {
+          version: 1,
+          nodes: [
+            {
+              id: "1",
+              type: "default",
+              data: { label: "Energy Conservation" },
+              position: { x: 0, y: 0 },
+              width: 150,
+              height: 40
+            },
+            {
+              id: "2",
+              type: "default", 
+              data: { label: "Kinetic Energy" },
+              position: { x: -200, y: 0 },
+              width: 150,
+              height: 40
+            },
+            {
+              id: "3",
+              type: "default",
+              data: { label: "Potential Energy" },
+              position: { x: 200, y: 0 },
+              width: 150,
+              height: 40
+            },
+            {
+              id: "4",
+              type: "default",
+              data: { label: "Energy Transformations" },
+              position: { x: 0, y: 200 },
+              width: 150,
+              height: 40
+            },
+            {
+              id: "5",
+              type: "default",
+              data: { label: "Real-World Systems" },
+              position: { x: 0, y: 350 },
+              width: 150,
+              height: 40
+            }
+          ],
+          edges: [
+            {
+              id: "e1-2",
+              source: "1",
+              target: "2",
+              type: "default"
+            },
+            {
+              id: "e1-3", 
+              source: "1",
+              target: "3",
+              type: "default"
+            },
+            {
+              id: "e1-4",
+              source: "1", 
+              target: "4",
+              type: "default"
+            },
+            {
+              id: "e1-5",
+              source: "1",
+              target: "5", 
+              type: "default"
+            }
           ]
         }
       },
@@ -216,6 +845,9 @@ export async function createTestUser(options: TestUserOptions = {}): Promise<{ i
   const bondingBlueprint = await prisma.learningBlueprint.create({
     data: {
       userId: user.id,
+      folderId: chemistryFolder.id,
+      title: 'Chemical Bonding and Molecular Structure',
+      description: 'Ionic, covalent, and metallic bonding with properties and examples.',
       sourceText: "Chemical bonding is the attraction between atoms that allows the formation of chemical substances. Ionic bonds form when electrons are transferred between atoms, creating charged ions. Covalent bonds form when atoms share electrons. Metallic bonds involve a sea of delocalized electrons shared among many atoms. The type of bond affects the properties of the resulting compound.",
       blueprintJson: {
         title: "Chemical Bonding and Molecular Structure",
@@ -248,6 +880,77 @@ export async function createTestUser(options: TestUserOptions = {}): Promise<{ i
             'Why do metals conduct electricity?',
             'How do hydrogen bonds differ from covalent bonds?'
           ]
+        },
+        mindmap: {
+          version: 1,
+          nodes: [
+            {
+              id: "1",
+              type: "default",
+              data: { label: "Chemical Bonding" },
+              position: { x: 0, y: 0 },
+              width: 150,
+              height: 40
+            },
+            {
+              id: "2",
+              type: "default", 
+              data: { label: "Ionic Bonding" },
+              position: { x: -200, y: -150 },
+              width: 150,
+              height: 40
+            },
+            {
+              id: "3",
+              type: "default",
+              data: { label: "Covalent Bonding" },
+              position: { x: 200, y: -150 },
+              width: 150,
+              height: 40
+            },
+            {
+              id: "4",
+              type: "default",
+              data: { label: "Metallic Bonding" },
+              position: { x: -200, y: 150 },
+              width: 150,
+              height: 40
+            },
+            {
+              id: "5",
+              type: "default",
+              data: { label: "Bond Properties" },
+              position: { x: 200, y: 150 },
+              width: 150,
+              height: 40
+            }
+          ],
+          edges: [
+            {
+              id: "e1-2",
+              source: "1",
+              target: "2",
+              type: "default"
+            },
+            {
+              id: "e1-3", 
+              source: "1",
+              target: "3",
+              type: "default"
+            },
+            {
+              id: "e1-4",
+              source: "1", 
+              target: "4",
+              type: "default"
+            },
+            {
+              id: "e1-5",
+              source: "1",
+              target: "5", 
+              type: "default"
+            }
+          ]
         }
       },
     },
@@ -257,6 +960,9 @@ export async function createTestUser(options: TestUserOptions = {}): Promise<{ i
   const revolutionBlueprint = await prisma.learningBlueprint.create({
     data: {
       userId: user.id,
+      folderId: historyFolder.id,
+      title: 'The French Revolution and Its Impact',
+      description: 'Causes, key events, and consequences of the French Revolution.',
       sourceText: "The French Revolution (1789-1799) was a period of radical social and political upheaval in France. It began with the storming of the Bastille on July 14, 1789, and led to the overthrow of the monarchy and establishment of a republic. Key events included the Declaration of the Rights of Man and Citizen, the Reign of Terror, and the rise of Napoleon Bonaparte. The revolution had profound effects on European society and politics.",
       blueprintJson: {
         title: "The French Revolution and Its Impact",
@@ -298,6 +1004,9 @@ export async function createTestUser(options: TestUserOptions = {}): Promise<{ i
   const calculusBlueprint = await prisma.learningBlueprint.create({
     data: {
       userId: user.id,
+      folderId: mathFolder.id,
+      title: 'Calculus Fundamentals and Applications',
+      description: 'Limits, derivatives, integrals, and applications across domains.',
       sourceText: "Calculus is the mathematical study of continuous change. Derivatives measure instantaneous rates of change, while integrals measure accumulation. The fundamental theorem of calculus connects these two operations. Limits are the foundation of calculus, allowing us to analyze behavior as values approach specific points. Calculus has applications in physics, engineering, economics, and many other fields.",
       blueprintJson: {
         title: "Calculus Fundamentals and Applications",

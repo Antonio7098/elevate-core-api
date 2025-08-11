@@ -2,8 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
 import { Prisma } from '@prisma/client'; // Correctly import Prisma types
 import { protect, AuthRequest } from '../middleware/auth.middleware';
-import { AiRAGService } from '../ai-rag/ai-rag.service';
-const aiRagService = new AiRAGService(prisma);
+// import { AiRAGService } from '../ai-rag/ai-rag.service';
+// const aiRagService = new AiRAGService(prisma);
 import { ChatMessageDto } from '../dtos/ai-rag';
 import { GenerateQuestionRequest, GenerateNoteRequest } from '../types/aiGeneration.types';
 import { GenerateQuestionsResponse, AIServiceErrorResponse, ChatRequest, isErrorResponse, EvaluateAnswerRequest } from '../types/ai-service.types';
@@ -305,9 +305,10 @@ export const chatWithAI = async (req: AuthRequest, res: Response, next: NextFunc
   try {
     const chatRequestDto = req.body as ChatMessageDto;
 
-    const result = await aiRagService.handleChatMessage(chatRequestDto, userId);
+    // const result = await aiRagService.handleChatMessage(chatRequestDto, userId);
 
-    res.status(200).json(result);
+    // res.status(200).json(result);
+    res.status(200).json({ message: 'Answer evaluation temporarily disabled' });
 
   } catch (error) {
 

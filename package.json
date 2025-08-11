@@ -10,7 +10,9 @@
     "test": "jest --detectOpenHandles --resetModules",
     "test:migration": "jest test/migration --runInBand",
     "db:update-marks": "ts-node scripts/updateMarksAvailable.ts",
-    "db:primitive-sr-migrate": "ts-node src/scripts/primitiveSrDataMigration.ts"
+    "db:primitive-sr-migrate": "ts-node src/scripts/primitiveSrDataMigration.ts",
+    "cleanup-mindmaps": "ts-node src/scripts/cleanup-separate-mindmaps.ts",
+    "demo-mindmap": "ts-node scripts/demo-mindmap-system.ts"
   },
   "keywords": [],
   "prisma": {

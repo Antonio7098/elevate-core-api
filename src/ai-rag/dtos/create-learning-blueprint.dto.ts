@@ -17,4 +17,14 @@ export class CreateLearningBlueprintDto {
   @IsOptional()
   @IsNumber()
   folderId?: number; // Optional properties don't strictly need '!' if undefined is acceptable before validation
+
+  @ApiPropertyOptional({ description: 'Optional display title for the blueprint.' })
+  @IsOptional()
+  @IsString()
+  title?: string;
+
+  @ApiPropertyOptional({ description: 'Optional description for the blueprint.' })
+  @IsOptional()
+  @IsString()
+  description?: string;
 }

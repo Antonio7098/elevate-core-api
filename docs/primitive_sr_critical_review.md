@@ -1,4 +1,4 @@
-# Critical Review: Primitive-Based Spaced Repetition System
+curl# Critical Review: Primitive-Based Spaced Repetition System
 
 **Date:** 2025-07-28  
 **Author:** System Architecture Review  

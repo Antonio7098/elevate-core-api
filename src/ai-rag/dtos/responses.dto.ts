@@ -24,9 +24,20 @@ export class LearningBlueprintResponseDto {
   @IsOptional()
   sourceId?: string;
 
-  @ApiPropertyOptional({ description: 'ID of the folder this blueprint might be associated with (passed from request).' })
+  @ApiPropertyOptional({ description: 'ID of the folder this blueprint is associated with.' })
   @IsNumber()
+  @IsOptional()
   folderId?: number;
+
+  @ApiPropertyOptional({ description: 'Optional display title for the blueprint.' })
+  @IsString()
+  @IsOptional()
+  title?: string;
+
+  @ApiPropertyOptional({ description: 'Optional description for the blueprint.' })
+  @IsString()
+  @IsOptional()
+  description?: string;
 
   @ApiPropertyOptional()
   @IsDate()

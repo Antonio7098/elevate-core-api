@@ -1,5 +1,5 @@
 import express, { Router, Request, Response, NextFunction } from 'express';
-import { AiRAGService } from './ai-rag.service';
+// // import { AiRAGService } from './ai-rag.service';
 import prisma from '../lib/prisma'; // Import Prisma client (default export)
 import { CreateLearningBlueprintDto } from './dtos/create-learning-blueprint.dto';
 import { validationMiddleware } from '../middlewares/validation.middleware';
@@ -9,42 +9,18 @@ import { UpdateLearningBlueprintDto } from './dtos/update-learning-blueprint.dto
 import { ChatMessageDto } from './dtos/chat-message.dto';
 import { HttpException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam } from '@nestjs/swagger'; // Swagger imports
-// Assuming your auth middleware adds a 'user' object to the Request
+
+// Interface for authenticated requests (matches the main app's AuthRequest)
 interface RequestWithUser extends Request {
   user?: {
-    userId: number; // Changed from id to userId
-    // other user properties
+    userId: number;
   };
 }
 
 const aiRagRouter = Router();
-console.log('🚀 AI RAG ROUTER: Loading aiRagRouter module');
-const aiRagService = new AiRAGService(prisma);
-console.log('🚀 AI RAG ROUTER: aiRagService instance created');
-
-// Instantiate the service
-
-// Middleware to check for authenticated user (basic example)
-// You'll likely have a more robust auth middleware already in use via app.ts
-const ensureAuthenticated = (req: Request, res: Response, next: NextFunction) => {
-  console.log('=== AI RAG AUTH MIDDLEWARE: Checking authentication ===');
-  console.log('Request URL:', req.url);
-  console.log('Request method:', req.method);
-  
-  const requestWithUser = req as RequestWithUser;
-  console.log('req.user exists:', !!requestWithUser.user);
-  console.log('req.user.userId:', requestWithUser.user?.userId);
-  
-  // Standardize on req.user.userId as defined in RequestWithUser interface
-  if (requestWithUser.user && typeof requestWithUser.user.userId === 'number') { 
-    console.log('✅ Authentication successful, proceeding to route handler');
-    next();
-  } else {
-    console.warn('❌ AiRAG Routes: req.user or req.user.userId is missing or invalid. Ensure auth middleware runs before these routes and populates req.user correctly.');
-    res.status(401).json({ message: 'User not authenticated' });
-    // Do NOT call next() here, as the request should be terminated.
-  }
-};
+console.log('🚀 AI RAG ROUTER: Loading aiRagRouter module (TEMPORARILY DISABLED)');
+// // const aiRagService = new AiRAGService(prisma);
+console.log('🚀 AI RAG ROUTER: aiRagService instance creation skipped (TEMPORARILY DISABLED)');
 
 // Add logging middleware to trace all requests to this router
 aiRagRouter.use((req, res, next) => {
@@ -53,51 +29,14 @@ aiRagRouter.use((req, res, next) => {
   next();
 });
 
-aiRagRouter.use(ensureAuthenticated); // Apply to all RAG routes
-
 // List all Learning Blueprints for the authenticated user
-aiRagRouter.get('/learning-blueprints', ensureAuthenticated, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const userId = (req.user as RequestWithUser['user'])!.userId;
-
-  if (!userId) {
-    res.status(401).json({ message: 'User not authenticated.' });
-    return;
-  }
-
-  try {
-    const blueprints = await aiRagService.getAllLearningBlueprintsForUser(userId);
-    res.status(200).json(blueprints);
-  } catch (error: any) {
-    console.error('Error in GET /learning-blueprints route:', error.message);
-    res.status(500).json({ message: error.message || 'Failed to retrieve learning blueprints.' });
-  }
+aiRagRouter.get('/learning-blueprints', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  res.status(501).json({ message: 'Learning blueprints functionality temporarily disabled' });
 });
 
 // Get a specific Learning Blueprint by ID
-aiRagRouter.get('/learning-blueprints/:blueprintId', ensureAuthenticated, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const blueprintId = parseInt(req.params.blueprintId, 10);
-  const userId = (req.user as RequestWithUser['user'])!.userId;
-
-  if (isNaN(blueprintId)) {
-    res.status(400).json({ message: 'Invalid blueprint ID.' });
-    return;
-  }
-  if (!userId) {
-    res.status(401).json({ message: 'User not authenticated.' });
-    return;
-  }
-
-  try {
-    const blueprint = await aiRagService.getLearningBlueprintById(blueprintId, userId);
-    if (!blueprint) {
-      res.status(404).json({ message: 'Learning Blueprint not found or access denied.' });
-      return;
-    }
-    res.status(200).json(blueprint);
-  } catch (error: any) {
-    console.error(`Error in GET /learning-blueprints/${blueprintId} route:`, error.message);
-    res.status(500).json({ message: error.message || 'Failed to retrieve learning blueprint.' });
-  }
+aiRagRouter.get('/learning-blueprints/:blueprintId', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  res.status(501).json({ message: 'Learning blueprint retrieval temporarily disabled' });
 });
 
 // Create a new Learning Blueprint
@@ -105,160 +44,35 @@ aiRagRouter.post(
   '/learning-blueprints',
   validationMiddleware(CreateLearningBlueprintDto),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      console.log('=== EXPRESS AI RAG ROUTE: BLUEPRINT CREATION STARTED ===');
-      const createDto = req.body as CreateLearningBlueprintDto; // req.body is now validated and transformed
-      const requestWithUser = req as RequestWithUser;
-
-      if (!requestWithUser.user || typeof requestWithUser.user.userId !== 'number') {
-        // This check should ideally be fully handled by ensureAuthenticated
-        // If ensureAuthenticated guarantees user.userId, this block can be simplified or removed.
-        res.status(401).json({ message: 'User not authenticated or user ID missing.' });
-        return; // Explicitly return to satisfy Promise<void>
-      }
-      const userId = requestWithUser.user.userId;
-      console.log(`Calling aiRagService.createLearningBlueprint for user ${userId}`);
-      const result = await aiRagService.createLearningBlueprint(createDto, userId);
-      res.status(201).json(result);
-    } catch (error) {
-      next(error); // Pass errors to the global error handler
-    }
+    res.status(501).json({ message: 'Learning blueprint creation temporarily disabled' });
   });
 
 // Update a Learning Blueprint
 aiRagRouter.put(
   '/learning-blueprints/:blueprintId',
-  ensureAuthenticated,
-  validationMiddleware(UpdateLearningBlueprintDto, true), // skipMissingProperties = true for partial updates
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const blueprintId = parseInt(req.params.blueprintId, 10);
-    const userId = (req.user as RequestWithUser['user'])!.userId;
-    const dto = req.body as UpdateLearningBlueprintDto;
-
-    if (isNaN(blueprintId)) {
-      res.status(400).json({ message: 'Invalid blueprint ID.' });
-      return;
-    }
-    if (!userId) {
-      res.status(401).json({ message: 'User not authenticated.' });
-      return;
-    }
-
-    try {
-      const updatedBlueprint = await aiRagService.updateLearningBlueprint(blueprintId, dto, userId);
-      if (!updatedBlueprint) {
-        res.status(404).json({ message: 'Learning Blueprint not found or access denied.' });
-        return;
-      }
-      res.status(200).json(updatedBlueprint);
-    } catch (error: any) {
-      console.error(`Error in PUT /learning-blueprints/${blueprintId} route:`, error.message);
-      if (error.message.includes('Failed to re-deconstruct text via AI service')) {
-        res.status(502).json({ message: 'Failed to update blueprint due to AI service error.' });
-      } else {
-        res.status(500).json({ message: error.message || 'Failed to update learning blueprint.' });
-      }
-    }
+    res.status(501).json({ message: 'Learning blueprint update temporarily disabled' });
   }
 );
 
 // Delete a Learning Blueprint
-aiRagRouter.delete('/learning-blueprints/:blueprintId', ensureAuthenticated, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const blueprintId = parseInt(req.params.blueprintId, 10);
-  const userId = (req.user as RequestWithUser['user'])!.userId;
-
-  if (isNaN(blueprintId)) {
-    res.status(400).json({ message: 'Invalid blueprint ID.' });
-    return;
-  }
-  if (!userId) {
-    res.status(401).json({ message: 'User not authenticated.' });
-    return;
-  }
-
-  try {
-    const success = await aiRagService.deleteLearningBlueprint(blueprintId, userId);
-    if (!success) {
-      res.status(404).json({ message: 'Learning Blueprint not found or access denied.' });
-      return;
-    }
-    res.status(204).send(); // No content on successful deletion
-  } catch (error: any) {
-    console.error(`Error in DELETE /learning-blueprints/${blueprintId} route:`, error.message);
-    res.status(500).json({ message: error.message || 'Failed to delete learning blueprint.' });
-  }
+aiRagRouter.delete('/learning-blueprints/:blueprintId', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  res.status(501).json({ message: 'Learning blueprint deletion temporarily disabled' });
 });
 
 // Generate a new Question Set from a Learning Blueprint
 aiRagRouter.post('/learning-blueprints/:blueprintId/question-sets', validationMiddleware(GenerateQuestionsFromBlueprintDto), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const blueprintId = parseInt(req.params.blueprintId, 10);
-    const dto = req.body as GenerateQuestionsFromBlueprintDto;
-    const userId = (req.user as RequestWithUser['user'])!.userId; // Assuming user is attached by ensureAuthenticated
-
-    if (isNaN(blueprintId)) {
-      res.status(400).json({ message: 'Invalid blueprint ID.' });
-      return;
-    }
-    if (!userId) {
-      res.status(401).json({ message: 'User not authenticated.' });
-      return;
-    }
-
-    try {
-      const result = await aiRagService.generateQuestionsFromBlueprint(blueprintId, dto, userId);
-      res.status(200).json(result);
-    } catch (error: any) {
-      console.error('Error in generateQuestionsFromBlueprint route:', error.message);
-      // Consider more specific error handling based on error type
-      res.status(500).json({ message: error.message || 'Failed to generate questions.' });
-    }
+    res.status(501).json({ message: 'Question generation temporarily disabled' });
 });
 
 // Generate a new Note from a Learning Blueprint
 aiRagRouter.post('/learning-blueprints/:blueprintId/notes', validationMiddleware(GenerateNoteFromBlueprintDto), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const blueprintId = parseInt(req.params.blueprintId, 10);
-    const dto = req.body as GenerateNoteFromBlueprintDto;
-    const userId = (req.user as RequestWithUser['user'])!.userId;
-
-    if (isNaN(blueprintId)) {
-      res.status(400).json({ message: 'Invalid blueprint ID.' });
-      return;
-    }
-    if (!userId) {
-      res.status(401).json({ message: 'User not authenticated.' });
-      return;
-    }
-
-    try {
-      const result = await aiRagService.generateNoteFromBlueprint(blueprintId, dto, userId);
-      res.status(200).json(result);
-    } catch (error: any) {
-      console.error('Error in generateNoteFromBlueprint route:', error.message);
-      res.status(500).json({ message: error.message || 'Failed to generate note.' });
-    }
+    res.status(501).json({ message: 'Note generation temporarily disabled' });
 });
 
 // Handle a chat message
 aiRagRouter.post('/chat/message', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const dto = req.body as ChatMessageDto;
-    const userId = (req.user as RequestWithUser['user'])!.userId;
-
-    if (!userId) {
-      res.status(401).json({ message: 'User not authenticated.' });
-      return;
-    }
-
-    try {
-      const result = await aiRagService.handleChatMessage(dto, userId);
-      res.status(200).json(result);
-    } catch (error: any) {
-      if (error instanceof HttpException) {
-        res.status(error.getStatus()).json({ message: error.message });
-      } else {
-        console.error('Error in handleChatMessage route:', error.message);
-        res.status(500).json({ message: error.message || 'Failed to handle chat message.' });
-      }
-    }
+    res.status(501).json({ message: 'Chat functionality temporarily disabled' });
 });
 
 export { aiRagRouter };

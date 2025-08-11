@@ -64,8 +64,9 @@ export class AiRAGService {
           userId: userId,
           sourceText: dto.sourceText,
           blueprintJson: blueprintJson, // Prisma expects a JsonValue, ensure blueprintJson matches
-          // folderId is not part of the LearningBlueprint model itself.
-          // It's passed in the DTO and can be used when generating associated content.
+          folderId: dto.folderId ?? null,
+          title: dto.title ?? null,
+          description: dto.description ?? null,
         },
       });
       console.log(`LearningBlueprint created with ID: ${newBlueprint.id}`);
@@ -115,8 +116,9 @@ export class AiRAGService {
       sourceText: newBlueprint.sourceText,
       blueprintJson: newBlueprint.blueprintJson as any, // Cast if necessary, ensure type compatibility
       sourceId: updatedBlueprint?.sourceId ?? undefined,
-      // folderId from the original DTO, not from newBlueprint as it's not stored on the model
-      folderId: dto.folderId, 
+      folderId: newBlueprint.folderId ?? undefined,
+      title: newBlueprint.title ?? undefined,
+      description: newBlueprint.description ?? undefined,
       createdAt: newBlueprint.createdAt,
       updatedAt: newBlueprint.updatedAt,
     };
@@ -126,14 +128,16 @@ export class AiRAGService {
     console.log(`AiRAGService: getAllLearningBlueprintsForUser called for user ${userId}`);
     const blueprints = await this.prisma.learningBlueprint.findMany({
       where: { userId },
-      orderBy: { createdAt: 'desc' }, // Optional: order by creation date
+      orderBy: { createdAt: 'desc' },
     });
     return blueprints.map(bp => ({
       id: bp.id,
       userId: bp.userId,
       sourceText: bp.sourceText,
       blueprintJson: bp.blueprintJson as any,
-      // folderId is not on the blueprint model, so it's not returned here unless we fetch related DTO info
+      folderId: bp.folderId ?? undefined,
+      title: bp.title ?? undefined,
+      description: bp.description ?? undefined,
       createdAt: bp.createdAt,
       updatedAt: bp.updatedAt,
     }));
@@ -156,6 +160,9 @@ export class AiRAGService {
       sourceText: blueprint.sourceText,
       blueprintJson: blueprint.blueprintJson as any,
       sourceId: blueprint.sourceId ?? undefined,
+      folderId: blueprint.folderId ?? undefined,
+      title: blueprint.title ?? undefined,
+      description: blueprint.description ?? undefined,
       createdAt: blueprint.createdAt,
       updatedAt: blueprint.updatedAt,
       // folderId is not on the blueprint model
@@ -211,6 +218,9 @@ export class AiRAGService {
           sourceText: dto.sourceText || existingBlueprint.sourceText,
           blueprintJson: updatedBlueprintJson as any,
           updatedAt: new Date(),
+          ...(dto.folderId !== undefined ? { folderId: dto.folderId } : {}),
+          ...(dto.title !== undefined ? { title: dto.title } : {}),
+          ...(dto.description !== undefined ? { description: dto.description } : {}),
         },
       });
       console.log(`LearningBlueprint ${blueprintId} updated successfully`);
@@ -283,6 +293,9 @@ export class AiRAGService {
       userId: updatedBlueprint.userId,
       sourceText: updatedBlueprint.sourceText,
       blueprintJson: updatedBlueprint.blueprintJson as any,
+      folderId: updatedBlueprint.folderId ?? undefined,
+      title: updatedBlueprint.title ?? undefined,
+      description: updatedBlueprint.description ?? undefined,
       createdAt: updatedBlueprint.createdAt,
       updatedAt: updatedBlueprint.updatedAt,
     };
