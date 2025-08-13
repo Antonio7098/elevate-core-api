@@ -27,39 +27,52 @@ describe('AI API Integration Tests', () => {
     userId = user.id;
     userToken = jwt.sign({ userId: user.id }, process.env.JWT_SECRET || 'secret');
 
+    // Create test blueprint first
+    const blueprint = await prisma.learningBlueprint.create({
+      data: {
+        title: 'AI Integration Test Blueprint',
+        description: 'Test blueprint for AI API integration tests',
+        sourceText: 'Test blueprint source text',
+        blueprintJson: { title: 'Test Blueprint', sections: [] },
+        userId: user.id
+      }
+    });
+
     // Create test knowledge primitive
     const primitive = await prisma.knowledgePrimitive.create({
       data: {
-        primitiveId: 'ai-test-concept',
-        title: 'AI Integration Test Concept',
-        description: 'A concept for testing AI API integration with real LLM calls',
-        primitiveType: 'concept',
-        difficultyLevel: 'intermediate',
+        primitiveId: "ai-test-concept",
+        title: "AI Integration Test Concept",
+        description: "A concept for testing AI API integration with real LLM calls",
+        primitiveType: "concept",
+        difficultyLevel: "intermediate",
         userId: user.id,
-        blueprintId: 1,
-        complexityScore: 7.5,
-        isCoreConcept: true,
-        conceptTags: ['ai', 'integration', 'test', 'llm'],
-        prerequisiteIds: [],
-        relatedConceptIds: [],
-        estimatedPrerequisites: 2,
-      },
+        blueprintId: blueprint.id,
+        estimatedTimeMinutes: 30
+      }
     });
     testPrimitiveId = primitive.primitiveId;
 
-    // Create user memory profile
-    await prisma.userMemory.create({
-      data: {
-        userId: user.id,
-        cognitiveApproach: 'ADAPTIVE',
-        explanationStyles: ['ANALOGY_DRIVEN', 'PRACTICAL_EXAMPLES'],
-        interactionStyle: 'SOCRATIC',
-        primaryGoal: 'Master AI integration through active learning',
-      },
-    });
+    // Create user memory profile (commented out - model not available in current schema)
+    // await prisma.userMemory.create({
+    //   data: {
+    //     userId: user.id,
+    //     cognitiveApproach: 'ADAPTIVE',
+    //     explanationStyle: 'DETAILED',
+    //     interactionStyle: 'COLLABORATIVE',
+    //     learningPreferences: {
+    //       preferredFormat: 'mixed',
+    //       complexityLevel: 'intermediate',
+    //       focusAreas: ['ai', 'machine-learning']
+    //     }
+    //   }
+    // });
   });
 
   afterAll(async () => {
+    // Clean up test data
+    await prisma.knowledgePrimitive.deleteMany({ where: { primitiveId: testPrimitiveId } });
+    await prisma.learningBlueprint.deleteMany({ where: { userId } });
     await prisma.user.deleteMany({ where: { email: 'ai-integration-test@example.com' } });
     await prisma.$disconnect();
   });

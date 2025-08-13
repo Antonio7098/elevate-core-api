@@ -44,6 +44,7 @@ model User {
   userLearningAnalytics    UserLearningAnalytics?
   userMemoryInsights       UserMemoryInsight[]
   learningPaths            LearningPath[]
+  learningPathSteps        LearningPathStep[]
   verificationTokens       VerificationToken[]
 
   @@index([email])
@@ -68,8 +69,7 @@ model LearningBlueprint {
   user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   blueprintSections     BlueprintSection[]
   knowledgePrimitives   KnowledgePrimitive[]
-  generatedQuestionSets QuestionSet[]
-  
+
   @@index([userId])
 }
 
@@ -101,7 +101,7 @@ model BlueprintSection {
   @@index([parentSectionId])
   @@index([userId])
   @@index([depth])
-  @@unique([blueprintId, parentSectionId, orderIndex])
+  @@unique([blueprintId, orderIndex])
 }
 
 enum DifficultyLevel {
@@ -161,8 +161,8 @@ model MasteryCriterion {
   user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   // Learning Pathway Relations (NEW - Sprint 51)
-  prerequisiteFor       MasteryCriterionRelationship[] @relation("CriterionPrerequisiteFor")
-  requiresPrerequisites MasteryCriterionRelationship[] @relation("CriterionRequiresPrerequisites")
+  prerequisiteFor       MasteryCriterionRelationship[] @relation("CriterionPrerequisiteFor", fields: [id], references: [sourceCriterionId])
+  requiresPrerequisites MasteryCriterionRelationship[] @relation("CriterionRequiresPrerequisites", fields: [id], references: [targetCriterionId])
   
   // Relations for existing models
   questions             Question[]
@@ -253,11 +253,12 @@ model KnowledgePrimitive {
   blueprintSection          BlueprintSection?         @relation(fields: [blueprintSectionId], references: [id], onDelete: SetNull)
   masteryCriteria           MasteryCriterion[]
   userPrimitiveProgresses   UserPrimitiveProgress[]
+  userCriterionMasteries    UserCriterionMastery[]
   pinnedReviews            PinnedReview[]
+  userQuestionAnswers      UserQuestionAnswer[]
   scheduledReviews         ScheduledReview[]
   insightCatalysts         InsightCatalyst[]
   dailySummaries           UserPrimitiveDailySummary[]
-  userQuestionAnswers      UserQuestionAnswer[]
   
   // Premium Relationship Tracking
   prerequisiteFor          KnowledgePrimitive[]       @relation("Prerequisites")
@@ -311,18 +312,10 @@ model UserQuestionAnswer {
   // Relations
   user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   questionInstance  QuestionInstance @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  
-  // Additional relations for compatibility
-  masteryCriterion  MasteryCriterion? @relation(fields: [masteryCriterionId], references: [id])
-  masteryCriterionId Int?
-  knowledgePrimitive KnowledgePrimitive? @relation(fields: [primitiveId], references: [id])
-  primitiveId        Int?
 
   @@index([userId])
   @@index([questionId])
   @@index([createdAt])
-  @@index([masteryCriterionId])
-  @@index([primitiveId])
 }
 
 // ============================================================================
@@ -382,6 +375,7 @@ model QuestionSetStudySession {
   sessionMarksAchieved  Int        // Sum of marks achieved for questions from this set in this session
   sessionMarksAvailable Int        // Sum of marks available for questions from this set in this session
   questionsAnswered     Question[]           // Direct references to questions answered in this session
+  userQuestionAnswers   UserQuestionAnswer[] // The specific answers given in this session for this set
   
   srStageBefore         Int // The SR stage of the QuestionSet before this session
   createdAt             DateTime   @default(now())
@@ -518,7 +512,7 @@ model LearningPath {
   updatedAt   DateTime @updatedAt
   
   steps       LearningPathStep[]
-  
+
   @@index([userId])
 }
 
@@ -680,6 +674,7 @@ model Question {
   
   // Relations
   questionSet                QuestionSet                 @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
+  userAnswers                UserQuestionAnswer[]
   insightCatalysts           InsightCatalyst[]
   questionSetStudySessions   QuestionSetStudySession[]
   
@@ -702,6 +697,7 @@ model QuestionSet {
   
   // Relations
   questions                  Question[]
+  userAnswers                UserQuestionAnswer[]
   scheduledReviews           ScheduledReview[]
   questionSetStudySessions   QuestionSetStudySession[]
   

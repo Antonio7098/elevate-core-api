@@ -1,0 +1,192 @@
+// Mastery System Database Schema
+// This file contains the new models for the blueprint-centric mastery tracking system
+
+// Mastery Criterion - Defines what needs to be mastered
+model MasteryCriterion {
+  id                    String                @id @default(cuid())
+  blueprintSectionId    String                // Links to BlueprintSection
+  uueStage              UueStage              @default(UNDERSTAND)
+  weight                Float                 @default(1.0) // Importance weight for calculations
+  masteryThreshold      Float                 @default(0.8) // 0.6, 0.8, or 0.95
+  description           String                // Human-readable description
+  questionTypes         String[]              // Types of questions for this criterion
+  
+  // Relations
+  blueprintSection      BlueprintSection      @relation(fields: [blueprintSectionId], references: [id], onDelete: Cascade)
+  userMasteries         UserCriterionMastery[]
+  
+  @@index([blueprintSectionId])
+  @@index([uueStage])
+  @@index([weight])
+}
+
+// User Criterion Mastery - Tracks individual user progress on criteria
+model UserCriterionMastery {
+  id                    String                @id @default(cuid())
+  userId                Int
+  masteryCriterionId    String                // Links to MasteryCriterion
+  blueprintSectionId    String                // Links to BlueprintSection
+  
+  // Mastery tracking
+  isMastered            Boolean               @default(false)
+  masteryScore          Float                 @default(0.0) // 0-1 score
+  uueStage              UueStage              @default(UNDERSTAND)
+  
+  // Consecutive interval tracking
+  lastTwoAttempts       Float[]               // Last 2 attempt scores [0.8, 0.9]
+  consecutiveIntervals  Int                   @default(0) // Count of consecutive intervals above threshold
+  lastThresholdCheckDate DateTime?            // Last date threshold was checked
+  
+  // Simple SR tracking
+  currentIntervalStep   Int                   @default(0)
+  nextReviewAt          DateTime?
+  lastReviewedAt        DateTime?
+  reviewCount           Int                   @default(0)
+  successfulReviews     Int                   @default(0)
+  consecutiveFailures   Int                   @default(0)
+  
+  // Tracking intensity
+  trackingIntensity     TrackingIntensity     @default(NORMAL)
+  
+  // Relations
+  masteryCriterion      MasteryCriterion      @relation(fields: [masteryCriterionId], references: [id], onDelete: Cascade)
+  blueprintSection      BlueprintSection      @relation(fields: [blueprintSectionId], references: [id], onDelete: Cascade)
+  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, masteryCriterionId])
+  @@index([userId])
+  @@index([masteryCriterionId])
+  @@index([blueprintSectionId])
+  @@index([nextReviewAt])
+  @@index([lastReviewedAt])
+  @@index([masteryScore])
+  @@index([consecutiveIntervals])
+  @@index([isMastered])
+  @@index([uueStage])
+  @@index([trackingIntensity])
+  @@index([userId, nextReviewAt]) // Composite index for due criteria queries
+  @@index([userId, isMastered])   // Composite index for mastery queries
+  @@index([userId, uueStage])     // Composite index for stage-specific queries
+}
+
+// Section Mastery Threshold - User-configurable mastery standards
+model SectionMasteryThreshold {
+  id              Int     @id @default(autoincrement())
+  userId          Int
+  sectionId       String
+  threshold       String  // 'SURVEY', 'PROFICIENT', or 'EXPERT'
+  thresholdValue  Float   // 0.6, 0.8, or 0.95
+  description     String  // User's reason for choosing this threshold
+  
+  // Relations
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, sectionId])
+  @@index([userId])
+  @@index([sectionId])
+}
+
+// Enums
+enum UueStage {
+  UNDERSTAND
+  USE
+  EXPLORE
+}
+
+enum TrackingIntensity {
+  DENSE    // 0.7x intervals - more frequent reviews
+  NORMAL   // 1.0x intervals - standard spacing
+  SPARSE   // 1.5x intervals - less frequent reviews
+}
+
+// Extend existing User model
+model User {
+  // ... existing fields ...
+  
+  // New mastery-related fields
+  dailyStudyTime        Int                   @default(60) // in minutes
+  preferredUueStages    UueStage[]           @default([UNDERSTAND, USE, EXPLORE])
+  defaultTrackingIntensity TrackingIntensity @default(NORMAL)
+  defaultMasteryThreshold String             @default("PROFICIENT")
+  learningStyle         String               @default("BALANCED") // CONSERVATIVE, BALANCED, AGGRESSIVE
+  experienceLevel       String               @default("INTERMEDIATE") // BEGINNER, INTERMEDIATE, ADVANCED, EXPERT
+  autoAdjustment        Boolean              @default(false)
+  lastUpdated           DateTime             @default(now())
+  
+  // Relations
+  userCriterionMasteries UserCriterionMastery[]
+  sectionMasteryThresholds SectionMasteryThreshold[]
+  userPreferences        UserPreferences?
+  userSectionPreferences UserSectionPreferences[]
+  userCriterionPreferences UserCriterionPreferences[]
+  
+  // ... existing relations ...
+}
+
+// User Preferences for detailed configuration
+model UserPreferences {
+  id              Int     @id @default(autoincrement())
+  userId          Int     @unique
+  masteryOptions  Json    // Detailed MasteryOptions configuration
+  
+  // Relations
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+// Section-specific user preferences
+model UserSectionPreferences {
+  id              Int     @id @default(autoincrement())
+  userId          Int
+  sectionId       String
+  masteryOptions  Json    // Section-specific MasteryOptions
+  
+  // Relations
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, sectionId])
+  @@index([userId])
+  @@index([sectionId])
+}
+
+// Criterion-specific user preferences
+model UserCriterionPreferences {
+  id              Int     @id @default(autoincrement())
+  userId          Int
+  criterionId     String
+  masteryOptions  Json    // Criterion-specific MasteryOptions
+  
+  // Relations
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, criterionId])
+  @@index([userId])
+  @@index([criterionId])
+}
+
+// Primitive to Criterion mapping for legacy compatibility
+model PrimitiveCriterionMapping {
+  id              Int     @id @default(autoincrement())
+  primitiveId     String
+  blueprintId     Int
+  criterionId     String
+  isTemporary     Boolean @default(true)
+  createdAt       DateTime @default(now())
+  
+  @@unique([primitiveId, blueprintId])
+  @@index([primitiveId])
+  @@index([criterionId])
+  @@index([isTemporary])
+}
+
+// Extend existing BlueprintSection model
+model BlueprintSection {
+  // ... existing fields ...
+  
+  // Relations
+  masteryCriteria       MasteryCriterion[]
+  userMasteries         UserCriterionMastery[]
+  
+  // ... existing relations ...
+}
