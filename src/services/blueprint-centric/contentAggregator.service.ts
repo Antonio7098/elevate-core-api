@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { BlueprintSectionWithChildren, SectionContent, MasteryProgress } from './blueprintSection.service';
+import { BlueprintSectionWithChildren, SectionContent } from './blueprintSection.service';
 
 const prisma = new PrismaClient();
 
@@ -11,7 +11,14 @@ export interface AggregatedContent {
   notes: any[];
   questions: any[];
   estimatedTime: number;
-  difficulty: string;
+  difficulty?: string;
+}
+
+export interface MasteryProgress {
+  overall: number;
+  byStage: Record<string, number>;
+  totalCriteria: number;
+  masteredCriteria: number;
 }
 
 export interface MasteryProgressByStage {
@@ -30,17 +37,18 @@ export class ContentAggregator {
    * Aggregates all content within a section and its children
    * Time Complexity: O(n + m) where n = sections, m = content items
    */
-  async aggregateSectionContent(sectionId: string): Promise<SectionContent> {
+  async aggregateSectionContent(sectionId: number): Promise<SectionContent> {
     const section = await this.getSectionWithChildren(sectionId);
     const content = await this.recursiveContentAggregation(section);
+    const masteryProgress = await this.calculateMasteryProgress(sectionId);
     
     return {
       section: section,
       notes: content.notes,
       questions: content.questions,
-      masteryProgress: await this.calculateMasteryProgress(sectionId),
-      estimatedTime: this.calculateEstimatedTime(content),
-      difficulty: this.calculateAverageDifficulty(content)
+      masteryCriteria: content.questions, // Using questions as mastery criteria
+      masteryProgress: masteryProgress.overall,
+      estimatedTime: content.estimatedTime
     };
   }
   
@@ -62,19 +70,26 @@ export class ContentAggregator {
       questions.push(...childContent.questions);
     }
     
-    return { notes, questions };
+    const estimatedTime = this.calculateEstimatedTime({ notes, questions });
+    
+    return { 
+      notes, 
+      questions, 
+      estimatedTime,
+      difficulty: this.calculateAverageDifficulty({ notes, questions })
+    };
   }
   
   /**
    * Calculates mastery progress across all content in section
    */
-  private async calculateMasteryProgress(sectionId: string): Promise<MasteryProgress> {
+  private async calculateMasteryProgress(sectionId: number): Promise<MasteryProgress> {
     const criteria = await this.getMasteryCriteriaBySection(sectionId);
     const userMasteries = await this.getUserMasteries(criteria.map(c => c.id));
     
     const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0);
     const masteredWeight = userMasteries.reduce((sum, m) => {
-      const criterion = criteria.find(c => c.id === m.masteryCriterionId);
+      const criterion = criteria.find(c => c.id === m.criterionId);
       return sum + (m.isMastered ? (criterion?.weight || 0) : 0);
     }, 0);
     
@@ -90,7 +105,7 @@ export class ContentAggregator {
    * Calculates UUE stage progression for a section
    * FOUNDATIONAL: Essential for spaced repetition and learning pathways
    */
-  async calculateUueStageProgress(sectionId: string, userId: number): Promise<any> {
+  async calculateUueStageProgress(sectionId: number, userId: number): Promise<any> {
     const masteryCriteria = await this.getMasteryCriteriaBySection(sectionId);
     const userMasteries = await this.getUserMasteriesForCriteria(
       masteryCriteria.map(mc => mc.id), 
@@ -105,7 +120,7 @@ export class ContentAggregator {
     
     // Calculate progress for each UUE stage
     for (const criterion of masteryCriteria) {
-      const mastery = userMasteries.find(m => m.masteryCriterionId === criterion.id);
+      const mastery = userMasteries.find(m => m.criterionId === criterion.id);
       const stage = criterion.uueStage.toLowerCase() as keyof typeof stageProgress;
       
       stageProgress[stage].total++;
@@ -135,7 +150,7 @@ export class ContentAggregator {
   /**
    * Aggregates content across multiple sections
    */
-  async aggregateMultipleSections(sectionIds: string[]): Promise<{
+  async aggregateMultipleSections(sectionIds: number[]): Promise<{
     totalNotes: number;
     totalQuestions: number;
     totalEstimatedTime: number;
@@ -154,19 +169,23 @@ export class ContentAggregator {
         await this.getSectionWithChildren(sectionId)
       );
       
-      contentBySection[sectionId] = content;
+      contentBySection[sectionId.toString()] = content;
       totalNotes += content.notes.length;
       totalQuestions += content.questions.length;
       totalEstimatedTime += content.estimatedTime;
       
       // Convert difficulty to numeric score for averaging
-      const difficultyScore = this.difficultyToScore(content.difficulty);
-      difficultyScores.push(difficultyScore);
+      if (content.difficulty) {
+        const difficultyScore = this.difficultyToScore(content.difficulty);
+        difficultyScores.push(difficultyScore);
+      }
     }
     
-    const averageDifficulty = this.scoreToDifficulty(
-      difficultyScores.reduce((sum, score) => sum + score, 0) / difficultyScores.length
-    );
+    const averageDifficulty = difficultyScores.length > 0 
+      ? this.scoreToDifficulty(
+          difficultyScores.reduce((sum, score) => sum + score, 0) / difficultyScores.length
+        )
+      : 'BEGINNER';
     
     // Calculate overall mastery progress
     const allCriteria = await this.getAllMasteryCriteria(sectionIds);
@@ -174,7 +193,7 @@ export class ContentAggregator {
     
     const totalWeight = allCriteria.reduce((sum, c) => sum + c.weight, 0);
     const masteredWeight = userMasteries.reduce((sum, m) => {
-      const criterion = allCriteria.find(c => c.id === m.masteryCriterionId);
+      const criterion = allCriteria.find(c => c.id === m.criterionId);
       return sum + (m.isMastered ? (criterion?.weight || 0) : 0);
     }, 0);
     
@@ -252,7 +271,7 @@ export class ContentAggregator {
     
     const totalWeight = allCriteria.reduce((sum, c) => sum + c.weight, 0);
     const masteredWeight = userMasteries.reduce((sum, m) => {
-      const criterion = allCriteria.find(c => c.id === m.masteryCriterionId);
+      const criterion = allCriteria.find(c => c.id === m.criterionId);
       return sum + (m.isMastered ? (criterion?.weight || 0) : 0);
     }, 0);
     
@@ -280,12 +299,21 @@ export class ContentAggregator {
   /**
    * Gets a section with its children
    */
-  private async getSectionWithChildren(sectionId: string): Promise<BlueprintSectionWithChildren> {
+  private async getSectionWithChildren(sectionId: number): Promise<BlueprintSectionWithChildren> {
     const section = await prisma.blueprintSection.findUnique({
       where: { id: sectionId },
       include: {
         children: {
-          orderBy: { orderIndex: 'asc' }
+          orderBy: { orderIndex: 'asc' },
+          include: {
+            _count: {
+              select: {
+                notes: true,
+                knowledgePrimitives: true,
+                masteryCriteria: true
+              }
+            }
+          }
         },
         _count: {
           select: {
@@ -301,13 +329,13 @@ export class ContentAggregator {
       throw new Error(`Section ${sectionId} not found`);
     }
     
-    return section;
+    return section as BlueprintSectionWithChildren;
   }
   
   /**
    * Gets notes by section
    */
-  private async getNotesBySection(sectionId: string): Promise<any[]> {
+  private async getNotesBySection(sectionId: number): Promise<any[]> {
     return prisma.noteSection.findMany({
       where: { blueprintSectionId: sectionId },
       orderBy: { createdAt: 'desc' }
@@ -317,7 +345,7 @@ export class ContentAggregator {
   /**
    * Gets mastery criteria by section
    */
-  private async getMasteryCriteriaBySection(sectionId: string): Promise<any[]> {
+  private async getMasteryCriteriaBySection(sectionId: number): Promise<any[]> {
     return prisma.masteryCriterion.findMany({
       where: { blueprintSectionId: sectionId }
     });
@@ -326,7 +354,7 @@ export class ContentAggregator {
   /**
    * Gets all mastery criteria for multiple sections
    */
-  private async getAllMasteryCriteria(sectionIds: string[]): Promise<any[]> {
+  private async getAllMasteryCriteria(sectionIds: number[]): Promise<any[]> {
     return prisma.masteryCriterion.findMany({
       where: {
         blueprintSectionId: { in: sectionIds }
@@ -346,7 +374,7 @@ export class ContentAggregator {
   /**
    * Gets user masteries for criteria
    */
-  private async getUserMasteries(criterionIds: string[]): Promise<any[]> {
+  private async getUserMasteries(criterionIds: number[]): Promise<any[]> {
     if (criterionIds.length === 0) return [];
     
     return prisma.userCriterionMastery.findMany({
@@ -359,7 +387,7 @@ export class ContentAggregator {
   /**
    * Gets user masteries for criteria by user ID
    */
-  private async getUserMasteriesForCriteria(criterionIds: string[], userId: number): Promise<any[]> {
+  private async getUserMasteriesForCriteria(criterionIds: number[], userId: number): Promise<any[]> {
     if (criterionIds.length === 0) return [];
     
     return prisma.userCriterionMastery.findMany({
@@ -386,9 +414,9 @@ export class ContentAggregator {
     
     // Calculate progress for each stage
     for (const [stage, stageCriteria] of Object.entries(criteriaByStage)) {
-      const totalWeight = stageCriteria.reduce((sum, c) => sum + c.weight, 0);
-      const masteredWeight = stageCriteria.reduce((sum, c) => {
-        const mastery = userMasteries.find(m => m.masteryCriterionId === c.id);
+      const totalWeight = (stageCriteria as any[]).reduce((sum, c) => sum + c.weight, 0);
+      const masteredWeight = (stageCriteria as any[]).reduce((sum, c) => {
+        const mastery = userMasteries.find(m => m.criterionId === c.id);
         return sum + (mastery?.isMastered ? c.weight : 0);
       }, 0);
       
@@ -454,7 +482,7 @@ export class ContentAggregator {
   /**
    * Calculates estimated time for content
    */
-  private calculateEstimatedTime(content: AggregatedContent): number {
+  private calculateEstimatedTime(content: { notes: any[]; questions: any[] }): number {
     let totalTime = 0;
     
     // Add time for notes (estimate 5 minutes per note)
@@ -469,7 +497,7 @@ export class ContentAggregator {
   /**
    * Calculates average difficulty for content
    */
-  private calculateAverageDifficulty(content: AggregatedContent): string {
+  private calculateAverageDifficulty(content: { notes: any[]; questions: any[] }): string {
     // For now, return the most common difficulty
     // In a real implementation, you might want to calculate a weighted average
     const difficulties = content.questions.map(q => q.difficulty || 'MEDIUM');

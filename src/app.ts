@@ -19,12 +19,20 @@ import userMemoryRouter from './routes/userMemory.routes';
 import learningBlueprintsRouter from './routes/learning-blueprints.routes'; // Temporarily disabled - imports AiRAGService
 import chatRouter from './routes/chat.routes'; // Temporarily disabled - imports AiRAGService
 import primitiveRouter from './routes/primitive.routes';
+import primitiveSRRouter from './routes/primitiveSR.routes';
 import primitiveAIRouter from './routes/primitiveAI.routes';
 import blueprintsAliasRouter from './routes/blueprints.routes'; // Temporarily disabled - imports AiRAGService
-import { aiRagRouter } from './ai-rag/ai-rag.routes'; // Temporarily disabled - causes server hang
+import { aiRagRouter } from './ai-rag/ai-rag.routes'; // ENABLED - AI RAG service working
 import premiumRouter from './routes/premium.routes';
 import paymentRouter from './routes/payment.routes';
 import stripeWebhookRouter from './routes/stripe-webhook.routes';
+// New blueprint-centric route imports
+import uueStageProgressionRouter from './routes/uueStageProgression.routes';
+import learningPathwaysRouter from './routes/learningPathways.routes';
+import masteryThresholdsRouter from './routes/masteryThresholds.routes';
+import sectionAnalyticsRouter from './routes/sectionAnalytics.routes';
+import studySessionsRouter from './routes/studySessions.routes';
+import contentRecommendationsRouter from './routes/contentRecommendations.routes';
 import { initializeAIAPIClient, shutdownAIAPIClient, getAIAPIClient } from './services/ai-api-client.service';
 import { NestFactory } from '@nestjs/core'; // Temporarily disabled - not used when Swagger is disabled
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -205,10 +213,19 @@ app.use('/api/learning-blueprints', learningBlueprintsRouter); // Commented out 
 app.use('/api/blueprints', blueprintsAliasRouter); // Commented out to avoid route conflicts
 app.use('/api/chat', chatRouter); // Temporarily disabled for debugging
 app.use('/api/primitives', primitiveRouter);
+app.use('/api/primitive-sr', primitiveSRRouter);
 app.use('/api/ai/primitives', primitiveAIRouter);
 app.use('/api/ai-rag', protect, aiRagRouter); // Enable AI-RAG routes with protection
 app.use('/api/premium', premiumRouter);
 app.use('/api/payments', paymentRouter);
+
+// New blueprint-centric routes
+app.use('/api/uue-stage-progression', uueStageProgressionRouter);
+app.use('/api/learning-pathways', learningPathwaysRouter);
+app.use('/api/mastery-thresholds', masteryThresholdsRouter);
+app.use('/api/section-analytics', sectionAnalyticsRouter);
+app.use('/api/study-sessions', studySessionsRouter);
+app.use('/api/content-recommendations', contentRecommendationsRouter);
 
 // Additional standalone routes for direct access
 app.use('/api/question-sets', standaloneQuestionSetRouter);

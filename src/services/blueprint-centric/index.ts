@@ -28,6 +28,10 @@ export { default as RAGResponseGenerator } from './ragResponseGenerator.service'
 export { default as RelationshipDiscoveryService } from './relationshipDiscovery.service';
 export { default as LearningPathService } from './learningPath.service';
 
+// Sprint 53: AI Integration & Advanced Features
+export { default as AIBlueprintGenerator } from '../aiBlueprintGenerator.service';
+export { default as LearningPathwaysService } from '../learningPathways.service';
+
 // Export all interfaces and types
 export * from './blueprintSection.service';
 export * from './noteSection.service';
@@ -43,6 +47,10 @@ export * from './vectorStore.service';
 export * from './ragResponseGenerator.service';
 export * from './relationshipDiscovery.service';
 export * from './learningPath.service';
+
+// Sprint 53: AI Integration & Advanced Features
+export * from '../aiBlueprintGenerator.service';
+export * from '../learningPathways.service';
 
 // ============================================================================
 // LEGACY REPLACEMENT MAPPING

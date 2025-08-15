@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import * as statsController from '../controllers/stats.controller';
 import { protect } from '../middleware/auth.middleware';
+import { blueprintSectionController } from '../controllers/blueprint-centric/blueprintSection.controller';
+import { masteryCriterionController } from '../controllers/blueprint-centric/masteryCriterion.controller';
 
 const router = Router();
 
@@ -153,6 +155,82 @@ router.get('/primitives/:primitiveId', protect, statsController.getPrimitiveStat
  *                 alternatives: { type: array, items: { type: string } }
  */
 router.get('/folders/:folderId/details', protect, statsController.getFolderStatsDetails);
+
+// Section-based stats routes (new blueprint-centric functionality)
+/**
+ * @swagger
+ * /stats/sections/{sectionId}:
+ *   get:
+ *     summary: Get detailed statistics for a specific blueprint section
+ *     tags: [Stats, Sections]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: sectionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the section
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved section statistics
+ *       401:
+ *         description: User not authenticated
+ *       404:
+ *         description: Section not found
+ */
+router.get('/sections/:sectionId', blueprintSectionController.getSectionStats);
+
+/**
+ * @swagger
+ * /stats/sections/{sectionId}/uue-progress:
+ *   get:
+ *     summary: Get UUE stage progression statistics for a specific section
+ *     tags: [Stats, Sections, UUE]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: sectionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the section
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved section UUE progress statistics
+ *       401:
+ *         description: User not authenticated
+ *       404:
+ *         description: Section not found
+ */
+router.get('/sections/:sectionId/uue-progress', masteryCriterionController.getSectionUueProgress);
+
+/**
+ * @swagger
+ * /stats/blueprints/{blueprintId}/sections:
+ *   get:
+ *     summary: Get aggregated statistics for all sections in a blueprint
+ *     tags: [Stats, Blueprints, Sections]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: blueprintId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the blueprint
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved blueprint section statistics
+ *       401:
+ *         description: User not authenticated
+ *       404:
+ *         description: Blueprint not found
+ */
+router.get('/blueprints/:blueprintId/sections', blueprintSectionController.getUserContentStats);
 
 /**
  * @swagger

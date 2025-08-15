@@ -1,13 +1,14 @@
 import { Request, Response } from 'express';
-import BlueprintSectionService from '../services/blueprintSection.service';
-import NoteSectionService from '../services/noteSection.service';
-import MasteryCriterionService from '../services/masteryCriterion.service';
-import ContentAggregator from '../services/contentAggregator.service';
-import SectionHierarchyManager from '../services/sectionHierarchyManager.service';
+import { PrismaClient } from '@prisma/client';
+import BlueprintSectionService from '../../services/blueprint-centric/blueprintSection.service';
+import NoteSectionService from '../../services/blueprint-centric/noteSection.service';
+import { masteryCriterionService } from '../../services/blueprint-centric/masteryCriterion.service';
+import ContentAggregator from '../../services/blueprint-centric/contentAggregator.service';
+import SectionHierarchyManager from '../../services/blueprint-centric/sectionHierarchyManager.service';
 
-const blueprintSectionService = new BlueprintSectionService();
+const prisma = new PrismaClient();
+const blueprintSectionService = new BlueprintSectionService(prisma);
 const noteSectionService = new NoteSectionService();
-const masteryCriterionService = new MasteryCriterionService();
 const contentAggregator = new ContentAggregator();
 const sectionHierarchyManager = new SectionHierarchyManager();
 
@@ -51,7 +52,7 @@ export class BlueprintSectionController {
   async getSection(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const section = await blueprintSectionService.getSection(id);
+      const section = await blueprintSectionService.getSection(parseInt(id));
       res.json(section);
     } catch (error) {
       res.status(404).json({ error: error.message });
@@ -65,7 +66,7 @@ export class BlueprintSectionController {
     try {
       const { id } = req.params;
       const updateData = req.body;
-      const section = await blueprintSectionService.updateSection(id, updateData);
+      const section = await blueprintSectionService.updateSection(parseInt(id), updateData);
       res.json(section);
     } catch (error) {
       res.status(400).json({ error: error.message });
@@ -78,7 +79,7 @@ export class BlueprintSectionController {
   async deleteSection(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      await blueprintSectionService.deleteSection(id);
+      await blueprintSectionService.deleteSection(parseInt(id));
       res.status(204).send();
     } catch (error) {
       res.status(400).json({ error: error.message });
@@ -105,7 +106,7 @@ export class BlueprintSectionController {
     try {
       const { id } = req.params;
       const { newParentId } = req.body;
-      const section = await blueprintSectionService.moveSection(id, newParentId);
+      const section = await blueprintSectionService.moveSection(parseInt(id), parseInt(newParentId));
       res.json(section);
     } catch (error) {
       res.status(400).json({ error: error.message });
@@ -132,7 +133,7 @@ export class BlueprintSectionController {
   async getSectionContent(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const content = await blueprintSectionService.getSectionContent(id);
+      const content = await blueprintSectionService.getSectionContent(parseInt(id));
       res.json(content);
     } catch (error) {
       res.status(400).json({ error: error.message });
@@ -145,7 +146,7 @@ export class BlueprintSectionController {
   async getSectionStats(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const stats = await blueprintSectionService.getSectionStats(id);
+      const stats = await blueprintSectionService.getSectionStats(parseInt(id));
       res.json(stats);
     } catch (error) {
       res.status(400).json({ error: error.message });
@@ -217,3 +218,6 @@ export class BlueprintSectionController {
 }
 
 export default BlueprintSectionController;
+
+// Export controller instance
+export const blueprintSectionController = new BlueprintSectionController();

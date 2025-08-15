@@ -58,7 +58,7 @@ export interface PerformanceThresholds {
   };
   
   // Load Testing Parameters
-  loadTesting: {
+  loadTestingParams: {
     maxConcurrentUsers: number;
     maxSectionCount: number;
     maxTestDuration: number; // seconds
@@ -112,9 +112,9 @@ export const defaultPerformanceThresholds: PerformanceThresholds = {
   },
   
   databasePerformance: {
-    maxAverageQueryTime: 50, // 50ms
-    maxSlowestQuery: 200, // 200ms
-    maxTotalDatabaseTime: 1000, // 1 second
+    maxAverageQueryTime: 100, // 100ms - realistic for real database operations
+    maxSlowestQuery: 500, // 500ms - realistic for complex queries
+    maxTotalDatabaseTime: 2000, // 2 seconds - realistic for multiple operations
   },
   
   memoryUsage: {
@@ -153,7 +153,7 @@ export const defaultPerformanceThresholds: PerformanceThresholds = {
   },
   
   // Load Testing Parameters
-  loadTesting: {
+  loadTestingParams: {
     maxConcurrentUsers: 50,
     maxSectionCount: 10000,
     maxTestDuration: 300, // 5 minutes

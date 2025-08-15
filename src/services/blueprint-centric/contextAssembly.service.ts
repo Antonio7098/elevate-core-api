@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import KnowledgeGraphTraversal, { 
-  GraphTraversalResult, 
-  CriterionLearningPath,
+  TraversalResult, 
+  LearningPathResult,
   RelationshipType 
 } from './knowledgeGraphTraversal.service';
 import VectorStoreService, {
@@ -44,7 +44,7 @@ export interface ContextAssembly {
   learningPath: KnowledgeRelationshipNode[];
   
   // Mastery criterion learning pathways
-  criterionLearningPaths: CriterionLearningPath[];
+  criterionLearningPaths: LearningPathResult[];
   relatedCriteria: MasteryCriterionNode[];
   
   // User context
@@ -56,47 +56,33 @@ export interface ContextAssembly {
   confidence: number;
   relevance: number;
   freshness: number;
-}
-
-export interface VectorSearchResult {
-  id: string;
-  content: string;
-  similarity: number;
-  sourceType: 'section' | 'primitive' | 'note';
-  sourceId: string;
-  metadata: {
-    conceptTags: string[];
-    complexityScore?: number;
-    ueeLevel?: string;
-    blueprintSectionId?: number;
-  };
-}
-
-export interface SearchFilters {
-  blueprintId?: number;
-  sectionId?: number;
-  ueeLevel?: string;
-  difficultyRange?: [number, number];
-  conceptTags?: string[];
-  maxResults?: number;
-}
-
-export interface UnifiedContext {
-  content: {
-    sections: BlueprintSectionNode[];
-    primitives: KnowledgePrimitiveNode[];
-    notes: NoteSectionNode[];
-    relationships: KnowledgeRelationshipNode[];
-  };
-  relationships: KnowledgeRelationshipNode[];
-  learningPaths: CriterionLearningPath[];
-  userProgress: UserProgress;
-  metadata: {
+  
+  // Additional metadata for context assembly
+  metadata?: {
     totalContent: number;
     contentDistribution: ContentDistribution;
-    confidence: number;
     processingTimeMs: number;
+    sources: {
+      vectorSearch: number;
+      graphTraversal: number;
+      userContext: number;
+      learningPaths: number;
+    };
   };
+}
+
+export interface UserContext {
+  userId: number;
+  progress: UserProgress;
+  learningGoals: LearningGoal[];
+  currentSession: StudySession;
+  overallMastery: number;
+  currentUeeStage: string;
+  recentActivity: Array<{
+    type: string;
+    timestamp: Date;
+    score?: number;
+  }>;
 }
 
 export interface BlueprintSectionNode {
@@ -283,13 +269,12 @@ export default class ContextAssemblyService {
   async graphTraversalFromKeyConcepts(
     keyConcepts: string[], 
     options: ContextOptions
-  ): Promise<GraphTraversalResult> {
+  ): Promise<TraversalResult> {
     if (keyConcepts.length === 0) {
       return {
         nodes: [],
         edges: [],
-        paths: [],
-        metadata: { maxDepth: 0, totalNodes: 0, totalEdges: 0, processingTimeMs: 0 }
+        metadata: { maxDepth: 0, totalNodes: 0, totalEdges: 0 }
       };
     }
     
@@ -309,8 +294,7 @@ export default class ContextAssemblyService {
       return {
         nodes: [],
         edges: [],
-        paths: [],
-        metadata: { maxDepth: 0, totalNodes: 0, totalEdges: 0, processingTimeMs: 0 }
+        metadata: { maxDepth: 0, totalNodes: 0, totalEdges: 0 }
       };
     }
   }
@@ -321,13 +305,13 @@ export default class ContextAssemblyService {
   async discoverLearningPaths(
     keyConcepts: string[], 
     options: ContextOptions
-  ): Promise<CriterionLearningPath[]> {
+  ): Promise<LearningPathResult[]> {
     if (!options.includeLearningPaths || keyConcepts.length === 0) {
       return [];
     }
     
     try {
-      const paths: CriterionLearningPath[] = [];
+      const paths: LearningPathResult[] = [];
       
       // Find mastery criteria related to key concepts
       const relatedCriteria = await this.findRelatedMasteryCriteria(keyConcepts);
@@ -373,11 +357,12 @@ export default class ContextAssemblyService {
       
       return {
         userId,
+        progress,
+        learningGoals: goals,
+        currentSession: session,
         overallMastery: progress.overallMastery,
         currentUeeStage: progress.currentUeeStage,
-        recentActivity: progress.recentActivity,
-        learningGoals: goals,
-        currentSession: session
+        recentActivity: progress.recentActivity
       };
       
     } catch (error) {
@@ -391,11 +376,11 @@ export default class ContextAssemblyService {
    */
   private async assembleUnifiedContext(
     vectorResults: VectorSearchResult[],
-    graphResults: GraphTraversalResult,
+    graphResults: TraversalResult,
     userContext: UserContext | null,
-    learningPaths: CriterionLearningPath[],
+    learningPaths: LearningPathResult[],
     options: ContextOptions
-  ): Promise<UnifiedContext> {
+  ): Promise<ContextAssembly> {
     // Combine all content sources
     const allContent = [
       ...vectorResults.map(r => ({ ...r, source: 'vector' as const })),
@@ -420,15 +405,43 @@ export default class ContextAssemblyService {
     // Group by content type
     const groupedContent = this.groupContentByType(rankedContent);
     
+    // Convert to ContextAssembly format
     return {
-      content: groupedContent,
-      relationships: graphResults.edges,
-      learningPaths,
-      userProgress: userContext?.progress || null,
+      relevantSections: groupedContent.sections,
+      relevantPrimitives: groupedContent.primitives,
+      relevantNotes: groupedContent.notes,
+      relatedConcepts: groupedContent.primitives,
+      prerequisiteChain: [],
+      learningPath: groupedContent.relationships,
+      criterionLearningPaths: learningPaths,
+      relatedCriteria: [],
+      userProgress: userContext?.progress || {
+        userId: userContext?.userId || 0,
+        overallMastery: 0,
+        currentUeeStage: 'UNDERSTAND',
+        recentActivity: []
+      },
+      learningGoals: userContext?.learningGoals || [],
+      currentSession: userContext?.currentSession || {
+        id: 0,
+        startTime: new Date(),
+        duration: 0,
+        focusArea: '',
+        currentProgress: 0
+      },
+      confidence: this.calculateOverallConfidence(rankedContent),
+      relevance: 0.8,
+      freshness: 0.9,
       metadata: {
         totalContent: rankedContent.length,
         contentDistribution: this.calculateContentDistribution(groupedContent),
-        confidence: this.calculateOverallConfidence(rankedContent)
+        processingTimeMs: 0,
+        sources: {
+          vectorSearch: vectorResults.length,
+          graphTraversal: graphResults.nodes.length,
+          userContext: userContext ? 1 : 0,
+          learningPaths: learningPaths.length
+        }
       }
     };
   }
@@ -597,6 +610,7 @@ export default class ContextAssemblyService {
   private async getUserProgress(userId: number) {
     // Placeholder implementation
     return {
+      userId,
       overallMastery: 0.7,
       currentUeeStage: 'USE',
       recentActivity: []

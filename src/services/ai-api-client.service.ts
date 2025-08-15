@@ -1,5 +1,9 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { Injectable, Logger } from '@nestjs/common';
+import { Logger } from 'winston';
+import { PrismaClient } from '@prisma/client';
+import { logger } from '../utils/logger';
+
+const prisma = new PrismaClient();
 
 // Custom error class for AI API failures
 export class AIAPIError extends Error {
@@ -117,15 +121,21 @@ export interface BlueprintQueryResponse {
   total_results: number;
 }
 
-@Injectable()
+// ============================================================================
+// AI API CLIENT SERVICE
+// ============================================================================
+// 🆕 NEW ARCHITECTURE - Centralized AI service client
+// ============================================================================
+
 export class AIAPIClientService {
-  private readonly logger = new Logger(AIAPIClientService.name);
+  private readonly logger: Logger;
   private readonly axiosInstance: AxiosInstance;
   private readonly baseUrl: string;
   private readonly apiKey: string;
   private readonly timeout: number;
 
   constructor() {
+    this.logger = logger;
     this.baseUrl = (process.env.AI_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
     this.apiKey = process.env.AI_API_KEY || 'test_api_key_123';
     this.timeout = parseFloat(process.env.AI_API_TIMEOUT || '30') * 1000; // Convert to milliseconds
@@ -196,7 +206,7 @@ export class AIAPIClientService {
       const response = await this.axiosInstance.get('/api/health');
       const result = response.data as HealthCheckResponse;
       
-      this.logger.log('AI API health check successful');
+      this.logger.info('AI API health check successful');
       return { 
         status: 'healthy',
         version: result.version,
@@ -220,7 +230,7 @@ export class AIAPIClientService {
     const response = await this.axiosInstance.post('/api/v1/index-blueprint', payload, { timeout: 120000 });
       const result = response.data as IndexingResponse;
       
-      this.logger.log(`Successfully indexed blueprint ${payload.blueprint_id}`);
+      this.logger.info(`Successfully indexed blueprint ${payload.blueprint_id}`);
       return result;
 
     } catch (error: any) {
@@ -276,7 +286,7 @@ export class AIAPIClientService {
       const response = await this.axiosInstance.put(`/api/v1/blueprints/${blueprintId}`, payload);
       const result = response.data as UpdateResponse;
       
-      this.logger.log(`Successfully updated blueprint ${blueprintId} with ${result.changes_applied} changes`);
+      this.logger.info(`Successfully updated blueprint ${blueprintId} with ${result.changes_applied} changes`);
       return result;
 
     } catch (error: any) {
@@ -295,7 +305,7 @@ export class AIAPIClientService {
       const response = await this.axiosInstance.delete(`/api/v1/blueprints/${blueprintId}`);
       const result = response.data;
       
-      this.logger.log(`Successfully submitted deletion request for blueprint ${blueprintId}`);
+      this.logger.info(`Successfully submitted deletion request for blueprint ${blueprintId}`);
       
       // The AI API deletion includes verification logic, but we should wait a bit more
       // for vector database consistency
@@ -395,7 +405,7 @@ export class AIAPIClientService {
       const response = await this.axiosInstance.post('/api/v1/chat/message', payload);
       const result = response.data as ChatMessageResponse;
       
-      this.logger.log(`Chat message processed successfully for user ${request.userId}`);
+      this.logger.info(`Chat message processed successfully for user ${request.userId}`);
       return result;
 
     } catch (error: any) {
@@ -420,7 +430,7 @@ export class AIAPIClientService {
       const response = await this.axiosInstance.post('/api/v1/query/blueprint', payload);
       const result = response.data;
       
-      this.logger.log(`Blueprint query successful for blueprint ${request.blueprintId}`);
+      this.logger.info(`Blueprint query successful for blueprint ${request.blueprintId}`);
       return Array.isArray(result.results) ? result.results : [];
 
     } catch (error: any) {

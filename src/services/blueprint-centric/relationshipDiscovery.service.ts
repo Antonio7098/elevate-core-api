@@ -286,12 +286,11 @@ export default class RelationshipDiscoveryService {
           title: true,
           description: true,
           conceptTags: true,
-          complexityScore: true,
-          ueeLevel: true
+          complexityScore: true
         }
       }),
       prisma.masteryCriterion.findMany({
-        where: whereClause,
+        where: blueprintId ? { blueprintSectionId: blueprintId } : {},
         select: {
           id: true,
           title: true,

@@ -604,4 +604,80 @@ export default class MasteryCriterionService {
       orderBy: { weight: 'desc' }
     });
   }
+
+  /**
+   * Get section UUE progress
+   */
+  async getSectionUueProgress(userId: number, sectionId: number): Promise<any> {
+    const criteria = await (this.prisma as any).masteryCriterion.findMany({
+      where: { blueprintSectionId: sectionId },
+      include: {
+        userMasteries: {
+          where: { userId }
+        }
+      }
+    });
+
+    const progress = {
+      understand: { total: 0, mastered: 0, progress: 0 },
+      use: { total: 0, mastered: 0, progress: 0 },
+      explore: { total: 0, mastered: 0, progress: 0 }
+    };
+
+    criteria.forEach(criterion => {
+      const stage = criterion.uueStage.toLowerCase();
+      progress[stage].total++;
+      const userMastery = criterion.userMasteries.find(m => m.userId === userId);
+      if (userMastery?.isMastered) {
+        progress[stage].mastered++;
+      }
+    });
+
+    // Calculate progress percentages
+    Object.values(progress).forEach(stage => {
+      stage.progress = stage.total > 0 ? (stage.mastered / stage.total) * 100 : 0;
+    });
+
+    return progress;
+  }
+
+  /**
+   * Get user mastery stats
+   */
+  async getUserMasteryStats(userId: number): Promise<any> {
+    const userMasteries = await (this.prisma as any).userCriterionMastery.findMany({
+      where: { userId },
+      include: {
+        masteryCriterion: {
+          include: {
+            blueprintSection: true
+          }
+        }
+      }
+    });
+
+    const stats = {
+      totalCriteria: userMasteries.length,
+      masteredCriteria: userMasteries.filter(m => m.isMastered).length,
+      averageMasteryScore: 0,
+      stageBreakdown: {
+        understand: 0,
+        use: 0,
+        explore: 0
+      }
+    };
+
+    if (userMasteries.length > 0) {
+      stats.averageMasteryScore = userMasteries.reduce((sum, m) => sum + m.masteryScore, 0) / userMasteries.length;
+      
+      userMasteries.forEach(mastery => {
+        const stage = mastery.masteryCriterion.uueStage.toLowerCase();
+        if (stats.stageBreakdown[stage] !== undefined) {
+          stats.stageBreakdown[stage]++;
+        }
+      });
+    }
+
+    return stats;
+  }
 }

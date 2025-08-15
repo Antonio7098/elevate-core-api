@@ -91,7 +91,7 @@ export default class KnowledgeGraphTraversal {
 
       if (depth < maxDepth) {
         // Get relationships FROM the current node (not TO it)
-        const relationships = await this.getRelationships(nodeId, relationshipTypes);
+        const relationships = await this.getPrimitiveRelationships(nodeId, relationshipTypes);
         
         for (const rel of relationships) {
           const targetId = rel.targetPrimitiveId;
@@ -141,7 +141,7 @@ export default class KnowledgeGraphTraversal {
       visited.add(nodeId);
 
       // Get prerequisite relationships
-      const relationships = await this.getRelationships(nodeId, ['PREREQUISITE']);
+      const relationships = await this.getPrimitiveRelationships(nodeId, ['PREREQUISITE']);
       
       for (const rel of relationships) {
         const prereqId = rel.targetPrimitiveId;
@@ -208,7 +208,7 @@ export default class KnowledgeGraphTraversal {
       visited.add(nodeId);
 
       // Get all relationships
-      const relationships = await this.getRelationships(nodeId, ['PREREQUISITE', 'RELATED', 'ADVANCES_TO']);
+      const relationships = await this.getPrimitiveRelationships(nodeId, ['PREREQUISITE', 'RELATED', 'ADVANCES_TO']);
       
       for (const rel of relationships) {
         const targetId = rel.targetPrimitiveId;
@@ -299,12 +299,12 @@ export default class KnowledgeGraphTraversal {
   /**
    * Gets relationships for a knowledge primitive
    */
-  async getRelationships(
-    nodeId: string,
+  async getPrimitiveRelationships(
+    nodeId: string | number,
     relationshipTypes: RelationshipType[]
   ): Promise<any[]> {
     // Handle both string and integer IDs for testing
-    const sourceId = isNaN(parseInt(nodeId)) ? nodeId : parseInt(nodeId);
+    const sourceId = typeof nodeId === 'string' ? parseInt(nodeId) : nodeId;
     
     return this.prisma.knowledgeRelationship.findMany({
       where: {

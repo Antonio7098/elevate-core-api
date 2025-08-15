@@ -509,3 +509,4 @@ export class PerformanceOptimizationService {
 }
 
 export const performanceOptimizationService = new PerformanceOptimizationService();
+

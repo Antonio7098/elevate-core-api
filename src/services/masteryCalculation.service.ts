@@ -15,12 +15,11 @@ export interface UueStageMasteryResult {
 }
 
 export interface CriterionMasteryBreakdown {
-  criterionId: string;
+  criterionId: number;
   description: string;
   weight: number;
   masteryScore: number;
   isMastered: boolean;
-  consecutiveIntervals: number;
 }
 
 export interface PrimitiveMasteryResult {
@@ -61,14 +60,14 @@ export class MasteryCalculationService {
    * Calculate mastery score for a specific criterion
    */
   async calculateCriterionMasteryScore(
-    criterionId: string,
+    criterionId: number,
     userId: number
   ): Promise<number> {
     const userMastery = await prisma.userCriterionMastery.findUnique({
       where: {
-        userId_masteryCriterionId: {
+        userId_criterionId: {
           userId,
-          masteryCriterionId: criterionId,
+          criterionId,
         },
       },
     });
@@ -200,7 +199,7 @@ export class MasteryCalculationService {
     const breakdown: CriterionMasteryBreakdown[] = [];
 
     for (const criterion of criteria) {
-      const userMastery = userMasteries.find(m => m.masteryCriterionId === criterion.id);
+      const userMastery = userMasteries.find(m => m.criterionId === criterion.id);
       const masteryScore = userMastery?.masteryScore ?? 0.0;
       const weight = criterion.weight;
       
@@ -213,11 +212,10 @@ export class MasteryCalculationService {
 
       breakdown.push({
         criterionId: criterion.id,
-        description: criterion.description,
+        description: criterion.description || '',
         weight,
         masteryScore,
         isMastered: userMastery?.isMastered ?? false,
-        consecutiveIntervals: userMastery?.consecutiveIntervals ?? 0,
       });
     }
 
@@ -246,19 +244,25 @@ export class MasteryCalculationService {
     const userMasteries = await prisma.userCriterionMastery.findMany({
       where: { userId },
       include: {
-        masteryCriterion: true,
-        blueprintSection: true,
+        masteryCriterion: {
+          include: {
+            blueprintSection: true,
+          },
+        },
       },
     });
 
     // Group by section
-    const sectionGroups = new Map<string, UserCriterionMastery[]>();
+    const sectionGroups = new Map<number, UserCriterionMastery[]>();
     for (const mastery of userMasteries) {
-      const sectionId = mastery.blueprintSectionId;
+      const sectionId = mastery.masteryCriterion.blueprintSectionId;
       if (!sectionGroups.has(sectionId)) {
         sectionGroups.set(sectionId, []);
       }
-      sectionGroups.get(sectionId)!.push(mastery);
+      const group = sectionGroups.get(sectionId);
+      if (group) {
+        group.push(mastery);
+      }
     }
 
     let totalSections = sectionGroups.size;
@@ -274,8 +278,8 @@ export class MasteryCalculationService {
     };
 
     // Calculate section mastery and stage breakdown
-    for (const [sectionId, masteries] of sectionGroups) {
-      const sectionMastery = await this.calculatePrimitiveMastery(sectionId, userId);
+    for (const [sectionId, masteries] of Array.from(sectionGroups.entries())) {
+      const sectionMastery = await this.calculatePrimitiveMastery(sectionId.toString(), userId);
       if (sectionMastery.isMastered) {
         masteredSections++;
       }
@@ -320,11 +324,11 @@ export class MasteryCalculationService {
     const masteries = await prisma.userCriterionMastery.findMany({
       where: {
         userId,
-        lastAttemptDate: {
+        lastAttempt: {
           gte: startDate,
         },
       },
-      orderBy: { lastAttemptDate: 'asc' },
+      orderBy: { lastAttempt: 'asc' },
     });
 
     // Group by date
@@ -336,7 +340,7 @@ export class MasteryCalculationService {
     }>();
 
     for (const mastery of masteries) {
-      const dateKey = mastery.lastAttemptDate.toISOString().split('T')[0];
+      const dateKey = mastery.lastAttempt.toISOString().split('T')[0];
       
       if (!dailyProgress.has(dateKey)) {
         dailyProgress.set(dateKey, {
@@ -347,13 +351,15 @@ export class MasteryCalculationService {
         });
       }
 
-      const dayData = dailyProgress.get(dateKey)!;
-      dayData.criteriaAttempted++;
-      dayData.totalScore += mastery.masteryScore;
-      dayData.count++;
+      const dayData = dailyProgress.get(dateKey);
+      if (dayData) {
+        dayData.criteriaAttempted++;
+        dayData.totalScore += mastery.masteryScore;
+        dayData.count++;
 
-      if (mastery.isMastered) {
-        dayData.criteriaMastered++;
+        if (mastery.isMastered) {
+          dayData.criteriaMastered++;
+        }
       }
     }
 
@@ -372,20 +378,10 @@ export class MasteryCalculationService {
    * Get user's mastery threshold for a section
    */
   private async getUserMasteryThreshold(sectionId: string, userId: number): Promise<'SURVEY' | 'PROFICIENT' | 'EXPERT'> {
-    // Try to get user-specific threshold
-    const userThreshold = await prisma.sectionMasteryThreshold.findUnique({
-      where: {
-        userId_sectionId: {
-          userId,
-          sectionId,
-        },
-      },
-    });
-
-    if (userThreshold) {
-      return userThreshold.threshold as 'SURVEY' | 'PROFICIENT' | 'EXPERT';
-    }
-
+    // Since sectionMasteryThreshold model doesn't exist in the main schema,
+    // we'll use a default threshold for now
+    // TODO: Implement user-specific thresholds when the model is added
+    
     // Default to PROFICIENT if no user preference
     return 'PROFICIENT';
   }
@@ -398,26 +394,11 @@ export class MasteryCalculationService {
     sectionId: string,
     threshold: 'SURVEY' | 'PROFICIENT' | 'EXPERT'
   ): Promise<void> {
-    await prisma.sectionMasteryThreshold.upsert({
-      where: {
-        userId_sectionId: {
-          userId,
-          sectionId,
-        },
-      },
-      update: {
-        threshold,
-        thresholdValue: this.defaultThresholds[threshold],
-        description: `User prefers ${threshold.toLowerCase()} level mastery`,
-      },
-      create: {
-        userId,
-        sectionId,
-        threshold,
-        thresholdValue: this.defaultThresholds[threshold],
-        description: `User prefers ${threshold.toLowerCase()} level mastery`,
-      },
-    });
+    // Since sectionMasteryThreshold model doesn't exist in the main schema,
+    // this method is currently a no-op
+    // TODO: Implement when the model is added to the schema
+    
+    console.log(`Setting mastery threshold for user ${userId}, section ${sectionId} to ${threshold}`);
   }
 
   /**
@@ -427,7 +408,7 @@ export class MasteryCalculationService {
     userId: number,
     threshold: number = 0.5
   ): Promise<{
-    criterionId: string;
+    criterionId: number;
     description: string;
     currentScore: number;
     daysSinceLastAttempt: number;
@@ -448,8 +429,8 @@ export class MasteryCalculationService {
     });
 
     return lowMasteryCriteria.map(mastery => {
-      const daysSinceLastAttempt = mastery.lastAttemptDate 
-        ? this.getDaysDifference(mastery.lastAttemptDate, new Date())
+      const daysSinceLastAttempt = mastery.lastAttempt 
+        ? this.getDaysDifference(mastery.lastAttempt, new Date())
         : 999;
 
       let recommendedAction = 'Review soon';
@@ -460,8 +441,8 @@ export class MasteryCalculationService {
       }
 
       return {
-        criterionId: mastery.masteryCriterionId,
-        description: mastery.masteryCriterion.description,
+        criterionId: mastery.criterionId,
+        description: mastery.masteryCriterion.description || '',
         currentScore: mastery.masteryScore,
         daysSinceLastAttempt,
         recommendedAction,
@@ -472,13 +453,13 @@ export class MasteryCalculationService {
   // Private helper methods
 
   private async getUserMasteriesForCriteria(
-    criterionIds: string[],
+    criterionIds: number[],
     userId: number
   ): Promise<UserCriterionMastery[]> {
     return await prisma.userCriterionMastery.findMany({
       where: {
         userId,
-        masteryCriterionId: { in: criterionIds },
+        criterionId: { in: criterionIds },
       },
     });
   }
@@ -490,3 +471,4 @@ export class MasteryCalculationService {
 }
 
 export const masteryCalculationService = new MasteryCalculationService();
+

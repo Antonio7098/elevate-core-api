@@ -1,12 +1,10 @@
 import { PrismaClient } from '@prisma/client';
 import ContextAssemblyService, { 
   ContextAssembly, 
-  VectorSearchResult, 
-  GraphTraversalResult,
   ContextOptions,
-  UnifiedContext,
-  UserContext
+  ContentDistribution
 } from './contextAssembly.service';
+import { VectorSearchResult } from './vectorStore.service';
 
 const prisma = new PrismaClient();
 
@@ -30,7 +28,7 @@ const prisma = new PrismaClient();
 // ============================================================================
 
 export interface ContextBuildingResult {
-  context: UnifiedContext;
+  context: ContextAssembly;
   metadata: {
     processingTimeMs: number;
     sourcesUsed: string[];
@@ -142,85 +140,138 @@ export default class IntelligentContextBuilder {
    * Optimizes context content for better quality and diversity
    */
   private async optimizeContextContent(
-    context: ContextAssembly,
-    options: ContextOptions,
-    diversityConfig?: DiversityOptimizationConfig
-  ): Promise<UnifiedContext> {
-    const config = diversityConfig || this.getDefaultDiversityConfig();
+    context: ContextAssembly, 
+    options: ContextOptions, 
+    diversityConfig: DiversityOptimizationConfig
+  ): Promise<ContextAssembly> {
+    const startTime = Date.now();
     
-    // 1. Apply content diversity optimization
-    const diversifiedContent = await this.applyDiversityOptimization(
-      context, 
-      config
-    );
-    
-    // 2. Balance complexity distribution
-    const complexityBalanced = await this.balanceComplexityDistribution(
-      diversifiedContent
-    );
-    
-    // 3. Optimize UEE stage progression
-    const ueeOptimized = await this.optimizeUeeProgression(
-      complexityBalanced
-    );
-    
-    // 4. Apply source variety optimization
-    const sourceOptimized = await this.applySourceVarietyOptimization(
-      ueeOptimized, 
-      config
-    );
-    
-    return sourceOptimized;
-  }
-  
-  /**
-   * Applies diversity optimization to content selection
-   */
-  private async applyDiversityOptimization(
-    context: ContextAssembly,
-    config: DiversityOptimizationConfig
-  ): Promise<UnifiedContext> {
-    const optimized: UnifiedContext = {
-      content: {
-        sections: [],
-        primitives: [],
-        notes: [],
-        relationships: []
-      },
-      relationships: context.learningPath || [],
-      learningPaths: context.criterionLearningPaths || [],
-      userProgress: context.userProgress || null,
-      metadata: context.metadata || {
-        totalContent: 0,
-        contentDistribution: { sections: 0, primitives: 0, notes: 0, relationships: 0 },
-        confidence: 0
+    // Create optimized context with proper structure
+    const optimized: ContextAssembly = {
+      ...context,
+      metadata: {
+        totalContent: this.calculateTotalContent(context),
+        contentDistribution: this.calculateContentDistribution(context),
+        processingTimeMs: Date.now() - startTime,
+        sources: {
+          vectorSearch: context.relevantSections.length + context.relevantPrimitives.length + context.relevantNotes.length,
+          graphTraversal: context.relatedConcepts.length + context.prerequisiteChain.length,
+          userContext: context.userProgress ? 1 : 0,
+          learningPaths: context.criterionLearningPaths ? context.criterionLearningPaths.length : 0,
+        }
       }
     };
-    
-    // Optimize sections
-    optimized.content.sections = this.optimizeSectionDiversity(
-      context.relevantSections || [],
-      config.contentTypeWeights.sections
+
+    // Apply diversity optimization
+    if (diversityConfig.sourceVariety) {
+      optimized.relevantSections = this.optimizeSectionDiversity(
+        context.relevantSections, 
+        diversityConfig.contentTypeWeights.sections
+      );
+      optimized.relevantPrimitives = this.optimizePrimitiveDiversity(
+        context.relevantPrimitives, 
+        diversityConfig.contentTypeWeights.primitives
+      );
+      optimized.relevantNotes = this.optimizeNoteDiversity(
+        context.relevantNotes, 
+        diversityConfig.contentTypeWeights.notes
+      );
+      optimized.relatedConcepts = this.optimizeRelationshipDiversity(
+        context.relatedConcepts, 
+        diversityConfig.contentTypeWeights.relationships
+      );
+    }
+
+    // Apply learning path optimization
+    if (optimized.criterionLearningPaths && optimized.criterionLearningPaths.length > 0) {
+      optimized.criterionLearningPaths = this.optimizeLearningPathUeeProgression(
+        optimized.criterionLearningPaths
+      );
+    }
+
+    // Apply complexity balancing
+    optimized.relevantPrimitives = this.balancePrimitiveComplexity(optimized.relevantPrimitives);
+    optimized.relevantSections = this.balanceSectionDifficulty(optimized.relevantSections);
+
+    // Apply UEE progression optimization
+    const ueeOptimized = await this.optimizeUeeProgression(optimized);
+    optimized.relevantPrimitives = ueeOptimized.relevantPrimitives;
+
+    // Apply source variety optimization
+    const sourceOptimized = await this.applySourceVarietyOptimization(
+      optimized, 
+      diversityConfig
     );
-    
-    // Optimize primitives
-    optimized.content.primitives = this.optimizePrimitiveDiversity(
-      context.relatedConcepts || [],
-      config.contentTypeWeights.primitives
-    );
-    
-    // Optimize notes
-    optimized.content.notes = this.optimizeNoteDiversity(
-      context.relevantNotes || [],
-      config.contentTypeWeights.notes
-    );
-    
-    // Optimize relationships
-    optimized.content.relationships = this.optimizeRelationshipDiversity(
-      context.learningPath || [],
-      config.contentTypeWeights.relationships
-    );
-    
+    optimized.relevantSections = sourceOptimized.relevantSections;
+
+    return optimized;
+  }
+
+  /**
+   * Calculates total content count from context
+   */
+  private calculateTotalContent(context: ContextAssembly): number {
+    return context.relevantSections.length + 
+           context.relevantPrimitives.length + 
+           context.relevantNotes.length + 
+           context.relatedConcepts.length + 
+           context.prerequisiteChain.length;
+  }
+
+  /**
+   * Calculates content distribution across different types
+   */
+  private calculateContentDistribution(context: ContextAssembly): ContentDistribution {
+    const total = this.calculateTotalContent(context);
+    return {
+      sections: context.relevantSections.length / total,
+      primitives: context.relevantPrimitives.length / total,
+      notes: context.relevantNotes.length / total,
+      relationships: context.relatedConcepts.length / total
+    };
+  }
+
+  /**
+   * Applies diversity optimization to context content
+   */
+  private async applyDiversityOptimization(
+    context: ContextAssembly, 
+    config: DiversityOptimizationConfig
+  ): Promise<ContextAssembly> {
+    const optimized = { ...context };
+
+    // Apply section diversity
+    if (config.contentTypeWeights.sections > 0) {
+      optimized.relevantSections = this.optimizeSectionDiversity(
+        context.relevantSections, 
+        config.contentTypeWeights.sections
+      );
+    }
+
+    // Apply primitive diversity
+    if (config.contentTypeWeights.primitives > 0) {
+      optimized.relevantPrimitives = this.optimizePrimitiveDiversity(
+        context.relevantPrimitives, 
+        config.contentTypeWeights.primitives
+      );
+    }
+
+    // Apply note diversity
+    if (config.contentTypeWeights.notes > 0) {
+      optimized.relevantNotes = this.optimizeNoteDiversity(
+        context.relevantNotes, 
+        config.contentTypeWeights.notes
+      );
+    }
+
+    // Apply relationship diversity
+    if (config.contentTypeWeights.relationships > 0) {
+      optimized.relatedConcepts = this.optimizeRelationshipDiversity(
+        context.relatedConcepts, 
+        config.contentTypeWeights.relationships
+      );
+    }
+
     return optimized;
   }
   
@@ -228,21 +279,21 @@ export default class IntelligentContextBuilder {
    * Balances complexity distribution across content
    */
   private async balanceComplexityDistribution(
-    context: UnifiedContext
-  ): Promise<UnifiedContext> {
+    context: ContextAssembly
+  ): Promise<ContextAssembly> {
     const balanced = { ...context };
     
     // Balance primitive complexity
-    if (balanced.content.primitives.length > 0) {
-      balanced.content.primitives = this.balancePrimitiveComplexity(
-        balanced.content.primitives
+    if (balanced.relevantPrimitives.length > 0) {
+      balanced.relevantPrimitives = this.balancePrimitiveComplexity(
+        balanced.relevantPrimitives
       );
     }
     
     // Balance section difficulty
-    if (balanced.content.sections.length > 0) {
-      balanced.content.sections = this.balanceSectionDifficulty(
-        balanced.content.sections
+    if (balanced.relevantSections.length > 0) {
+      balanced.relevantSections = this.balanceSectionDifficulty(
+        balanced.relevantSections
       );
     }
     
@@ -253,21 +304,21 @@ export default class IntelligentContextBuilder {
    * Optimizes UEE stage progression
    */
   private async optimizeUeeProgression(
-    context: UnifiedContext
-  ): Promise<UnifiedContext> {
+    context: ContextAssembly
+  ): Promise<ContextAssembly> {
     const optimized = { ...context };
     
     // Ensure UEE progression follows optimal order
-    if (optimized.learningPaths.length > 0) {
-      optimized.learningPaths = this.optimizeLearningPathUeeProgression(
-        optimized.learningPaths
+    if (optimized.criterionLearningPaths && optimized.criterionLearningPaths.length > 0) {
+      optimized.criterionLearningPaths = this.optimizeLearningPathUeeProgression(
+        optimized.criterionLearningPaths
       );
     }
     
     // Balance UEE stages in content
-    if (optimized.content.primitives.length > 0) {
-      optimized.content.primitives = this.balanceUeeStages(
-        optimized.content.primitives
+    if (optimized.relevantPrimitives.length > 0) {
+      optimized.relevantPrimitives = this.balanceUeeStages(
+        optimized.relevantPrimitives
       );
     }
     
@@ -278,21 +329,21 @@ export default class IntelligentContextBuilder {
    * Applies source variety optimization
    */
   private async applySourceVarietyOptimization(
-    context: UnifiedContext,
+    context: ContextAssembly,
     config: DiversityOptimizationConfig
-  ): Promise<UnifiedContext> {
+  ): Promise<ContextAssembly> {
     if (!config.sourceVariety) return context;
     
     const optimized = { ...context };
     
     // Ensure content comes from diverse sources
-    optimized.content.sections = this.ensureSourceVariety(
-      optimized.content.sections,
+    optimized.relevantSections = this.ensureSourceVariety(
+      optimized.relevantSections,
       'blueprintSectionId'
     );
     
-    optimized.content.primitives = this.ensureSourceVariety(
-      optimized.content.primitives,
+    optimized.relevantPrimitives = this.ensureSourceVariety(
+      optimized.relevantPrimitives,
       'blueprintSectionId'
     );
     
@@ -303,7 +354,7 @@ export default class IntelligentContextBuilder {
    * Generates context recommendations
    */
   private async generateContextRecommendations(
-    context: UnifiedContext,
+    context: ContextAssembly,
     userId: number,
     options: ContextOptions
   ): Promise<ContextRecommendation[]> {
@@ -364,11 +415,11 @@ export default class IntelligentContextBuilder {
    * Calculates content quality metrics
    */
   private async calculateContentQualityMetrics(
-    context: UnifiedContext
+    context: ContextAssembly
   ): Promise<ContentQualityMetrics> {
-    const sections = context.content.sections;
-    const primitives = context.content.primitives;
-    const notes = context.content.notes;
+    const sections = context.relevantSections;
+    const primitives = context.relevantPrimitives;
+    const notes = context.relevantNotes;
     
     // Calculate average relevance
     const allContent = [...sections, ...primitives, ...notes];
@@ -400,11 +451,11 @@ export default class IntelligentContextBuilder {
   /**
    * Calculates diversity score
    */
-  private calculateDiversityScore(context: UnifiedContext): number {
-    const sections = context.content.sections.length;
-    const primitives = context.content.primitives.length;
-    const notes = context.content.notes.length;
-    const relationships = context.content.relationships.length;
+  private calculateDiversityScore(context: ContextAssembly): number {
+    const sections = context.relevantSections.length;
+    const primitives = context.relevantPrimitives.length;
+    const notes = context.relevantNotes.length;
+    const relationships = context.relatedConcepts.length;
     
     const total = sections + primitives + notes + relationships;
     if (total === 0) return 0;
@@ -586,22 +637,22 @@ export default class IntelligentContextBuilder {
     return redistributed;
   }
   
-  private async analyzeContentGaps(context: UnifiedContext, userId: number): Promise<string[]> {
+  private async analyzeContentGaps(context: ContextAssembly, userId: number): Promise<string[]> {
     // Placeholder for content gap analysis
     return [];
   }
   
-  private async analyzeLearningOpportunities(context: UnifiedContext, userId: number): Promise<string[]> {
+  private async analyzeLearningOpportunities(context: ContextAssembly, userId: number): Promise<string[]> {
     // Placeholder for learning opportunity analysis
     return [];
   }
   
-  private async analyzeUserGoalAlignment(context: UnifiedContext, userId: number): Promise<{score: number, details: string}> {
+  private async analyzeUserGoalAlignment(context: ContextAssembly, userId: number): Promise<{score: number, details: string}> {
     // Placeholder for goal alignment analysis
     return { score: 0.8, details: 'Good alignment with current goals' };
   }
   
-  private async analyzeDifficultyBalance(context: UnifiedContext): Promise<{needsAdjustment: boolean, details: string}> {
+  private async analyzeDifficultyBalance(context: ContextAssembly): Promise<{needsAdjustment: boolean, details: string}> {
     // Placeholder for difficulty balance analysis
     return { needsAdjustment: false, details: 'Difficulty progression is balanced' };
   }
@@ -624,14 +675,14 @@ export default class IntelligentContextBuilder {
     return freshnessScores.reduce((sum, score) => sum + score, 0) / freshnessScores.length;
   }
   
-  private calculateSourceDiversity(context: UnifiedContext): number {
+  private calculateSourceDiversity(context: ContextAssembly): number {
     const sources = new Set<number>();
     
-    context.content.sections.forEach(s => sources.add(s.id));
-    context.content.primitives.forEach(p => sources.add(p.id));
-    context.content.notes.forEach(n => sources.add(n.id));
+    context.relevantSections.forEach(s => sources.add(s.id));
+    context.relevantPrimitives.forEach(p => sources.add(p.id));
+    context.relevantNotes.forEach(n => sources.add(n.id));
     
-    return sources.size / (context.content.sections.length + context.content.primitives.length + context.content.notes.length);
+    return sources.size / (context.relevantSections.length + context.relevantPrimitives.length + context.relevantNotes.length);
   }
   
   private calculateComplexityBalance(primitives: any[]): number {
@@ -645,14 +696,14 @@ export default class IntelligentContextBuilder {
     return Math.max(0, 1 - Math.sqrt(variance) / 10);
   }
   
-  private calculateUeeProgression(context: UnifiedContext): number {
-    if (context.learningPaths.length === 0) return 0;
+  private calculateUeeProgression(context: ContextAssembly): number {
+    if (!context.criterionLearningPaths || context.criterionLearningPaths.length === 0) return 0;
     
-    const optimalPaths = context.learningPaths.filter(path => 
+    const optimalPaths = context.criterionLearningPaths.filter(path => 
       path.ueeProgression?.isOptimal
     );
     
-    return optimalPaths.length / context.learningPaths.length;
+    return optimalPaths.length / context.criterionLearningPaths.length;
   }
   
   private extractSourcesUsed(context: ContextAssembly): string[] {

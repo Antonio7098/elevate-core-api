@@ -48,6 +48,7 @@ export interface SearchFilters {
   maxResults?: number;
   similarityThreshold?: number;
   includeVectors?: boolean;
+  excludeIds?: string[];
 }
 
 export interface EmbeddingRequest {
@@ -58,7 +59,7 @@ export interface EmbeddingRequest {
     description?: string;
     conceptTags?: string[];
     complexityScore?: number;
-    ueeLevel?: string;
+    uueLevel?: string;
     blueprintSectionId?: number;
     blueprintId?: number;
     userId?: number;
@@ -262,7 +263,7 @@ export default class VectorStoreService {
             description: primitive.description,
             conceptTags: primitive.conceptTags || [],
             complexityScore: primitive.complexityScore,
-            ueeLevel: primitive.ueeLevel,
+            difficultyLevel: primitive.difficultyLevel,
             blueprintSectionId: primitive.blueprintSectionId || undefined,
             blueprintId: blueprintId,
             userId: primitive.userId
@@ -494,7 +495,7 @@ export default class VectorStoreService {
             metadata: {
               conceptTags: contentDetails.conceptTags || [],
               complexityScore: contentDetails.complexityScore,
-              ueeLevel: contentDetails.ueeLevel,
+              uueLevel: contentDetails.uueLevel,
               blueprintSectionId: contentDetails.blueprintSectionId,
               blueprintId: contentDetails.blueprintId,
               userId: contentDetails.userId,
@@ -531,9 +532,9 @@ export default class VectorStoreService {
       filtered = filtered.filter(r => r.metadata.blueprintSectionId === filters.sectionId);
     }
     
-    // Apply UEE level filter
-    if (filters?.ueeLevel) {
-      filtered = filtered.filter(r => r.metadata.ueeLevel === filters.ueeLevel);
+    // Apply UUE level filter
+    if (filters?.uueLevel) {
+      filtered = filtered.filter(r => r.metadata.uueLevel === filters.uueLevel);
     }
     
     // Apply difficulty range filter
@@ -581,7 +582,7 @@ export default class VectorStoreService {
         metadata: {
           conceptTags: [],
           complexityScore: undefined,
-          ueeLevel: undefined,
+          uueLevel: undefined,
           blueprintSectionId: section.id,
           blueprintId: section.blueprintId,
           userId: section.userId
@@ -599,7 +600,7 @@ export default class VectorStoreService {
         metadata: {
           conceptTags: primitive.conceptTags || [],
           complexityScore: primitive.complexityScore,
-          ueeLevel: primitive.ueeLevel,
+          difficultyLevel: primitive.difficultyLevel,
           blueprintSectionId: primitive.blueprintSectionId || undefined,
           blueprintId: primitive.blueprintId,
           userId: primitive.userId
@@ -617,7 +618,7 @@ export default class VectorStoreService {
         metadata: {
           conceptTags: [],
           complexityScore: undefined,
-          ueeLevel: undefined,
+          uueLevel: undefined,
           blueprintSectionId: note.blueprintSectionId,
           blueprintId: undefined,
           userId: note.userId

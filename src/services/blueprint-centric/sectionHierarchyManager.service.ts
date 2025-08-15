@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 // ============================================================================
 
 export interface BlueprintSectionTree {
-  id: string;
+  id: number;
   title: string;
   description?: string;
   depth: number;
@@ -27,15 +27,15 @@ export interface HierarchyValidationResult {
   isValid: boolean;
   errors: string[];
   warnings: string[];
-  circularReferences: string[];
-  orphanedSections: string[];
+  circularReferences: number[];
+  orphanedSections: number[];
 }
 
 export interface SectionMoveResult {
   success: boolean;
   section: BlueprintSectionTree;
   depthChanges: number;
-  affectedSections: string[];
+  affectedSections: number[];
 }
 
 // ============================================================================
@@ -50,10 +50,10 @@ export class SectionHierarchyManager {
    * Space Complexity: O(n) for the tree structure
    */
   buildSectionTree(sections: BlueprintSection[]): BlueprintSectionTree[] {
-    const sectionMap = new Map<string, BlueprintSection>();
-    const rootSections: BlueprintSectionTree[] = [];
+    const sectionMap = new Map<number, BlueprintSection & { children: BlueprintSection[] }>();
+    const rootSections: (BlueprintSection & { children: BlueprintSection[] })[] = [];
     
-    // First pass: create lookup map
+    // First pass: create lookup map with children array
     sections.forEach(section => {
       sectionMap.set(section.id, { ...section, children: [] });
     });
@@ -70,33 +70,39 @@ export class SectionHierarchyManager {
       }
     });
     
-    // Sort by orderIndex at each level
-    const sortSections = (sections: BlueprintSection[]): BlueprintSectionTree[] => {
+    // Sort by orderIndex at each level and convert to BlueprintSectionTree
+    const sortAndConvertSections = (sections: (BlueprintSection & { children: BlueprintSection[] })[]): BlueprintSectionTree[] => {
       return sections.sort((a, b) => a.orderIndex - b.orderIndex)
         .map(section => ({
-          ...section,
-          children: sortSections(section.children),
+          id: section.id,
+          title: section.title,
+          description: section.description,
+          depth: section.depth,
+          orderIndex: section.orderIndex,
+          difficulty: section.difficulty,
+          estimatedTimeMinutes: section.estimatedTimeMinutes,
+          children: sortAndConvertSections(section.children as (BlueprintSection & { children: BlueprintSection[] })[]),
           stats: {
             noteCount: 0, // Will be calculated when needed
             questionCount: 0,
             masteryProgress: 0,
-            estimatedTimeMinutes: 0
+            estimatedTimeMinutes: section.estimatedTimeMinutes || 0
           }
         }));
     };
     
-    return sortSections(rootSections);
+    return sortAndConvertSections(rootSections);
   }
   
   /**
    * Calculates optimal section depth and prevents circular references
    * Time Complexity: O(n) where n = number of sections
    */
-  async calculateSectionDepth(sections: BlueprintSection[]): Promise<Map<string, number>> {
-    const depthMap = new Map<string, number>();
-    const visited = new Set<string>();
+  async calculateSectionDepth(sections: BlueprintSection[]): Promise<Map<number, number>> {
+    const depthMap = new Map<number, number>();
+    const visited = new Set<number>();
     
-    const calculateDepth = (sectionId: string, currentDepth: number = 0): number => {
+    const calculateDepth = (sectionId: number, currentDepth: number = 0): number => {
       if (visited.has(sectionId)) {
         throw new Error(`Circular reference detected in section ${sectionId}`);
       }
@@ -171,7 +177,7 @@ export class SectionHierarchyManager {
     });
     
     // Check for depth inconsistencies
-    const depthMap = new Map<string, number>();
+    const depthMap = new Map<number, number>();
     sections.forEach(section => {
       if (section.parentSectionId) {
         const parent = sections.find(s => s.id === section.parentSectionId);
@@ -185,7 +191,7 @@ export class SectionHierarchyManager {
     });
     
     // Check for order index conflicts
-    const orderMap = new Map<string, Set<number>>();
+    const orderMap = new Map<number | 'root', Set<number>>();
     sections.forEach(section => {
       const key = section.parentSectionId || 'root';
       if (!orderMap.has(key)) {
@@ -210,10 +216,10 @@ export class SectionHierarchyManager {
    * Prevents circular references when building hierarchy
    */
   private preventCircularReferences(sections: BlueprintSection[]): boolean {
-    const visited = new Set<string>();
-    const recursionStack = new Set<string>();
+    const visited = new Set<number>();
+    const recursionStack = new Set<number>();
     
-    const hasCycle = (sectionId: string): boolean => {
+    const hasCycle = (sectionId: number): boolean => {
       if (recursionStack.has(sectionId)) {
         return true; // Cycle detected
       }
@@ -328,8 +334,8 @@ export class SectionHierarchyManager {
    * Moves a section to a new parent with validation
    */
   async moveSection(
-    sectionId: string, 
-    newParentId: string | null, 
+    sectionId: number, 
+    newParentId: number | null, 
     newOrderIndex?: number
   ): Promise<SectionMoveResult> {
     const section = await prisma.blueprintSection.findUnique({
@@ -395,10 +401,10 @@ export class SectionHierarchyManager {
   /**
    * Checks if moving a section would create a cycle
    */
-  private async wouldCreateCycle(sectionId: string, newParentId: string): Promise<boolean> {
-    const visited = new Set<string>();
+  private async wouldCreateCycle(sectionId: number, newParentId: number): Promise<boolean> {
+    const visited = new Set<number>();
     
-    const checkCycle = async (currentId: string): Promise<boolean> => {
+    const checkCycle = async (currentId: number): Promise<boolean> => {
       if (currentId === sectionId) {
         return true; // Cycle detected
       }
@@ -426,10 +432,10 @@ export class SectionHierarchyManager {
   /**
    * Updates depths for all descendants of a section
    */
-  private async updateDescendantDepths(sectionId: string, newDepth: number): Promise<string[]> {
-    const affectedSections: string[] = [];
+  private async updateDescendantDepths(sectionId: number, newDepth: number): Promise<number[]> {
+    const affectedSections: number[] = [];
     
-    const updateDescendants = async (currentId: string, currentDepth: number): Promise<void> => {
+    const updateDescendants = async (currentId: number, currentDepth: number): Promise<void> => {
       const children = await prisma.blueprintSection.findMany({
         where: { parentSectionId: currentId }
       });
@@ -452,7 +458,7 @@ export class SectionHierarchyManager {
   /**
    * Reorders siblings to maintain consistent ordering
    */
-  private async reorderSiblings(parentId: string): Promise<void> {
+  private async reorderSiblings(parentId: number): Promise<void> {
     const siblings = await prisma.blueprintSection.findMany({
       where: { parentSectionId: parentId },
       orderBy: { orderIndex: 'asc' }
@@ -472,7 +478,7 @@ export class SectionHierarchyManager {
   /**
    * Gets the next available order index for a parent
    */
-  private async getNextOrderIndex(blueprintId: number, parentSectionId?: string): Promise<number> {
+  private async getNextOrderIndex(blueprintId: number, parentSectionId?: number): Promise<number> {
     const maxOrder = await prisma.blueprintSection.aggregate({
       where: {
         blueprintId,
@@ -508,10 +514,10 @@ export class SectionHierarchyManager {
   /**
    * Finds the path from root to a specific section
    */
-  async findSectionPath(sectionId: string): Promise<BlueprintSectionTree[]> {
+  async findSectionPath(sectionId: number): Promise<BlueprintSectionTree[]> {
     const path: BlueprintSectionTree[] = [];
     
-    const buildPath = async (currentId: string): Promise<void> => {
+    const buildPath = async (currentId: number): Promise<void> => {
       const section = await prisma.blueprintSection.findUnique({
         where: { id: currentId }
       });

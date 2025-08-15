@@ -1,16 +1,17 @@
-// Create a mock instance that we can control
-let mockAiRagServiceInstance: any;
+// Mock the services that actually exist
+jest.mock('../../services/mindmap.service', () => ({
+  MindmapService: jest.fn().mockImplementation(() => ({
+    createMindmap: jest.fn(),
+    getMindmap: jest.fn(),
+    updateMindmap: jest.fn(),
+    deleteMindmap: jest.fn(),
+  })),
+}));
 
-jest.mock('../../ai-rag/ai-rag.service', () => ({
-  AiRAGService: jest.fn().mockImplementation(() => {
-    if (!mockAiRagServiceInstance) {
-      mockAiRagServiceInstance = {
-        createLearningBlueprint: jest.fn(),
-        generateQuestionsFromBlueprint: jest.fn(),
-        generateNoteFromBlueprint: jest.fn(),
-      };
-    }
-    return mockAiRagServiceInstance;
+jest.mock('../../services/ai-api-client.service', () => ({
+  getAIAPIClient: jest.fn().mockReturnValue({
+    generateQuestions: jest.fn(),
+    generateNotes: jest.fn(),
   }),
 }));
 
@@ -25,7 +26,7 @@ describe('Learning Blueprints Routes', () => {
   let token: string;
 
   beforeAll(async () => {
-    const { id, token: userToken } = await createTestUser('learning-blueprint-test@example.com');
+    const { id, token: userToken } = await createTestUser({ email: 'learning-blueprint-test@example.com' });
     const foundUser = await prisma.user.findUnique({ where: { id } });
     if (!foundUser) {
       throw new Error('Test user not found');
@@ -41,14 +42,33 @@ describe('Learning Blueprints Routes', () => {
 
     describe('POST /api/learning-blueprints', () => {
         it('should create a learning blueprint', async () => {
-      mockAiRagServiceInstance.createLearningBlueprint.mockResolvedValue({
-        id: 1,
-        sourceText: 'This is a test source text.',
-        blueprintJson: { some: 'data' },
-        userId: user.id,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+      // Mock the MindmapService to return a dummy ID
+      const mockMindmapService = require('../../services/mindmap.service');
+      mockMindmapService.MindmapService.mockReturnValue({
+        createMindmap: jest.fn().mockResolvedValue({
+          id: 1,
+          name: 'Test Mindmap',
+          userId: user.id,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }),
       });
+
+      // Mock the AIAPIClient to return a dummy ID
+      const mockAIAPIClient = require('../../services/ai-api-client.service');
+      mockAIAPIClient.getAIAPIClient.mockReturnValue({
+        generateQuestions: jest.fn().mockResolvedValue({
+          id: 1,
+          name: 'Generated Question Set',
+          userId: user.id,
+          folderId: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          generatedFromBlueprintId: 1,
+          questions: [],
+        }),
+      });
+
       const response = await request(app)
         .post('/api/learning-blueprints')
         .set('Authorization', `Bearer ${token}`)
@@ -63,17 +83,14 @@ describe('Learning Blueprints Routes', () => {
 
   describe('POST /api/learning-blueprints/:blueprintId/question-sets', () => {
     it('should generate a question set from a blueprint', async () => {
-      const blueprintId = 1;
-      mockAiRagServiceInstance.generateQuestionsFromBlueprint.mockResolvedValue({
-        id: 1,
-        name: 'Generated Question Set',
-        userId: user.id,
-        folderId: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        generatedFromBlueprintId: blueprintId,
-        questions: [],
-      } as any);
+      // First create a blueprint to get a real ID
+      const blueprintResponse = await request(app)
+        .post('/api/learning-blueprints')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ sourceText: 'This is a test source text for question generation.' });
+
+      expect(blueprintResponse.status).toBe(201);
+      const blueprintId = blueprintResponse.body.id;
 
       const response = await request(app)
         .post(`/api/learning-blueprints/${blueprintId}/question-sets`)
@@ -88,19 +105,14 @@ describe('Learning Blueprints Routes', () => {
 
   describe('POST /api/learning-blueprints/:blueprintId/notes', () => {
     it('should generate a note from a blueprint', async () => {
-      const blueprintId = 1;
-      mockAiRagServiceInstance.generateNoteFromBlueprint.mockResolvedValue({
-        id: 1,
-        title: 'Generated Note',
-        content: {},
-        plainText: 'Generated note content.',
-        userId: user.id,
-        folderId: null,
-        questionSetId: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        generatedFromBlueprintId: blueprintId,
-      });
+      // First create a blueprint to get a real ID
+      const blueprintResponse = await request(app)
+        .post('/api/learning-blueprints')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ sourceText: 'This is a test source text for note generation.' });
+
+      expect(blueprintResponse.status).toBe(201);
+      const blueprintId = blueprintResponse.body.id;
 
       const response = await request(app)
         .post(`/api/learning-blueprints/${blueprintId}/notes`)

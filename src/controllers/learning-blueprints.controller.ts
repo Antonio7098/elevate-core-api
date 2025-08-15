@@ -1,36 +1,28 @@
 import { Request, Response } from 'express';
 import { AuthenticatedRequest } from '../types/express';
 import prisma from '../lib/prisma';
-// import AiRAGService from '../services/ai-rag.service';
+import { AiRAGService } from '../ai-rag/ai-rag.service';
 import { MindmapService } from '../services/mindmap.service';
 import { getAIAPIClient } from '../services/ai-api-client.service';
 
 export class LearningBlueprintsController {
   private mindmapService: MindmapService;
-  // private aiRagService: AiRAGService | null = null;
+  private aiRagService: AiRAGService;
 
   constructor() {
     this.mindmapService = new MindmapService();
-    // Don't initialize aiRagService here - do it lazily when needed
+    this.aiRagService = new AiRAGService(prisma);
   }
 
-  // private getAiRagService(): AiRAGService {
-  //   if (!this.aiRagService) {
-  //     try {
-  //       const aiClient = getAIAPIClient();
-  //       this.aiRagService = new AiRAGService(aiClient);
-  //     } catch (error) {
-  //       throw new Error(`Failed to initialize AI RAG service: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  //     }
-  //   }
-  //   return this.aiRagService;
-  // }
+  private getAiRagService(): AiRAGService {
+    return this.aiRagService;
+  }
 
   private getMindmapService(): MindmapService {
     return this.mindmapService;
   }
 
-  async createLearningBlueprint(req: AuthenticatedRequest, res: Response): Promise<void> {
+  createLearningBlueprint = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     console.log('🔵 createLearningBlueprint called with body:', req.body);
     console.log('🔵 User info:', req.user);
     try {
@@ -39,15 +31,23 @@ export class LearningBlueprintsController {
         res.status(401).json({ message: 'User not authenticated' });
         return;
       }
-      // console.log('✅ User authenticated, calling aiRagService...');
-      // const aiRagService = this.getAiRagService();
-      // const result = await aiRagService.createLearningBlueprint(
-      //   req.user.userId,
-      //   req.body,
-      // );
-      // console.log('✅ aiRagService successful, returning result');
-      // res.status(201).json(result);
-      res.status(501).json({ message: 'Learning blueprint creation temporarily disabled' });
+
+      // Use AI RAG service for intelligent blueprint generation
+      const { sourceText, title, description } = req.body;
+      if (!sourceText) {
+        res.status(400).json({ message: 'sourceText is required' });
+        return;
+      }
+
+      const blueprint = await this.getAiRagService().createLearningBlueprint(
+        sourceText,
+        req.user.userId,
+        title,
+        description
+      );
+
+      console.log('✅ Blueprint created successfully:', blueprint.id);
+      res.status(201).json(blueprint);
     } catch (error) {
       console.log('❌ Error in createLearningBlueprint:', error);
       if (error instanceof Error) {
@@ -358,27 +358,36 @@ export class LearningBlueprintsController {
     }
   }
 
-  async generateQuestionsFromBlueprint(
+  generateQuestionsFromBlueprint = async (
     req: AuthenticatedRequest,
     res: Response,
-  ): Promise<void> {
+  ): Promise<void> => {
     try {
       if (!req.user) {
         res.status(401).json({ message: 'User not authenticated' });
         return;
       }
-      const blueprintId = parseInt(req.params.id, 10);
+      const blueprintId = parseInt(req.params.blueprintId, 10);
       if (isNaN(blueprintId)) {
         res.status(400).json({ message: 'Invalid blueprint ID' });
         return;
       }
-      // const result = await this.getAiRagService().generateQuestionsFromBlueprint(
-      //   req.user.userId,
-      //   blueprintId,
-      //   req.body,
-      // );
-      // res.status(200).json(result);
-      res.status(501).json({ message: 'Question generation temporarily disabled' });
+
+      // Use AI RAG service for intelligent question generation
+      const { name, count } = req.body;
+      if (!name) {
+        res.status(400).json({ message: 'name is required' });
+        return;
+      }
+
+      const questionSet = await this.getAiRagService().generateQuestionsFromBlueprint(
+        req.user.userId,
+        blueprintId,
+        { name, count }
+      );
+
+      console.log('✅ Question set generated successfully:', questionSet.id);
+      res.status(201).json(questionSet);
     } catch (error) {
       if (error instanceof Error) {
         res.status(500).json({ message: error.message });
@@ -388,24 +397,33 @@ export class LearningBlueprintsController {
     }
   }
 
-  async generateNoteFromBlueprint(req: AuthenticatedRequest, res: Response): Promise<void> {
+  generateNoteFromBlueprint = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       if (!req.user) {
         res.status(401).json({ message: 'User not authenticated' });
         return;
       }
-      const blueprintId = parseInt(req.params.id, 10);
+      const blueprintId = parseInt(req.params.blueprintId, 10);
       if (isNaN(blueprintId)) {
         res.status(400).json({ message: 'Invalid blueprint ID' });
         return;
       }
-      // const result = await this.getAiRagService().generateNoteFromBlueprint(
-      //   req.user.userId,
-      //   blueprintId,
-      //   req.body,
-      // );
-      // res.status(200).json(result);
-      res.status(501).json({ message: 'Note generation temporarily disabled' });
+
+      // Use AI RAG service for intelligent note generation
+      const { title } = req.body;
+      if (!title) {
+        res.status(400).json({ message: 'title is required' });
+        return;
+      }
+
+      const note = await this.getAiRagService().generateNoteFromBlueprint(
+        req.user.userId,
+        blueprintId,
+        { title }
+      );
+
+      console.log('✅ Note generated successfully:', note.id);
+      res.status(201).json(note);
     } catch (error) {
       if (error instanceof Error) {
         res.status(500).json({ message: error.message });

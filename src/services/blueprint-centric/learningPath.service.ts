@@ -44,24 +44,16 @@ export default class LearningPathService {
     maxPathLength: number = 10
   ): Promise<LearningPath[]> {
     try {
-      const allPaths = await this.graphTraversal.findAllCriterionLearningPaths(
+      const path = await this.graphTraversal.findCriterionLearningPath(
         startCriterionId,
         maxPathLength,
         50
       );
       
-      const learningPaths: LearningPath[] = [];
+      if (!path) return [];
       
-      for (const path of allPaths) {
-        const learningPath = await this.convertToLearningPath(path);
-        if (learningPath) {
-          learningPaths.push(learningPath);
-        }
-      }
-      
-      return learningPaths.sort((a, b) => 
-        b.metadata.estimatedTime - a.metadata.estimatedTime
-      );
+      const learningPath = await this.convertToLearningPath(path);
+      return learningPath ? [learningPath] : [];
       
     } catch (error) {
       console.error('Learning path discovery failed:', error);
@@ -93,6 +85,8 @@ export default class LearningPathService {
       return null;
     }
   }
+
+
   
   /**
    * Converts graph traversal result to LearningPath
@@ -181,7 +175,7 @@ export default class LearningPathService {
     const estimatedTime = steps.reduce((sum, step) => sum + step.estimatedTime, 0);
     const difficulty = steps.reduce((sum, step) => sum + step.complexityScore, 0) / totalSteps;
     
-    const ueeStages = [...new Set(steps.map(step => step.ueeStage))];
+    const ueeStages = Array.from(new Set(steps.map(step => step.ueeStage)));
     const ueeProgression = this.orderUeeStages(ueeStages);
     
     const prerequisites = steps.slice(0, Math.ceil(totalSteps * 0.3)).map(s => s.title);

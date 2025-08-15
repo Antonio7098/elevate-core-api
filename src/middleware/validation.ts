@@ -338,3 +338,320 @@ export const validateGenerateNote = (req: Request, res: Response, next: NextFunc
   }
   next();
 };
+
+// Blueprint-centric validation middleware
+
+export const validateSectionCreate = [
+  check('name')
+    .isString()
+    .withMessage('Section name must be a string')
+    .notEmpty()
+    .withMessage('Section name cannot be empty')
+    .trim(),
+  check('blueprintId')
+    .isString()
+    .withMessage('Blueprint ID must be a string')
+    .notEmpty()
+    .withMessage('Blueprint ID is required'),
+  check('parentSectionId')
+    .optional()
+    .isString()
+    .withMessage('Parent section ID must be a string if provided'),
+  check('order')
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage('Order must be a non-negative integer')
+    .toInt(),
+  check('description')
+    .optional()
+    .isString()
+    .withMessage('Description must be a string if provided')
+    .trim(),
+  handleValidationErrors,
+];
+
+export const validateSectionUpdate = [
+  check('name')
+    .optional()
+    .isString()
+    .withMessage('Section name must be a string if provided')
+    .trim()
+    .notEmpty()
+    .withMessage('Section name cannot be empty if provided'),
+  check('description')
+    .optional()
+    .isString()
+    .withMessage('Description must be a string if provided')
+    .trim(),
+  check('order')
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage('Order must be a non-negative integer if provided')
+    .toInt(),
+  check('parentSectionId')
+    .optional()
+    .isString()
+    .withMessage('Parent section ID must be a string if provided'),
+  handleValidationErrors,
+];
+
+export const validateSectionMove = [
+  check('newParentSectionId')
+    .optional()
+    .isString()
+    .withMessage('New parent section ID must be a string if provided'),
+  check('newOrder')
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage('New order must be a non-negative integer if provided')
+    .toInt(),
+  check('blueprintId')
+    .isString()
+    .withMessage('Blueprint ID is required')
+    .notEmpty()
+    .withMessage('Blueprint ID cannot be empty'),
+  handleValidationErrors,
+];
+
+export const validateUueStageProgression = [
+  check('criterionId')
+    .isString()
+    .withMessage('Criterion ID must be a string')
+    .notEmpty()
+    .withMessage('Criterion ID is required'),
+  check('currentStage')
+    .isString()
+    .withMessage('Current stage must be a string')
+    .notEmpty()
+    .withMessage('Current stage is required')
+    .isIn(['Understand', 'Use', 'Explore'])
+    .withMessage('Current stage must be one of: Understand, Use, Explore'),
+  check('targetStage')
+    .optional()
+    .isString()
+    .withMessage('Target stage must be a string if provided')
+    .isIn(['Understand', 'Use', 'Explore'])
+    .withMessage('Target stage must be one of: Understand, Use, Explore'),
+  check('masteryScore')
+    .optional()
+    .isFloat({ min: 0, max: 100 })
+    .withMessage('Mastery score must be between 0 and 100 if provided')
+    .toFloat(),
+  handleValidationErrors,
+];
+
+export const validateMasteryThreshold = [
+  check('criterionId')
+    .isString()
+    .withMessage('Criterion ID must be a string')
+    .notEmpty()
+    .withMessage('Criterion ID is required'),
+  check('threshold')
+    .isFloat({ min: 0, max: 100 })
+    .withMessage('Threshold must be between 0 and 100')
+    .toFloat(),
+  check('uueStage')
+    .isString()
+    .withMessage('UUE stage must be a string')
+    .notEmpty()
+    .withMessage('UUE stage is required')
+    .isIn(['Understand', 'Use', 'Explore'])
+    .withMessage('UUE stage must be one of: Understand, Use, Explore'),
+  check('customThreshold')
+    .optional()
+    .isBoolean()
+    .withMessage('Custom threshold must be a boolean if provided'),
+  handleValidationErrors,
+];
+
+export const validateQuestionInstance = [
+  check('criterionId')
+    .isString()
+    .withMessage('Criterion ID must be a string')
+    .notEmpty()
+    .withMessage('Criterion ID is required'),
+  check('uueStage')
+    .isString()
+    .withMessage('UUE stage must be a string')
+    .notEmpty()
+    .withMessage('UUE stage is required')
+    .isIn(['Understand', 'Use', 'Explore'])
+    .withMessage('UUE stage must be one of: Understand, Use, Explore'),
+  check('difficulty')
+    .optional()
+    .isString()
+    .withMessage('Difficulty must be a string if provided')
+    .isIn(['Beginner', 'Intermediate', 'Advanced'])
+    .withMessage('Difficulty must be one of: Beginner, Intermediate, Advanced'),
+  check('sectionId')
+    .optional()
+    .isString()
+    .withMessage('Section ID must be a string if provided'),
+  handleValidationErrors,
+];
+
+// New validation middleware for question instance routes that only have URL parameters
+export const validateQuestionInstanceParams = [
+  param('stage')
+    .optional()
+    .isString()
+    .withMessage('Stage parameter must be a string')
+    .isIn(['Understand', 'Use', 'Explore'])
+    .withMessage('Stage must be one of: Understand, Use, Explore'),
+  param('difficulty')
+    .optional()
+    .isString()
+    .withMessage('Difficulty parameter must be a string')
+    .isIn(['Beginner', 'Intermediate', 'Advanced'])
+    .withMessage('Difficulty must be one of: Beginner, Intermediate, Advanced'),
+  param('criterionId')
+    .optional()
+    .isString()
+    .withMessage('Criterion ID parameter must be a string'),
+  param('sectionId')
+    .optional()
+    .isString()
+    .withMessage('Section ID parameter must be a string'),
+  handleValidationErrors,
+];
+
+export const validateNoteSection = [
+  check('sectionId')
+    .isString()
+    .withMessage('Section ID must be a string')
+    .notEmpty()
+    .withMessage('Section ID is required'),
+  check('noteId')
+    .isString()
+    .withMessage('Note ID must be a string')
+    .notEmpty()
+    .withMessage('Note ID is required'),
+  check('position')
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage('Position must be a non-negative integer if provided')
+    .toInt(),
+  handleValidationErrors,
+];
+
+export const validateLearningPathway = [
+  check('name')
+    .isString()
+    .withMessage('Pathway name must be a string')
+    .notEmpty()
+    .withMessage('Pathway name is required')
+    .trim(),
+  check('description')
+    .optional()
+    .isString()
+    .withMessage('Description must be a string if provided')
+    .trim(),
+  check('criteria')
+    .isArray({ min: 1 })
+    .withMessage('Criteria must be a non-empty array'),
+  check('criteria.*.criterionId')
+    .isString()
+    .withMessage('Each criterion ID must be a string')
+    .notEmpty()
+    .withMessage('Criterion ID cannot be empty'),
+  check('criteria.*.order')
+    .isInt({ min: 0 })
+    .withMessage('Each criterion order must be a non-negative integer')
+    .toInt(),
+  check('difficulty')
+    .optional()
+    .isString()
+    .withMessage('Difficulty must be a string if provided')
+    .isIn(['Beginner', 'Intermediate', 'Advanced'])
+    .withMessage('Difficulty must be one of: Beginner, Intermediate, Advanced'),
+  handleValidationErrors,
+];
+
+export const validateStudySession = [
+  check('userId')
+    .isString()
+    .withMessage('User ID must be a string')
+    .notEmpty()
+    .withMessage('User ID is required'),
+  check('duration')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Duration must be a positive integer if provided')
+    .toInt(),
+  check('sectionId')
+    .optional()
+    .isString()
+    .withMessage('Section ID must be a string if provided'),
+  check('sessionType')
+    .optional()
+    .isString()
+    .withMessage('Session type must be a string if provided')
+    .isIn(['Review', 'New Content', 'Practice', 'Assessment'])
+    .withMessage('Session type must be one of: Review, New Content, Practice, Assessment'),
+  handleValidationErrors,
+];
+
+export const validateContentRecommendation = [
+  check('userId')
+    .isString()
+    .withMessage('User ID must be a string')
+    .notEmpty()
+    .withMessage('User ID is required'),
+  check('context')
+    .optional()
+    .isObject()
+    .withMessage('Context must be an object if provided'),
+  check('context.sectionId')
+    .optional()
+    .isString()
+    .withMessage('Context section ID must be a string if provided'),
+  check('context.uueStage')
+    .optional()
+    .isString()
+    .withMessage('Context UUE stage must be a string if provided')
+    .isIn(['Understand', 'Use', 'Explore'])
+    .withMessage('Context UUE stage must be one of: Understand, Use, Explore'),
+  check('context.difficulty')
+    .optional()
+    .isString()
+    .withMessage('Context difficulty must be a string if provided')
+    .isIn(['Beginner', 'Intermediate', 'Advanced'])
+    .withMessage('Context difficulty must be one of: Beginner, Intermediate, Advanced'),
+  check('limit')
+    .optional()
+    .isInt({ min: 1, max: 50 })
+    .withMessage('Limit must be between 1 and 50 if provided')
+    .toInt(),
+  handleValidationErrors,
+];
+
+export const validateSectionAnalytics = [
+  check('sectionId')
+    .isString()
+    .withMessage('Section ID must be a string')
+    .notEmpty()
+    .withMessage('Section ID is required'),
+  check('dateRange')
+    .optional()
+    .isObject()
+    .withMessage('Date range must be an object if provided'),
+  check('dateRange.start')
+    .optional()
+    .isISO8601()
+    .withMessage('Start date must be a valid ISO 8601 date if provided'),
+  check('dateRange.end')
+    .optional()
+    .isISO8601()
+    .withMessage('End date must be a valid ISO 8601 date if provided'),
+  check('metrics')
+    .optional()
+    .isArray()
+    .withMessage('Metrics must be an array if provided'),
+  check('metrics.*')
+    .optional()
+    .isString()
+    .withMessage('Each metric must be a string')
+    .isIn(['mastery', 'engagement', 'progress', 'performance', 'content'])
+    .withMessage('Each metric must be one of: mastery, engagement, progress, performance, content'),
+  handleValidationErrors,
+];

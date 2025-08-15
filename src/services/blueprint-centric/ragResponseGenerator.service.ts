@@ -360,7 +360,7 @@ export default class RAGResponseGenerator {
     if (context.criterionLearningPaths?.length) {
       answer += `Learning pathways available: `;
       answer += context.criterionLearningPaths.map(p => 
-        `${p.path.length} steps from ${p.estimatedTime} minutes`
+        `${p.path.length} steps`
       ).join(', ');
       answer += `.\n\n`;
     }
@@ -513,10 +513,10 @@ export default class RAGResponseGenerator {
         for (const concept of exploreConcepts) {
           recommendations.push({
             type: 'explore',
-            title: `Explore ${concept.title || 'related concept'}`,
+            title: `Explore related concept`,
             description: `Discover connections and deepen your understanding`,
             estimatedTime: 45,
-            difficulty: concept.complexityScore || 7,
+            difficulty: 7,
             ueeStage: 'EXPLORE',
             confidence: 0.6,
             action: `Explore related concepts`
@@ -715,7 +715,7 @@ export default class RAGResponseGenerator {
     try {
       return await prisma.masteryCriterion.findMany({
         where: {
-          uueStage,
+          uueStage: ueeStage as any,
           userId
         },
         take: 5
@@ -737,7 +737,7 @@ export default class RAGResponseGenerator {
     try {
       return await prisma.masteryCriterion.findMany({
         where: {
-          uueStage,
+          uueStage: ueeStage as any,
           userId
         },
         take: 3

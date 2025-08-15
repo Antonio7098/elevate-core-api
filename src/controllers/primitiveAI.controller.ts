@@ -1,11 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { PrimitiveAIService } from '../services/primitiveAI.service';
-import { AIAPIClientService } from '../services/ai-api-client.service';
+import { getAIAPIClient } from '../services/ai-api-client.service';
 import prisma from '../lib/prisma';
 
 // Initialize services
-const aiApiClient = new AIAPIClientService();
+const aiApiClient = getAIAPIClient();
 const primitiveAIService = new PrimitiveAIService(aiApiClient);
 
 interface CreatePrimitivesFromSourceRequest {

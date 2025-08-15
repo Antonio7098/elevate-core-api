@@ -1,42 +1,57 @@
 import { Router } from 'express';
-import * as primitiveController from '../controllers/primitive.controller';
-import { getDailyTasksPrimitive } from '../controllers/primitive.controller.fast-tasks';
 import { protect } from '../middleware/auth.middleware';
-import { cacheMiddleware, userSpecificKeyGenerator, primitiveSpecificKeyGenerator } from '../middleware/cache.middleware';
+import { masteryCriterionController } from '../controllers/blueprint-centric/masteryCriterion.controller';
+import { enhancedSpacedRepetitionController } from '../controllers/blueprint-centric/enhancedSpacedRepetition.controller';
+import { cacheMiddleware, userSpecificKeyGenerator } from '../middleware/cache.middleware';
 
 const router = Router();
 
-// POST /api/primitives/review - Process review outcomes for primitives
-router.post('/review', protect, primitiveController.submitReview);
+// Apply authentication middleware to all routes
+router.use(protect);
 
-// POST /api/primitives/:id/tracking - Toggle tracking for a primitive
-router.post('/:id/tracking', protect, primitiveController.toggleTracking);
+// Mastery criterion management
+router.post('/criterion', masteryCriterionController.createCriterion);
+router.get('/criterion/:id', masteryCriterionController.getCriterion);
+router.put('/criterion/:id', masteryCriterionController.updateCriterion);
+router.delete('/criterion/:id', masteryCriterionController.deleteCriterion);
 
-// GET /api/primitives/due - Fast daily tasks endpoint using cached denormalized data
-router.get('/due', protect, cacheMiddleware({ 
-  ttl: 300, // 5 minutes cache for daily tasks
-  keyGenerator: userSpecificKeyGenerator 
-}), getDailyTasksPrimitive);
+// Criterion queries by section and UUE stage
+router.get('/criteria-by-section/:sectionId', masteryCriterionController.getCriteriaBySection);
+router.get('/criteria-by-uue-stage/:stage', masteryCriterionController.getCriteriaByUueStage);
 
-// GET /api/primitives - List all primitives for a user
-router.get('/', protect, cacheMiddleware({ 
-  ttl: 180, // 3 minutes cache for primitive listing
-  keyGenerator: userSpecificKeyGenerator 
-}), primitiveController.listPrimitives);
+// Criterion review processing
+router.post('/criterion-review', masteryCriterionController.processCriterionReview);
 
-// GET /api/primitives/:id/details - Get detailed information for a single primitive
-router.get('/:id/details', protect, cacheMiddleware({ 
-  ttl: 600, // 10 minutes cache for primitive details
-  keyGenerator: primitiveSpecificKeyGenerator 
-}), primitiveController.getPrimitiveDetails);
+// Mastery progress tracking
+router.get('/criterion-mastery-progress/:criterionId', masteryCriterionController.getCriterionMasteryProgress);
 
-// POST /api/primitives/:id/tracking-intensity - Set tracking intensity for a primitive
-router.post('/:id/tracking-intensity', protect, primitiveController.setTrackingIntensity);
+// Mastery threshold management
+router.put('/mastery-threshold/:criterionId', masteryCriterionController.updateMasteryThreshold);
 
-// GET /api/primitives/:id/tracking-intensity - Get tracking intensity for a primitive
-router.get('/:id/tracking-intensity', protect, primitiveController.getTrackingIntensity);
+// Section UUE progress
+router.get('/section-uue-progress/:sectionId', masteryCriterionController.getSectionUueProgress);
 
-// DELETE /api/primitives/:id/tracking-intensity - Reset tracking intensity to default (NORMAL)
-router.delete('/:id/tracking-intensity', protect, primitiveController.deleteTrackingIntensity);
+// User mastery statistics
+router.get('/user-mastery-stats', masteryCriterionController.getUserMasteryStats);
+
+// ============================================================================
+// BACKWARD COMPATIBILITY ROUTES
+// These routes maintain compatibility with existing frontend integrations
+// ============================================================================
+
+// Primitive review processing (backward compatibility)
+router.post('/review', enhancedSpacedRepetitionController.processBatchReviewOutcomes);
+
+// Primitive tracking management (backward compatibility)
+router.post('/:id/tracking', enhancedSpacedRepetitionController.togglePrimitiveTracking);
+
+// Primitive listing and details (backward compatibility)
+router.get('/', enhancedSpacedRepetitionController.getUserPrimitives);
+router.get('/:id/details', enhancedSpacedRepetitionController.getPrimitiveDetails);
+
+// Tracking intensity management (backward compatibility)
+router.post('/:id/tracking-intensity', enhancedSpacedRepetitionController.setTrackingIntensity);
+router.get('/:id/tracking-intensity', enhancedSpacedRepetitionController.getTrackingIntensity);
+router.delete('/:id/tracking-intensity', enhancedSpacedRepetitionController.resetTrackingIntensity);
 
 export default router;

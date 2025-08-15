@@ -12,7 +12,7 @@ export interface CreateNoteData {
   contentBlocks?: any[];
   contentHtml?: string;
   plainText?: string;
-  blueprintSectionId: string;
+  blueprintSectionId: number;
   userId: number;
 }
 
@@ -37,7 +37,7 @@ export interface NoteVersion {
 
 export interface NoteWithSection extends NoteSection {
   blueprintSection: {
-    id: string;
+    id: number;
     title: string;
     depth: number;
   };
@@ -80,7 +80,7 @@ export class NoteSectionService {
   /**
    * Gets a note by ID
    */
-  async getNote(id: string): Promise<NoteSection> {
+  async getNote(id: number): Promise<NoteSection> {
     const note = await prisma.noteSection.findUnique({
       where: { id }
     });
@@ -95,7 +95,7 @@ export class NoteSectionService {
   /**
    * Updates a note
    */
-  async updateNote(id: string, data: UpdateNoteData): Promise<NoteSection> {
+  async updateNote(id: number, data: UpdateNoteData): Promise<NoteSection> {
     const existingNote = await this.getNote(id);
     
     // Increment content version if content changed
@@ -118,7 +118,7 @@ export class NoteSectionService {
   /**
    * Deletes a note
    */
-  async deleteNote(id: string): Promise<void> {
+  async deleteNote(id: number): Promise<void> {
     await prisma.noteSection.delete({
       where: { id }
     });
@@ -127,7 +127,7 @@ export class NoteSectionService {
   /**
    * Gets all notes for a specific section
    */
-  async getNotesBySection(sectionId: string): Promise<NoteSection[]> {
+  async getNotesBySection(sectionId: number): Promise<NoteSection[]> {
     return prisma.noteSection.findMany({
       where: { blueprintSectionId: sectionId },
       orderBy: { createdAt: 'desc' }
@@ -156,7 +156,7 @@ export class NoteSectionService {
   /**
    * Moves a note to a different section
    */
-  async moveNote(noteId: string, newSectionId: string): Promise<NoteSection> {
+  async moveNote(noteId: number, newSectionId: number): Promise<NoteSection> {
     const note = await this.getNote(noteId);
     
     // Verify the new section exists and belongs to the same user
@@ -181,7 +181,7 @@ export class NoteSectionService {
    * Updates note content with version tracking
    */
   async updateContent(
-    noteId: string, 
+    noteId: number, 
     content: string, 
     blocks?: any[],
     html?: string,
@@ -204,15 +204,15 @@ export class NoteSectionService {
   /**
    * Gets note history (for future versioning system)
    */
-  async getNoteHistory(noteId: string): Promise<NoteVersion[]> {
+  async getNoteHistory(noteId: number): Promise<NoteVersion[]> {
     // For now, return the current note as a single version
     // In the future, this could implement a proper versioning system
     const note = await this.getNote(noteId);
     
     return [{
-      id: note.id,
+      id: note.id.toString(),
       content: note.content,
-      contentBlocks: note.contentBlocks,
+      contentBlocks: (note.contentBlocks as any[]) || [],
       contentHtml: note.contentHtml,
       plainText: note.plainText,
       contentVersion: note.contentVersion,
@@ -253,7 +253,7 @@ export class NoteSectionService {
       if (!note.contentBlocks) return false;
       
       try {
-        const blocks = JSON.parse(note.contentBlocks as string);
+        const blocks = (note.contentBlocks as any) || [];
         const noteTags = this.extractTagsFromBlocks(blocks);
         return tags.some(tag => noteTags.includes(tag));
       } catch {

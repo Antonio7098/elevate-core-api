@@ -94,6 +94,7 @@ model BlueprintSection {
   notes                 NoteSection[]
   knowledgePrimitives   KnowledgePrimitive[]
   masteryCriteria       MasteryCriterion[]
+  userCriterionMasteries UserCriterionMastery[]
   user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   // Indexes for performance
@@ -220,6 +221,7 @@ enum QuestionDifficulty {
   HARD
 }
 
+
 // ============================================================================
 // KNOWLEDGE PRIMITIVE AND RELATED MODELS
 // ============================================================================
@@ -280,23 +282,41 @@ model KnowledgePrimitive {
 }
 
 model UserCriterionMastery {
-  id                    Int      @id @default(autoincrement())
+  id                    String                @id @default(cuid())
   userId                Int
-  criterionId           Int
-  isMastered            Boolean  @default(false)
-  masteryScore          Float    @default(0.0)
-  lastAttempt           DateTime @default(now())
-  attempts              Int      @default(0)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-
+  masteryCriterionId    Int                   // Links to MasteryCriterion
+  blueprintSectionId    Int                   // Links to BlueprintSection
+  
+  // Mastery tracking
+  isMastered            Boolean               @default(false)
+  masteryScore          Float                 @default(0.0) // 0-1 score
+  uueStage              UueStage              @default(UNDERSTAND)
+  
+  // Consecutive interval tracking
+  lastTwoAttempts       Float[]               // Last 2 attempt scores [0.8, 0.9]
+  consecutiveIntervals  Int                   @default(0) // Count of consecutive intervals above threshold
+  lastThresholdCheckDate DateTime?            // Last date threshold was checked
+  
+  // Simple SR tracking
+  currentIntervalStep   Int                   @default(0)
+  nextReviewAt          DateTime?
+  lastReviewedAt        DateTime?
+  reviewCount           Int                   @default(0)
+  successfulReviews     Int                   @default(0)
+  consecutiveFailures   Int                   @default(0)
+  
+  // Tracking intensity
+  trackingIntensity     TrackingIntensity     @default(NORMAL)
+  
   // Relations
-  user                  User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  masteryCriterion      MasteryCriterion     @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  masteryCriterion      MasteryCriterion      @relation(fields: [masteryCriterionId], references: [id], onDelete: Cascade)
+  blueprintSection      BlueprintSection      @relation(fields: [blueprintSectionId], references: [id], onDelete: Cascade)
+  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, criterionId])
   @@index([userId])
-  @@index([criterionId])
+  @@index([masteryCriterionId])
+  @@index([blueprintSectionId])
+  @@index([uueStage])
 }
 
 model UserQuestionAnswer {

@@ -1,8 +1,11 @@
 import { Router } from 'express';
-import { getTodaysTasksController } from '../controllers/todaysTasks.controller';
-import { protect } from '../middleware/auth.middleware'; // Corrected import name
+import { enhancedTodaysTasksController } from '../controllers/blueprint-centric/enhancedTodaysTasks.controller';
+import { protect } from '../middleware/auth.middleware';
 
 const router = Router();
+
+// Apply authentication middleware to all routes
+router.use(protect);
 
 /**
  * @swagger
@@ -31,6 +34,13 @@ const router = Router();
  *       500:
  *         description: Internal server error.
  */
-router.get('/', protect, getTodaysTasksController); // Used correct middleware name
+router.get('/', enhancedTodaysTasksController.getTodaysTasks);
+
+// Enhanced task generation routes
+router.get('/capacity-analysis', enhancedTodaysTasksController.getCapacityAnalysis);
+router.post('/generate-more', enhancedTodaysTasksController.generateMoreTasks);
+router.get('/tasks-for-section/:sectionId', enhancedTodaysTasksController.getTasksForSection);
+router.get('/tasks-for-uue-stage/:stage', enhancedTodaysTasksController.getTasksForUueStage);
+router.post('/complete-task/:taskId', enhancedTodaysTasksController.completeTask);
 
 export default router;
