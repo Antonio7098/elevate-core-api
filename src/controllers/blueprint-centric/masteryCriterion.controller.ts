@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
-import { masteryCriterionService } from '../../services/masteryCriterion.service';
-import { MasteryThreshold, UueStage, getMasteryStats, updateMasteryScore } from '../../services/masteryTracking.service';
-import { MasteryCalculationService } from '../../services/masteryCalculation.service';
+import MasteryCriterionService from '../../services/blueprint-centric/masteryCriterion.service';
+import { MasteryThreshold, UueStage, getMasteryStats, updateMasteryScore } from '../../services/mastery/masteryTracking.service';
+import { MasteryCalculationService } from '../../services/mastery/masteryCalculation.service';
+import { enhancedSpacedRepetitionService } from '../../services/mastery/enhancedSpacedRepetition.service';
 import { AuthRequest } from '../../middleware/auth.middleware';
 
 const masteryCalculationService = new MasteryCalculationService();
+const masteryCriterionService = new MasteryCriterionService();
 
 // ============================================================================
 // MASTERY CRITERION CONTROLLER
@@ -52,11 +54,11 @@ export class MasteryCriterionController {
         description,
         weight: weight || 1.0,
         uueStage,
+        assessmentType: 'QUESTION_BASED', // Default assessment type
         masteryThreshold: masteryThreshold || 0.8,
         knowledgePrimitiveId: `primitive_${Date.now()}`, // Generate placeholder ID
-        blueprintSectionId: parseInt(blueprintSectionId.toString()), // Convert to number
-        userId: (req as any).user?.userId || 1,
-        questionTypes: questionTypes || ['multiple-choice']
+        blueprintSectionId: blueprintSectionId.toString(), // Convert to string as expected by service
+        userId: (req as any).user?.userId || 1
       });
 
       res.status(201).json({
@@ -80,7 +82,7 @@ export class MasteryCriterionController {
         return res.status(400).json({ error: 'Criterion ID is required' });
       }
       
-      const criterion = await masteryCriterionService.getCriterion(parseInt(id));
+      const criterion = await masteryCriterionService.getCriterion(id);
       if (!criterion) {
         return res.status(404).json({ error: 'Criterion not found' });
       }
@@ -104,7 +106,7 @@ export class MasteryCriterionController {
       }
       
       const updateData = req.body;
-      const criterion = await masteryCriterionService.updateCriterion(parseInt(id), updateData);
+      const criterion = await masteryCriterionService.updateCriterion(id, updateData);
       
       res.json({ success: true, data: criterion });
     } catch (error) {
@@ -124,7 +126,7 @@ export class MasteryCriterionController {
         return res.status(400).json({ error: 'Criterion ID is required' });
       }
       
-      await masteryCriterionService.deleteCriterion(parseInt(id));
+      await masteryCriterionService.deleteCriterion(id);
       res.status(204).send();
     } catch (error) {
       console.error('Error deleting criterion:', error);
@@ -144,7 +146,7 @@ export class MasteryCriterionController {
       }
       
       // Use the available method from the main service
-      const criteria = await masteryCriterionService.getCriteriaByUueStage(parseInt(sectionId), 'UNDERSTAND' as any);
+      const criteria = await masteryCriterionService.getCriteriaByUueStage(sectionId, 'UNDERSTAND' as any);
       res.json({ success: true, data: criteria });
     } catch (error) {
       console.error('Error getting criteria by section:', error);
@@ -164,7 +166,7 @@ export class MasteryCriterionController {
       }
       
       // Use the available method from the main service
-      const criteria = await masteryCriterionService.getCriteriaByUueStage(1, stage as any); // Use sectionId 1 as default
+      const criteria = await masteryCriterionService.getCriteriaByUueStage("1", stage as any); // Use sectionId "1" as default
       res.json({ success: true, data: criteria });
     } catch (error) {
       console.error('Error getting criteria by stage:', error);
@@ -188,14 +190,15 @@ export class MasteryCriterionController {
         return res.status(400).json({ error: 'Missing required fields: criterionId, isCorrect' });
       }
 
-      // Use the available method from the main service
-      const result = await masteryCriterionService.processCriterionReview(
+      // Use the available method from the enhanced spaced repetition service
+      const result = await enhancedSpacedRepetitionService.processReviewOutcome({
         userId,
-        parseInt(criterionId),
+        criterionId,
         isCorrect,
-        isCorrect ? 1.0 : 0.0, // performance score
-        { allowRetrySameDay: true }
-      );
+        confidence: confidence || 0.5,
+        timeSpentSeconds: 0,
+        timestamp: new Date()
+      });
 
       res.json({ success: true, data: result });
     } catch (error) {
@@ -221,7 +224,7 @@ export class MasteryCriterionController {
       }
       
       // Use the available method from the main service
-      const progress = await masteryCriterionService.calculateCriterionMastery(parseInt(criterionId), userId);
+      const progress = await masteryCriterionService.calculateCriterionMastery(criterionId, userId);
       
       if (!progress) {
         return res.status(404).json({ error: 'Mastery progress not found' });
@@ -252,14 +255,15 @@ export class MasteryCriterionController {
         return res.status(400).json({ error: 'Missing required fields: criterionId, newThreshold' });
       }
 
-      // Use the available method from the main service
-      const result = await masteryCriterionService.processCriterionReview(
+      // Use the available method from the enhanced spaced repetition service
+      const result = await enhancedSpacedRepetitionService.processReviewOutcome({
         userId,
-        parseInt(criterionId),
-        false, // No score change, just threshold update
-        0.0, // performance score
-        { customThreshold: newThreshold }
-      );
+        criterionId,
+        isCorrect: false, // No score change, just threshold update
+        confidence: 0.0,
+        timeSpentSeconds: 0,
+        timestamp: new Date()
+      });
 
       res.json({ success: true, data: result });
     } catch (error) {
@@ -285,9 +289,9 @@ export class MasteryCriterionController {
       }
       
       // Use the available method from the main service - get criteria for all stages
-      const understandCriteria = await masteryCriterionService.getCriteriaByUueStage(parseInt(sectionId), 'UNDERSTAND' as any);
-      const useCriteria = await masteryCriterionService.getCriteriaByUueStage(parseInt(sectionId), 'USE' as any);
-      const exploreCriteria = await masteryCriterionService.getCriteriaByUueStage(parseInt(sectionId), 'EXPLORE' as any);
+      const understandCriteria = await masteryCriterionService.getCriteriaByUueStage(sectionId, 'UNDERSTAND' as any);
+      const useCriteria = await masteryCriterionService.getCriteriaByUueStage(sectionId, 'USE' as any);
+      const exploreCriteria = await masteryCriterionService.getCriteriaByUueStage(sectionId, 'EXPLORE' as any);
       
       const progress = {
         understand: { total: understandCriteria.length, mastered: 0, progress: 0 },
@@ -314,9 +318,9 @@ export class MasteryCriterionController {
       }
 
       // Use the available method from the main service - get criteria for all stages
-      const understandCriteria = await masteryCriterionService.getCriteriaByUueStage(1, 'UNDERSTAND' as any);
-      const useCriteria = await masteryCriterionService.getCriteriaByUueStage(1, 'USE' as any);
-      const exploreCriteria = await masteryCriterionService.getCriteriaByUueStage(1, 'EXPLORE' as any);
+      const understandCriteria = await masteryCriterionService.getCriteriaByUueStage("1", 'UNDERSTAND' as any);
+      const useCriteria = await masteryCriterionService.getCriteriaByUueStage("1", 'USE' as any);
+      const exploreCriteria = await masteryCriterionService.getCriteriaByUueStage("1", 'EXPLORE' as any);
       
       const stats = {
         totalCriteria: understandCriteria.length + useCriteria.length + exploreCriteria.length,

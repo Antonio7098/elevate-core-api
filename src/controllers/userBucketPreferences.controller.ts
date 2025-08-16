@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { onUserPreferencesChanged } from '../services/summaryMaintenance.service';
+import { onUserPreferencesChanged } from '../services/core/summaryMaintenance.service';
 
 const prisma = new PrismaClient();
 

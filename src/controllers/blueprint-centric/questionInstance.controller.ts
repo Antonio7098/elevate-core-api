@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.middleware';
-import { questionInstanceService } from '../../services/questionInstance.service';
+import { questionInstanceService } from '../../services/mastery/questionInstance.service';
 
 // ============================================================================
 // QUESTION INSTANCE CONTROLLER
@@ -321,13 +321,15 @@ export class QuestionInstanceController {
         return res.status(400).json({ error: 'Criterion ID is required' });
       }
 
-      const recommendations = await questionInstanceService.getQuestionRecommendations({
+      const recommendations = await questionInstanceService.getQuestionRecommendations(
         userId,
-        criterionId: parseInt(criterionId as string),
-        difficulty: difficulty as string,
-        limit: parseInt(limit as string),
-        excludeAnswered: excludeAnswered === 'true'
-      });
+        {
+          masteryCriterionId: parseInt(criterionId as string),
+          difficulty: difficulty as any,
+          limit: parseInt(limit as string),
+          excludeAnswered: excludeAnswered === 'true'
+        }
+      );
 
       res.json({
         success: true,
@@ -352,11 +354,7 @@ export class QuestionInstanceController {
 
       const { criterionId, timeRange } = req.query;
 
-      const stats = await questionInstanceService.getUserQuestionStats({
-        userId,
-        criterionId: criterionId ? parseInt(criterionId as string) : undefined,
-        timeRange: timeRange as string
-      });
+      const stats = await questionInstanceService.getUserQuestionStats(userId);
 
       res.json({
         success: true,

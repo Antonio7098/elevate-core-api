@@ -13,9 +13,9 @@ const mockPrismaDisconnect = jest.fn();
 const mockPrismaNoteFindfirst = jest.fn();
 
 // Import controller functions AFTER mocks are defined and set up
-import { generateQuestionsFromSource, chatWithAI } from '../ai.controller';
+import { generateQuestionsFromSource, chatWithAI } from '../ai/ai.controller';
 import { AuthRequest } from '../../middleware/auth.middleware';
-import { AiRAGService } from '../../ai-rag/ai-rag.service';
+import { AiRAGService } from '../../services/ai/ai-rag.service';
 
 // Mock AiRAGService
 jest.mock('../../services/ai-rag.service');

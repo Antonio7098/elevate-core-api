@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
 import { AuthenticatedRequest } from '../types/express';
 import prisma from '../lib/prisma';
-import { AiRAGService } from '../ai-rag/ai-rag.service';
-import { MindmapService } from '../services/mindmap.service';
-import { getAIAPIClient } from '../services/ai-api-client.service';
+import { AiRAGService } from '../services/ai/ai-rag.service';
+import { MindmapService } from '../services/ai/mindmap.service';
+import { getAIAPIClient } from '../services/ai/ai-api-client.service';
 
 export class LearningBlueprintsController {
   private mindmapService: MindmapService;

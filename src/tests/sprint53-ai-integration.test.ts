@@ -1,8 +1,8 @@
 // Sprint 53: AI Integration & Advanced Features Test Suite
 // Tests for AI Blueprint Generator and Learning Pathways services
 
-import { AIBlueprintGeneratorService } from '../services/aiBlueprintGenerator.service';
-import { LearningPathwaysService } from '../services/learningPathways.service';
+import { AIBlueprintGeneratorService } from '../services/ai/aiBlueprintGenerator.service';
+import { LearningPathwaysService } from '../services/mastery/learningPathways.service';
 import { 
   GenerationStyle,
   GenerationFocus,

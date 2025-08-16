@@ -29,8 +29,8 @@ export { default as RelationshipDiscoveryService } from './relationshipDiscovery
 export { default as LearningPathService } from './learningPath.service';
 
 // Sprint 53: AI Integration & Advanced Features
-export { default as AIBlueprintGenerator } from '../aiBlueprintGenerator.service';
-export { default as LearningPathwaysService } from '../learningPathways.service';
+export { default as AIBlueprintGenerator } from '../ai/aiBlueprintGenerator.service';
+export { default as LearningPathwaysService } from '../mastery/learningPathways.service';
 
 // Export all interfaces and types
 export * from './blueprintSection.service';
@@ -49,8 +49,8 @@ export * from './relationshipDiscovery.service';
 export * from './learningPath.service';
 
 // Sprint 53: AI Integration & Advanced Features
-export * from '../aiBlueprintGenerator.service';
-export * from '../learningPathways.service';
+export * from '../ai/aiBlueprintGenerator.service';
+export * from '../mastery/learningPathways.service';
 
 // ============================================================================
 // LEGACY REPLACEMENT MAPPING

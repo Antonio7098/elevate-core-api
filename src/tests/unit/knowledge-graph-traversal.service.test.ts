@@ -33,6 +33,24 @@ describe('KnowledgeGraphTraversal', () => {
     service = new KnowledgeGraphTraversal();
     // Inject mocked Prisma
     (service as any).prisma = mockPrisma;
+    
+    // Set up default mock implementations
+    mockPrisma.knowledgeRelationship.findMany.mockImplementation((args) => {
+      const sourceId = args.where.sourcePrimitiveId;
+      const targetId = args.where.targetPrimitiveId;
+      
+      if (sourceId !== undefined) {
+        // Outgoing relationships (sourcePrimitiveId matches)
+        return Promise.resolve([]);
+      } else if (targetId !== undefined) {
+        // Incoming relationships (targetPrimitiveId matches)
+        return Promise.resolve([]);
+      }
+      
+      return Promise.resolve([]);
+    });
+    
+    mockPrisma.knowledgePrimitive.findUnique.mockResolvedValue(null);
   });
 
   describe('traverseGraph', () => {
@@ -44,7 +62,11 @@ describe('KnowledgeGraphTraversal', () => {
       const relationships = [
         { sourcePrimitiveId: 'node-1', targetPrimitiveId: 'node-2', relationshipType: 'RELATED' },
         { sourcePrimitiveId: 'node-2', targetPrimitiveId: 'node-3', relationshipType: 'PREREQUISITE' },
-        { sourcePrimitiveId: 'node-1', targetPrimitiveId: 'node-4', relationshipType: 'RELATED' }
+        { sourcePrimitiveId: 'node-1', targetPrimitiveId: 'node-4', relationshipType: 'RELATED' },
+        // Add reverse relationships for bidirectional traversal
+        { sourcePrimitiveId: 'node-2', targetPrimitiveId: 'node-1', relationshipType: 'RELATED' },
+        { sourcePrimitiveId: 'node-3', targetPrimitiveId: 'node-2', relationshipType: 'PREREQUISITE' },
+        { sourcePrimitiveId: 'node-4', targetPrimitiveId: 'node-1', relationshipType: 'RELATED' }
       ];
 
       const nodes = [
@@ -57,7 +79,17 @@ describe('KnowledgeGraphTraversal', () => {
       // Mock findMany to return relationships based on the source node
       mockPrisma.knowledgeRelationship.findMany.mockImplementation((args) => {
         const sourceId = args.where.sourcePrimitiveId;
-        return Promise.resolve(relationships.filter(rel => rel.sourcePrimitiveId === sourceId));
+        const targetId = args.where.targetPrimitiveId;
+        
+        if (sourceId !== undefined) {
+          // Outgoing relationships (sourcePrimitiveId matches)
+          return Promise.resolve(relationships.filter(rel => rel.sourcePrimitiveId === sourceId));
+        } else if (targetId !== undefined) {
+          // Incoming relationships (targetPrimitiveId matches)
+          return Promise.resolve(relationships.filter(rel => rel.targetPrimitiveId === targetId));
+        }
+        
+        return Promise.resolve([]);
       });
       mockPrisma.knowledgePrimitive.findUnique
         .mockResolvedValueOnce(nodes[0])
@@ -91,7 +123,17 @@ describe('KnowledgeGraphTraversal', () => {
       // Mock findMany to return relationships based on the source node
       mockPrisma.knowledgeRelationship.findMany.mockImplementation((args) => {
         const sourceId = args.where.sourcePrimitiveId;
-        return Promise.resolve(relationships.filter(rel => rel.sourcePrimitiveId === sourceId));
+        const targetId = args.where.targetPrimitiveId;
+        
+        if (sourceId !== undefined) {
+          // Outgoing relationships (sourcePrimitiveId matches)
+          return Promise.resolve(relationships.filter(rel => rel.sourcePrimitiveId === sourceId));
+        } else if (targetId !== undefined) {
+          // Incoming relationships (targetPrimitiveId matches)
+          return Promise.resolve(relationships.filter(rel => rel.targetPrimitiveId === targetId));
+        }
+        
+        return Promise.resolve([]);
       });
       mockPrisma.knowledgePrimitive.findUnique
         .mockResolvedValueOnce(nodes[0])
@@ -133,7 +175,17 @@ describe('KnowledgeGraphTraversal', () => {
       // Mock findMany to return relationships based on the source node
       mockPrisma.knowledgeRelationship.findMany.mockImplementation((args) => {
         const sourceId = args.where.sourcePrimitiveId;
-        return Promise.resolve(relationships.filter(rel => rel.sourcePrimitiveId === sourceId));
+        const targetId = args.where.targetPrimitiveId;
+        
+        if (sourceId !== undefined) {
+          // Outgoing relationships (sourcePrimitiveId matches)
+          return Promise.resolve(relationships.filter(rel => rel.sourcePrimitiveId === sourceId));
+        } else if (targetId !== undefined) {
+          // Incoming relationships (targetPrimitiveId matches)
+          return Promise.resolve(relationships.filter(rel => rel.targetPrimitiveId === targetId));
+        }
+        
+        return Promise.resolve([]);
       });
       mockPrisma.knowledgePrimitive.findUnique
         .mockResolvedValueOnce(nodes[0])
@@ -445,7 +497,17 @@ describe('KnowledgeGraphTraversal', () => {
       // Mock findMany to return relationships based on the source node
       mockPrisma.knowledgeRelationship.findMany.mockImplementation((args) => {
         const sourceId = args.where.sourcePrimitiveId;
-        return Promise.resolve(relationships.filter(rel => rel.sourcePrimitiveId === sourceId));
+        const targetId = args.where.targetPrimitiveId;
+        
+        if (sourceId !== undefined) {
+          // Outgoing relationships (sourcePrimitiveId matches)
+          return Promise.resolve(relationships.filter(rel => rel.sourcePrimitiveId === sourceId));
+        } else if (targetId !== undefined) {
+          // Incoming relationships (targetPrimitiveId matches)
+          return Promise.resolve(relationships.filter(rel => rel.targetPrimitiveId === targetId));
+        }
+        
+        return Promise.resolve([]);
       });
 
       const result = await (service as any).getRelationships(nodeId, relationshipTypes);

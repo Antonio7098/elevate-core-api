@@ -1,60 +1,64 @@
 // ============================================================================
-// SERVICES INDEX
+// MAIN SERVICES INDEX
 // ============================================================================
 // 
-// This module exports all services from the elevate-core-api
-// Organized by functionality and architecture
-//
+// This module exports all services organized by domain
 // ============================================================================
 
-// Blueprint-Centric Services (New Architecture)
+// Blueprint-Centric Services (already organized)
 export * from './blueprint-centric';
 
-// AI Integration Services
-export { default as AIBlueprintGenerator } from './aiBlueprintGenerator.service';
-export { AiApiIntegrationService } from './aiApiIntegration.service';
-export { LearningPathwaysService } from './learningPathways.service';
+// Domain-Specific Services
+export * from './mastery';
+export * from './ai';
+export * from './user';
+export * from './legacy';
+export * from './core';
 
-// Mastery System Services
-export { MasteryCalculationService } from './masteryCalculation.service';
-export { MasteryConfigurationService } from './masteryConfiguration.service';
-export { MasteryCriterionService } from './masteryCriterion.service';
-export { MasterySystemOrchestratorService } from './masterySystemOrchestrator.service';
-export { MasteryTrackingService } from './masteryTracking.service';
+// Legacy Direct Exports (for backward compatibility during transition)
+// These will be removed once all imports are updated
+export * from './mastery/enhancedSpacedRepetition.service';
+export * from './mastery/enhancedTodaysTasks.service';
+export * from './mastery/enhancedBatchReview.service';
+export * from './mastery/masteryCriterion.service';
+export * from './mastery/masteryTracking.service';
+export * from './mastery/masteryCalculation.service';
+export * from './mastery/masteryConfiguration.service';
+export * from './mastery/masterySystemOrchestrator.service';
+export * from './mastery/uueStageProgression.service';
+export * from './mastery/advancedSpacedRepetition.service';
+export * from './mastery/batchReviewProcessing.service';
+export * from './mastery/cachedPrimitiveSR.service';
+export * from './mastery/learningPathways.service';
+export * from './mastery/insightCatalyst.service';
+export * from './mastery/primitiveReviewScheduling.service';
+export * from './mastery/primitiveStats.service';
+export * from './mastery/stats.service';
+export * from './mastery/todaysTasks.service';
+export * from './mastery/primitiveSR.service';
+export * from './mastery/questionInstance.service';
 
-// Performance & Optimization Services
-export { PerformanceOptimizationService } from './performanceOptimization.service';
-export { default as PerformanceTestingService } from './blueprint-centric/performanceTesting.service';
-export { default as MasteryPerformanceTestingService } from './blueprint-centric/masteryPerformanceTesting.service';
+export * from './ai/aiBlueprintGenerator.service';
+export * from './ai/aiApiIntegration.service';
+export * from './ai/ai-api-client.service';
+export * from './ai/aiService';
+export * from './ai/primitiveAI.service';
+export * from './ai/mindmap.service';
+export * from './ai/premiumVectorIndexing.service';
 
-// Enhanced Services
-export { EnhancedBatchReviewService } from './enhancedBatchReview.service';
-export { EnhancedSpacedRepetitionService } from './enhancedSpacedRepetition.service';
-export { EnhancedTodaysTasksService } from './enhancedTodaysTasks.service';
+export * from './user/userExperience.service';
+export * from './user/userMemory.service';
+export * from './user/payment.service';
 
-// Core Services
-export { default as DashboardService } from './dashboard.service';
-export { ErrorHandlingService } from './errorHandling.service';
-export { MonitoringService } from './monitoring.service';
-export { scheduledTasksService } from './scheduledTasks.service';
+export * from './legacy/recursiveFolder.service';
+export * from './legacy/legacyCompatibility.service';
 
-// Stats and Task Services (function-based exports)
-export * from './stats.service';
-export * from './todaysTasks.service';
+export * from './core/dashboard.service';
+export * from './core/errorHandling.service';
+export * from './core/monitoring.service';
+export * from './core/performanceOptimization.service';
+export * from './core/scheduledTasks.service';
+export * from './core/summaryMaintenance.service';
 
-// Legacy Services (for backward compatibility)
-export { UserExperienceService } from './userExperience.service';
-export { UserMemoryService } from './userMemory.service';
-
-// ============================================================================
-// SERVICE CATEGORIES
-// ============================================================================
-//
-// BLUEPRINT-CENTRIC: New architecture replacing legacy folder/question set system
-// MASTERY SYSTEM: New criterion-based mastery tracking
-// PERFORMANCE: Testing and optimization services
-// ENHANCED: Improved versions of existing services
-// CORE: Essential system services
-// LEGACY: Backward compatibility services
-//
-// ============================================================================
+// Note Content Service
+export * from './blueprint-centric/note-content.service';

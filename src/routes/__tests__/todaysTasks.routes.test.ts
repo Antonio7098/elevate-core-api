@@ -3,7 +3,7 @@ import app from '../../app';
 import prisma from '../../lib/prisma';
 import { User } from '@prisma/client';
 import { protect } from '../../middleware/auth.middleware';
-import { generateDailyTasks } from '../../services/primitiveSR.service';
+import { generateDailyTasks } from '../../services/mastery/primitiveSR.service';
 
 // Mock the auth middleware
 jest.mock('../../middleware/auth.middleware', () => ({

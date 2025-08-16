@@ -3,49 +3,42 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import prisma from './lib/prisma'; // Import shared prisma instance
-import { authRouter } from './routes/auth'; 
-import userRouter from './routes/user.routes';
-import folderRouter from './routes/folder.routes';
-import aiRouter from './routes/ai.routes'; // Temporarily disabled - imports AiRAGService
-import reviewRouter from './routes/review-minimal'; // Using minimal review router to avoid heavy Prisma queries
-import standaloneQuestionSetRouter from './routes/standalone-questionset.routes';
-import standaloneQuestionRouter from './routes/standalone-question.routes';
-import dashboardRouter from './routes/dashboard.routes';
-import todaysTasksRoutes from './routes/todaysTasks.routes';
-import statsRouter from './routes/stats.routes';
+import { authRouter } from './routes/user/auth'; 
+import userRouter from './routes/user/user.routes';
+import folderRouter from './routes/legacy/folder.routes';
+import aiRouter from './routes/ai/ai.routes'; // Temporarily disabled - imports AiRAGService
+import reviewRouter from './routes/mastery/review.routes'; // Using minimal review router to avoid heavy Prisma queries
+import standaloneQuestionSetRouter from './routes/legacy/standalone-questionset.routes';
+import standaloneQuestionRouter from './routes/legacy/standalone-question.routes';
+import dashboardRouter from './routes/core/dashboard.routes';
+import todaysTasksRoutes from './routes/mastery/todaysTasks.routes';
+import statsRouter from './routes/mastery/stats.routes';
 import noteRouter from './routes/note.routes';
-import insightCatalystRouter from './routes/insightCatalyst.routes';
-import userMemoryRouter from './routes/userMemory.routes';
+import insightCatalystRouter from './routes/mastery/insightCatalyst.routes';
+import userMemoryRouter from './routes/user/userMemory.routes';
 import learningBlueprintsRouter from './routes/learning-blueprints.routes'; // Temporarily disabled - imports AiRAGService
-import chatRouter from './routes/chat.routes'; // Temporarily disabled - imports AiRAGService
-import primitiveRouter from './routes/primitive.routes';
-import primitiveSRRouter from './routes/primitiveSR.routes';
-import primitiveAIRouter from './routes/primitiveAI.routes';
+import chatRouter from './routes/ai/chat.routes'; // Temporarily disabled - imports AiRAGService
+import primitiveRouter from './routes/mastery/primitive.routes';
+import primitiveSRRouter from './routes/mastery/primitiveSR.routes';
+import primitiveAIRouter from './routes/ai/primitiveAI.routes';
 import blueprintsAliasRouter from './routes/blueprints.routes'; // Temporarily disabled - imports AiRAGService
-import { aiRagRouter } from './ai-rag/ai-rag.routes'; // ENABLED - AI RAG service working
+import { aiRagRouter } from './services/ai/ai-rag.routes'; // ENABLED - AI RAG service working
 import premiumRouter from './routes/premium.routes';
-import paymentRouter from './routes/payment.routes';
+import paymentRouter from './routes/user/payment.routes';
 import stripeWebhookRouter from './routes/stripe-webhook.routes';
 // New blueprint-centric route imports
-import uueStageProgressionRouter from './routes/uueStageProgression.routes';
-import learningPathwaysRouter from './routes/learningPathways.routes';
-import masteryThresholdsRouter from './routes/masteryThresholds.routes';
+import uueStageProgressionRouter from './routes/mastery/uueStageProgression.routes';
+import learningPathwaysRouter from './routes/mastery/learningPathways.routes';
+import masteryThresholdsRouter from './routes/mastery/masteryThresholds.routes';
 import sectionAnalyticsRouter from './routes/sectionAnalytics.routes';
-import studySessionsRouter from './routes/studySessions.routes';
+import studySessionsRouter from './routes/mastery/studySessions.routes';
 import contentRecommendationsRouter from './routes/contentRecommendations.routes';
-import { initializeAIAPIClient, shutdownAIAPIClient, getAIAPIClient } from './services/ai-api-client.service';
+import { initializeAIAPIClient, shutdownAIAPIClient, getAIAPIClient } from './services/ai/ai-api-client.service';
 import { NestFactory } from '@nestjs/core'; // Temporarily disabled - not used when Swagger is disabled
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as swaggerUi from 'swagger-ui-express';
-import { SwaggerAppModule } from './swagger.app.module'; // Temporary module for Swagger gen
-import { AiRAGController } from './ai-rag/ai-rag.controller'; // Temporarily disabled - imports AiRAGService
-// Import all DTOs used in AiRAGController for Swagger schema generation
-import { CreateLearningBlueprintDto } from './ai-rag/dtos/create-learning-blueprint.dto';
-import { GenerateQuestionsFromBlueprintDto } from './ai-rag/dtos/generate-questions-from-blueprint.dto';
-import { GenerateNoteFromBlueprintDto } from './ai-rag/dtos/generate-note-from-blueprint.dto';
-import { ChatMessageDto } from './ai-rag/dtos/chat-message.dto';
-import { LearningBlueprintResponseDto, QuestionSetResponseDto, NoteResponseDto, ChatResponseMessageDto } from './ai-rag/dtos/responses.dto';
-import { ChatMessageHistoryItemDto as ChatMessageContentDto } from './ai-rag/dtos/chat-message.dto'; // Nested DTO
+// AI-RAG imports moved to services/ai directory
+// Note: Swagger generation temporarily disabled during reorganization
 
 // Load environment variables
 dotenv.config();

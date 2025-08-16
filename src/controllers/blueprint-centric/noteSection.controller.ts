@@ -39,7 +39,7 @@ export class NoteSectionController {
   async getNoteSection(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const note = await this.noteSectionService.getNote(id);
+      const note = await this.noteSectionService.getNote(parseInt(id));
       res.json(note);
     } catch (error) {
       res.status(404).json({ error: error.message });
@@ -53,7 +53,7 @@ export class NoteSectionController {
     try {
       const { id } = req.params;
       const updateData = req.body;
-      const note = await this.noteSectionService.updateNote(id, updateData);
+      const note = await this.noteSectionService.updateNote(parseInt(id), updateData);
       res.json(note);
     } catch (error) {
       res.status(400).json({ error: error.message });
@@ -66,7 +66,7 @@ export class NoteSectionController {
   async deleteNoteSection(req: AuthRequest, res: Response) {
     try {
       const { id } = req.params;
-      await this.noteSectionService.deleteNote(id);
+      await this.noteSectionService.deleteNote(parseInt(id));
       res.status(204).send();
     } catch (error) {
       res.status(400).json({ error: error.message });
@@ -79,7 +79,7 @@ export class NoteSectionController {
   async getNoteSectionsBySection(req: Request, res: Response) {
     try {
       const { sectionId } = req.params;
-      const notes = await this.noteSectionService.getNotesBySection(sectionId);
+      const notes = await this.noteSectionService.getNotesBySection(parseInt(sectionId));
       res.json(notes);
     } catch (error) {
       res.status(400).json({ error: error.message });
@@ -129,7 +129,7 @@ export class NoteSectionController {
   async moveNoteSection(req: AuthRequest, res: Response) {
     try {
       const { id, sectionId } = req.params;
-      const result = await this.noteSectionService.moveNote(id, sectionId);
+      const result = await this.noteSectionService.moveNote(parseInt(id), parseInt(sectionId));
       res.json(result);
     } catch (error) {
       res.status(400).json({ error: error.message });
@@ -142,8 +142,8 @@ export class NoteSectionController {
   async updateNoteTags(req: AuthRequest, res: Response) {
     try {
       const { id } = req.params;
-      const { tags } = req.body;
-      const note = await this.noteSectionService.updateNote(id, { tags });
+      const updateData = req.body;
+      const note = await this.noteSectionService.updateNote(parseInt(id), updateData);
       res.json(note);
     } catch (error) {
       res.status(400).json({ error: error.message });
@@ -174,7 +174,7 @@ export class NoteSectionController {
   async getNotesBySection(req: Request, res: Response) {
     try {
       const { sectionId } = req.params;
-      const notes = await this.noteSectionService.getNotesBySection(sectionId);
+      const notes = await this.noteSectionService.getNotesBySection(parseInt(sectionId));
       res.json(notes);
     } catch (error) {
       res.status(400).json({ error: error.message });
@@ -212,7 +212,7 @@ export class NoteSectionController {
       // For now, we'll simulate UUE stage filtering based on note content and tags
       const notes = allNotes.filter(note => {
         // Filter by section if specified
-        if (sectionId && note.section?.id !== parseInt(sectionId as string)) {
+        if (sectionId && note.blueprintSection?.id !== parseInt(sectionId as string)) {
           return false;
         }
         
@@ -310,7 +310,7 @@ export class NoteSectionController {
   async moveNoteToSection(req: AuthRequest, res: Response) {
     try {
       const { id, sectionId } = req.params;
-      const result = await this.noteSectionService.moveNote(id, sectionId);
+      const result = await this.noteSectionService.moveNote(parseInt(id), parseInt(sectionId));
       res.json(result);
     } catch (error) {
       res.status(400).json({ error: error.message });

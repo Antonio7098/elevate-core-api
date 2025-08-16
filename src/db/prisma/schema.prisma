@@ -1,6 +1,3 @@
-// This is your new blueprint-centric Prisma schema file
-// Replaces the old folder/question set system with blueprint sections
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,166 +7,139 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ============================================================================
-// CORE USER MODEL
-// ============================================================================
-
 model User {
-  id                       Int                       @id @default(autoincrement())
-  email                    String                    @unique
-  password                 String
-  name                     String?
-  createdAt                DateTime                  @default(now())
-  updatedAt                DateTime                  @updatedAt
-  dailyStudyTimeMinutes    Int                       @default(0)
-  
-  // Blueprint-centric relations
-  blueprintSections        BlueprintSection[]
-  noteSections             NoteSection[]
-  masteryCriteria          MasteryCriterion[]
-  questionInstances        QuestionInstance[]
-  knowledgePrimitives      KnowledgePrimitive[]
-  userPrimitiveProgresses  UserPrimitiveProgress[]
-  userCriterionMasteries   UserCriterionMastery[]
-  userQuestionAnswers      UserQuestionAnswer[]
-  userStudySessions        UserStudySession[]
-  questionSetStudySessions QuestionSetStudySession[]
-  insightCatalysts         InsightCatalyst[]
-  scheduledReviews         ScheduledReview[]
-  userMemory               UserMemory?
-  pinnedReviews            PinnedReview[]
-  learningBlueprints       LearningBlueprint[]
-  userBucketPreferences    UserBucketPreferences?
+  id                          Int                         @id @default(autoincrement())
+  email                       String                      @unique
+  password                    String
+  createdAt                   DateTime                    @default(now())
+  updatedAt                   DateTime                    @updatedAt
+  dailyStudyTimeMinutes       Int                         @default(0)
+  name                        String?
+  plan                        String                      @default("free")
+  stripeCustomerId            String?                     @unique
+  subscriptionId              String?                     @unique
+  subscriptionStatus          String?
+  subscriptionEndDate         DateTime?
+  blueprintSections           BlueprintSection[]
+  insightCatalysts            InsightCatalyst[]
+  knowledgePrimitives         KnowledgePrimitive[]
+  learningBlueprints          LearningBlueprint[]
+  learningPaths               LearningPath[]
+  masteryCriteria             MasteryCriterion[]
+  noteSections                NoteSection[]
+  pinnedReviews               PinnedReview[]
+  questionInstances           QuestionInstance[]
+  questionSetStudySessions    QuestionSetStudySession[]
+  scheduledReviews            ScheduledReview[]
+  userBucketPreferences       UserBucketPreferences?
+  userCriterionMasteries      UserCriterionMastery[]
+  userLearningAnalytics       UserLearningAnalytics[]
+  userMemory                  UserMemory?
+  userMemoryInsights          UserMemoryInsight[]
   userPrimitiveDailySummaries UserPrimitiveDailySummary[]
-  userLearningAnalytics    UserLearningAnalytics?
-  userMemoryInsights       UserMemoryInsight[]
-  learningPaths            LearningPath[]
-  verificationTokens       VerificationToken[]
+  userPrimitiveProgresses     UserPrimitiveProgress[]
+  userQuestionAnswers         UserQuestionAnswer[]
+  userStudySessions           UserStudySession[]
+  verificationTokens          VerificationToken[]
 
   @@index([email])
 }
 
-// ============================================================================
-// BLUEPRINT-CENTRIC MODELS (NEW)
-// ============================================================================
-
 model LearningBlueprint {
-  id                    Int                 @id @default(autoincrement())
+  id                    Int                  @id @default(autoincrement())
   sourceText            String
   blueprintJson         Json
-  title                 String?
-  description           String?
-  sourceId              String?             // AI API's UUID for vector database operations
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
   userId                Int
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
-
-  // Relations
-  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceId              String?
+  description           String?
+  title                 String?
   blueprintSections     BlueprintSection[]
   knowledgePrimitives   KnowledgePrimitive[]
+  user                  User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   generatedQuestionSets QuestionSet[]
-  
+
   @@index([userId])
 }
 
 model BlueprintSection {
-  id                    Int                   @id @default(autoincrement())
-  title                 String                // Section name
-  description           String?               // Section description
-  blueprintId           Int                   // Reference to parent blueprint
-  parentSectionId       Int?                  // For hierarchical nesting
-  depth                 Int                   @default(0) // Nesting depth
-  orderIndex            Int                   @default(0) // Display order
-  difficulty            DifficultyLevel       @default(BEGINNER)
-  estimatedTimeMinutes  Int?                 // Estimated study time for this section
-  userId                Int                   // Owner
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  
-  // Relations
-  blueprint             LearningBlueprint     @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
-  parent                BlueprintSection?     @relation("SectionHierarchy", fields: [parentSectionId], references: [id])
-  children              BlueprintSection[]    @relation("SectionHierarchy")
-  notes                 NoteSection[]
-  knowledgePrimitives   KnowledgePrimitive[]
-  masteryCriteria       MasteryCriterion[]
+  id                     Int                    @id @default(autoincrement())
+  title                  String
+  description            String?
+  blueprintId            Int
+  parentSectionId        Int?
+  depth                  Int                    @default(0)
+  orderIndex             Int                    @default(0)
+  difficulty             DifficultyLevel        @default(BEGINNER)
+  estimatedTimeMinutes   Int?
+  userId                 Int
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  blueprint              LearningBlueprint      @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  parent                 BlueprintSection?      @relation("SectionHierarchy", fields: [parentSectionId], references: [id])
+  children               BlueprintSection[]     @relation("SectionHierarchy")
+  user                   User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  knowledgePrimitives    KnowledgePrimitive[]
+  masteryCriteria        MasteryCriterion[]
+  notes                  NoteSection[]
   userCriterionMasteries UserCriterionMastery[]
-  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // Indexes for performance
+
+  @@unique([blueprintId, parentSectionId, orderIndex])
   @@index([blueprintId])
   @@index([parentSectionId])
   @@index([userId])
   @@index([depth])
-  @@unique([blueprintId, parentSectionId, orderIndex])
-}
-
-enum DifficultyLevel {
-  BEGINNER
-  INTERMEDIATE
-  ADVANCED
 }
 
 model NoteSection {
-  id                    Int                   @id @default(autoincrement())
-  title                 String                // Note title
-  content               String                // Note content
-  contentBlocks         Json?                 // Structured content blocks (BlockNote)
-  contentHtml           String?               // HTML content
-  plainText             String?               // Plain text content
-  contentVersion        Int                   @default(2)
-  blueprintSectionId    Int                   // Links to blueprint section
-  userId                Int                   // Owner
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  
-  // Relations
-  blueprintSection      BlueprintSection      @relation(fields: [blueprintSectionId], references: [id], onDelete: Cascade)
-  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  insightCatalysts      InsightCatalyst[]
-  
-  // Indexes
+  id                 Int               @id @default(autoincrement())
+  title              String
+  content            String
+  contentBlocks      Json?
+  contentHtml        String?
+  plainText          String?
+  contentVersion     Int               @default(2)
+  blueprintSectionId Int
+  userId             Int
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  insightCatalysts   InsightCatalyst[]
+  blueprintSection   BlueprintSection  @relation(fields: [blueprintSectionId], references: [id], onDelete: Cascade)
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([blueprintSectionId])
   @@index([userId])
   @@index([createdAt])
 }
 
 model MasteryCriterion {
-  id                    Int                   @id @default(autoincrement())
-  title                 String                // "What is a derivative?" - The question family
-  description           String?               // "Understand the basic concept of derivatives"
-  weight                Float                 @default(1.0) // Importance weight
-  uueStage              UueStage              @default(UNDERSTAND) // FOUNDATIONAL: UUE stage for SR and learning pathways
-  complexityScore       Float?                // AI-calculated complexity (1-10)
-  knowledgePrimitiveId  String                // Links to knowledge primitive
-  blueprintSectionId    Int                   // Links to blueprint section
-  userId                Int                   // Owner
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  
-  // Enhanced Fields
-  assessmentType        AssessmentType        @default(QUESTION_BASED)
-  masteryThreshold      Float                 @default(0.8) // Score needed to master
-  timeLimit             Int?                  // Time limit in seconds
-  attemptsAllowed       Int                   @default(3) // Number of attempts allowed
-  
-  // Relations
-  knowledgePrimitive    KnowledgePrimitive    @relation(fields: [knowledgePrimitiveId], references: [primitiveId], onDelete: Cascade)
-  blueprintSection      BlueprintSection      @relation(fields: [blueprintSectionId], references: [id], onDelete: Cascade)
-  questionInstances     QuestionInstance[]    // Direct question variations (no QuestionFamily layer)
+  id                     Int                            @id @default(autoincrement())
+  title                  String
+  description            String?
+  userId                 Int
+  createdAt              DateTime                       @default(now())
+  updatedAt              DateTime                       @updatedAt
+  weight                 Float                          @default(1.0)
+  assessmentType         AssessmentType                 @default(QUESTION_BASED)
+  attemptsAllowed        Int                            @default(3)
+  blueprintSectionId     Int
+  complexityScore        Float?
+  knowledgePrimitiveId   String
+  masteryThreshold       Float                          @default(0.8)
+  timeLimit              Int?
+  uueStage               UueStage                       @default(UNDERSTAND)
+  insightCatalysts       InsightCatalyst[]
+  blueprintSection       BlueprintSection               @relation(fields: [blueprintSectionId], references: [id], onDelete: Cascade)
+  knowledgePrimitive     KnowledgePrimitive             @relation(fields: [knowledgePrimitiveId], references: [primitiveId], onDelete: Cascade)
+  user                   User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prerequisiteFor        MasteryCriterionRelationship[] @relation("CriterionPrerequisiteFor")
+  requiresPrerequisites  MasteryCriterionRelationship[] @relation("CriterionRequiresPrerequisites")
+  questions              Question[]
+  questionInstances      QuestionInstance[]
   userCriterionMasteries UserCriterionMastery[]
-  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // Learning Pathway Relations (NEW - Sprint 51)
-  prerequisiteFor       MasteryCriterionRelationship[] @relation("CriterionPrerequisiteFor")
-  requiresPrerequisites MasteryCriterionRelationship[] @relation("CriterionRequiresPrerequisites")
-  
-  // Relations for existing models
-  questions             Question[]
-  insightCatalysts      InsightCatalyst[]
-  userQuestionAnswers   UserQuestionAnswer[]
-  
+  userQuestionAnswers    UserQuestionAnswer[]
+
   @@index([knowledgePrimitiveId])
   @@index([blueprintSectionId])
   @@index([userId])
@@ -178,140 +148,95 @@ model MasteryCriterion {
   @@index([complexityScore])
 }
 
-enum UueStage {
-  UNDERSTAND
-  USE
-  EXPLORE
-}
-
-enum AssessmentType {
-  QUESTION_BASED         // Multiple choice, fill-in-blank
-  EXPLANATION_BASED      // Written explanations
-  APPLICATION_BASED      // Practical applications
-  COMPARISON_BASED       // Compare and contrast
-  CREATION_BASED         // Create new content
-}
-
 model QuestionInstance {
-  id                    Int                   @id @default(autoincrement())
-  questionText          String                // Specific question variation
-  answer                String                // Correct answer
-  explanation           String?               // Answer explanation
-  context               String?               // Additional context
-  difficulty            QuestionDifficulty    @default(MEDIUM)
-  masteryCriterionId    Int                   // Direct link to mastery criterion
-  userId                Int                   // Owner
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  
-  // Relations
-  masteryCriterion      MasteryCriterion      @relation(fields: [masteryCriterionId], references: [id], onDelete: Cascade)
-  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userAnswers           UserQuestionAnswer[]
-  
-  // Indexes
+  id                 Int                  @id @default(autoincrement())
+  questionText       String
+  answer             String
+  explanation        String?
+  context            String?
+  difficulty         QuestionDifficulty   @default(MEDIUM)
+  masteryCriterionId Int
+  userId             Int
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  masteryCriterion   MasteryCriterion     @relation(fields: [masteryCriterionId], references: [id], onDelete: Cascade)
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAnswers        UserQuestionAnswer[]
+
   @@index([masteryCriterionId])
   @@index([userId])
   @@index([difficulty])
 }
 
-enum QuestionDifficulty {
-  EASY
-  MEDIUM
-  HARD
-}
-
-
-// ============================================================================
-// KNOWLEDGE PRIMITIVE AND RELATED MODELS
-// ============================================================================
-
 model KnowledgePrimitive {
-  id                        Int                       @id @default(autoincrement())
-  primitiveId               String                    @unique // Unique identifier for the primitive
-  title                     String
-  description               String?
-  primitiveType             String // e.g., "proposition", "entity", "process"
-  difficultyLevel           String // e.g., "beginner", "intermediate", "advanced"
-  estimatedTimeMinutes      Int?
-  userId                    Int
-  blueprintId               Int // Reference to the LearningBlueprint
-  blueprintSectionId        Int? // NEW: Reference to BlueprintSection
-  trackingIntensity         TrackingIntensity @default(NORMAL)
-  createdAt                 DateTime                  @default(now())
-  updatedAt                 DateTime                  @updatedAt
-  
-  // Premium Knowledge Graph Fields
-  conceptTags               String[]                  @default([]) // For semantic grouping
-  prerequisiteIds           String[]                  @default([]) // Direct prerequisites
-  relatedConceptIds         String[]                  @default([]) // Related concepts
-  complexityScore           Float?                    // AI-calculated complexity (1-10)
-  estimatedPrerequisites    Int?                      // Number of concepts needed before this
-  isCoreConcept            Boolean                   @default(false) // Essential for domain mastery
-  
-  // Relations
-  user                      User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  blueprint                 LearningBlueprint         @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
-  blueprintSection          BlueprintSection?         @relation(fields: [blueprintSectionId], references: [id], onDelete: SetNull)
-  masteryCriteria           MasteryCriterion[]
-  userPrimitiveProgresses   UserPrimitiveProgress[]
-  pinnedReviews            PinnedReview[]
-  scheduledReviews         ScheduledReview[]
-  insightCatalysts         InsightCatalyst[]
-  dailySummaries           UserPrimitiveDailySummary[]
-  userQuestionAnswers      UserQuestionAnswer[]
-  
-  // Premium Relationship Tracking
-  prerequisiteFor          KnowledgePrimitive[]       @relation("Prerequisites")
-  prerequisites            KnowledgePrimitive[]       @relation("Prerequisites")
-  relatedConcepts          KnowledgePrimitive[]       @relation("RelatedConcepts")
-  relatedToConcepts        KnowledgePrimitive[]       @relation("RelatedConcepts")
-  learningPathSteps        LearningPathStep[]
-  
-  // Knowledge Graph Relationships (NEW - Sprint 51)
-  prerequisiteForRelations KnowledgeRelationship[]    @relation("PrerequisiteFor")
-  requiresPrerequisites    KnowledgeRelationship[]    @relation("RequiresPrerequisites")
+  id                                   Int                         @id @default(autoincrement())
+  primitiveId                          String                      @unique
+  title                                String
+  description                          String?
+  primitiveType                        String
+  difficultyLevel                      String
+  estimatedTimeMinutes                 Int?
+  userId                               Int
+  blueprintId                          Int
+  trackingIntensity                    TrackingIntensity           @default(NORMAL)
+  createdAt                            DateTime                    @default(now())
+  updatedAt                            DateTime                    @updatedAt
+  complexityScore                      Float?
+  conceptTags                          String[]                    @default([])
+  estimatedPrerequisites               Int?
+  isCoreConcept                        Boolean                     @default(false)
+  prerequisiteIds                      String[]                    @default([])
+  relatedConceptIds                    String[]                    @default([])
+  blueprintSectionId                   Int?
+  insightCatalysts                     InsightCatalyst[]
+  blueprint                            LearningBlueprint           @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  blueprintSection                     BlueprintSection?           @relation(fields: [blueprintSectionId], references: [id])
+  user                                 User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prerequisiteForRelations             KnowledgeRelationship[]     @relation("PrerequisiteFor")
+  requiresPrerequisites                KnowledgeRelationship[]     @relation("RequiresPrerequisites")
+  learningPathSteps                    LearningPathStep[]
+  masteryCriteria                      MasteryCriterion[]
+  pinnedReviews                        PinnedReview[]
+  scheduledReviews                     ScheduledReview[]
+  dailySummaries                       UserPrimitiveDailySummary[]
+  userPrimitiveProgresses              UserPrimitiveProgress[]
+  userQuestionAnswers                  UserQuestionAnswer[]
+  KnowledgePrimitive_Prerequisites_A   KnowledgePrimitive[]        @relation("Prerequisites")
+  KnowledgePrimitive_Prerequisites_B   KnowledgePrimitive[]        @relation("Prerequisites")
+  KnowledgePrimitive_RelatedConcepts_A KnowledgePrimitive[]        @relation("RelatedConcepts")
+  KnowledgePrimitive_RelatedConcepts_B KnowledgePrimitive[]        @relation("RelatedConcepts")
+
+  @@index([conceptTags])
+  @@index([isCoreConcept])
+  @@index([complexityScore])
 
   @@index([userId])
   @@index([blueprintId])
   @@index([blueprintSectionId])
   @@index([primitiveId])
-  @@index([conceptTags]) // Premium: Fast semantic search
-  @@index([isCoreConcept]) // Premium: Core concept filtering
-  @@index([complexityScore]) // Premium: Complexity-based sorting
 }
 
 model UserCriterionMastery {
-  id                    String                @id @default(cuid())
-  userId                Int
-  masteryCriterionId    Int                   // Links to MasteryCriterion
-  blueprintSectionId    Int                   // Links to BlueprintSection
-  
-  // Mastery tracking
-  isMastered            Boolean               @default(false)
-  masteryScore          Float                 @default(0.0) // 0-1 score
-  uueStage              UueStage              @default(UNDERSTAND)
-  
-  // Consecutive interval tracking
-  lastTwoAttempts       Float[]               // Last 2 attempt scores [0.8, 0.9]
-  consecutiveIntervals  Int                   @default(0) // Count of consecutive intervals above threshold
-  lastThresholdCheckDate DateTime?            // Last date threshold was checked
-  
-  // Simple SR tracking
-  currentIntervalStep   Int                   @default(0)
-  nextReviewAt          DateTime?
-  lastReviewedAt        DateTime?
-  reviewCount           Int                   @default(0)
-  successfulReviews     Int                   @default(0)
-  consecutiveFailures   Int                   @default(0)
-  
-  // Tracking intensity
-  trackingIntensity     TrackingIntensity     @default(NORMAL)
-  
-  // Relations
-  masteryCriterion      MasteryCriterion      @relation(fields: [masteryCriterionId], references: [id], onDelete: Cascade)
-  blueprintSection      BlueprintSection      @relation(fields: [blueprintSectionId], references: [id], onDelete: Cascade)
-  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                     String            @id @default(cuid())
+  userId                 Int
+  isMastered             Boolean           @default(false)
+  blueprintSectionId     Int
+  consecutiveFailures    Int               @default(0)
+  consecutiveIntervals   Int               @default(0)
+  currentIntervalStep    Int               @default(0)
+  lastReviewedAt         DateTime?
+  lastThresholdCheckDate DateTime?
+  lastTwoAttempts        Float[]
+  masteryCriterionId     Int
+  masteryScore           Float             @default(0.0)
+  nextReviewAt           DateTime?
+  reviewCount            Int               @default(0)
+  successfulReviews      Int               @default(0)
+  trackingIntensity      TrackingIntensity @default(NORMAL)
+  uueStage               UueStage          @default(UNDERSTAND)
+  blueprintSection       BlueprintSection  @relation(fields: [blueprintSectionId], references: [id], onDelete: Cascade)
+  masteryCriterion       MasteryCriterion  @relation(fields: [masteryCriterionId], references: [id], onDelete: Cascade)
+  user                   User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([masteryCriterionId])
@@ -320,23 +245,19 @@ model UserCriterionMastery {
 }
 
 model UserQuestionAnswer {
-  id                Int      @id @default(autoincrement())
-  userId            Int
-  questionId        Int      // Now references QuestionInstance
-  isCorrect         Boolean
-  answerText        String?
-  timeSpentSeconds  Int?
-  createdAt         DateTime @default(now())
-
-  // Relations
-  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  questionInstance  QuestionInstance @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  
-  // Additional relations for compatibility
-  masteryCriterion  MasteryCriterion? @relation(fields: [masteryCriterionId], references: [id])
+  id                 Int                 @id @default(autoincrement())
+  userId             Int
+  questionId         Int
+  isCorrect          Boolean
+  createdAt          DateTime            @default(now())
+  answerText         String?
   masteryCriterionId Int?
-  knowledgePrimitive KnowledgePrimitive? @relation(fields: [primitiveId], references: [id])
+  timeSpentSeconds   Int?
   primitiveId        Int?
+  masteryCriterion   MasteryCriterion?   @relation(fields: [masteryCriterionId], references: [id])
+  knowledgePrimitive KnowledgePrimitive? @relation(fields: [primitiveId], references: [id])
+  questionInstance   QuestionInstance    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([questionId])
@@ -345,27 +266,19 @@ model UserQuestionAnswer {
   @@index([primitiveId])
 }
 
-// ============================================================================
-// STUDY SESSION AND PROGRESS MODELS
-// ============================================================================
-
 model UserPrimitiveProgress {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])
-  
-  primitiveId Int
-  primitive   KnowledgePrimitive @relation(fields: [primitiveId], references: [id])
-  
-  currentUeeLevel String   @default("Understand")
-  nextReviewAt    DateTime?
+  id              Int                @id @default(autoincrement())
+  userId          Int
   lastReviewedAt  DateTime?
-  
-  // Other SR fields like interval, ease factor, etc.
-  interval        Float    @default(1.0)
-  easeFactor     Float    @default(2.5)
-  lapses         Int      @default(0)
-  
+  nextReviewAt    DateTime?
+  currentUeeLevel String             @default("Understand")
+  easeFactor      Float              @default(2.5)
+  interval        Float              @default(1.0)
+  lapses          Int                @default(0)
+  primitiveId     Int
+  primitive       KnowledgePrimitive @relation(fields: [primitiveId], references: [id])
+  user            User               @relation(fields: [userId], references: [id])
+
   @@unique([userId, primitiveId])
   @@index([userId])
   @@index([primitiveId])
@@ -375,127 +288,115 @@ model UserPrimitiveProgress {
 model UserStudySession {
   id                       Int                       @id @default(autoincrement())
   userId                   Int
-  sessionStartedAt         DateTime?
-  sessionEndedAt           DateTime                  @default(now())
-  timeSpentSeconds         Int
   answeredQuestionsCount   Int
   createdAt                DateTime                  @default(now())
+  sessionEndedAt           DateTime                  @default(now())
+  sessionStartedAt         DateTime?
+  timeSpentSeconds         Int
   updatedAt                DateTime                  @default(now()) @updatedAt
-  
-  user                     User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
   questionSetStudySessions QuestionSetStudySession[]
-  
+  user                     User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([sessionEndedAt])
 }
 
 model QuestionSetStudySession {
-  id                    Int        @id @default(autoincrement())
+  id                    Int              @id @default(autoincrement())
   userId                Int
-  user                  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sessionId             Int
-  session               UserStudySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   questionSetId         Int
-  questionSet           QuestionSet @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
-  
-  // Session-specific performance snapshot
-  sessionMarksAchieved  Int        // Sum of marks achieved for questions from this set in this session
-  sessionMarksAvailable Int        // Sum of marks available for questions from this set in this session
-  questionsAnswered     Question[]           // Direct references to questions answered in this session
-  
-  srStageBefore         Int // The SR stage of the QuestionSet before this session
-  createdAt             DateTime   @default(now())
-  
+  createdAt             DateTime         @default(now())
+  sessionId             Int
+  sessionMarksAchieved  Int
+  sessionMarksAvailable Int
+  srStageBefore         Int
+  questionSet           QuestionSet      @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
+  session               UserStudySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questionsAnswered     Question[]       @relation("QuestionToQuestionSetStudySession")
+
   @@unique([sessionId, questionSetId])
   @@index([userId])
   @@index([questionSetId])
 }
 
-// ============================================================================
-// INSIGHT AND REVIEW MODELS
-// ============================================================================
-
 model InsightCatalyst {
-  id           Int       @id @default(autoincrement())
-  type         String
-  text         String
-  explanation  String?
-  imageUrls    String[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  userId       Int
-  noteId       Int?
-  questionId   Int? // Optional, for legacy or non-SR questions
-  primitiveId  Int? // New: Link to KnowledgePrimitive
-  masteryCriterionId Int? // New: Link to MasteryCriterion
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  note         NoteSection? @relation(fields: [noteId], references: [id], onDelete: SetNull)
-  question     Question? @relation(fields: [questionId], references: [id], onDelete: SetNull)
-  primitive    KnowledgePrimitive? @relation(fields: [primitiveId], references: [id])
-  masteryCriterion MasteryCriterion? @relation(fields: [masteryCriterionId], references: [id])
-  
+  id                 Int                 @id @default(autoincrement())
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  userId             Int
+  noteId             Int?
+  explanation        String?
+  imageUrls          String[]
+  masteryCriterionId Int?
+  questionId         Int?
+  text               String
+  type               String
+  primitiveId        Int?
+  masteryCriterion   MasteryCriterion?   @relation(fields: [masteryCriterionId], references: [id])
+  note               NoteSection?        @relation(fields: [noteId], references: [id])
+  primitive          KnowledgePrimitive? @relation(fields: [primitiveId], references: [id])
+  question           Question?           @relation(fields: [questionId], references: [id])
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([noteId])
   @@index([questionId])
-  @@index([primitiveId]) // New index
-  @@index([masteryCriterionId]) // New index
+  @@index([primitiveId])
+  @@index([masteryCriterionId])
 }
 
 model ScheduledReview {
-  id            Int         @id @default(autoincrement())
-  reviewDate    DateTime
-  type          String // "AUTO" or "MANUAL"
-  status        String      @default("PENDING") // "PENDING" or "COMPLETED"
+  id            Int                 @id @default(autoincrement())
   userId        Int
-  questionSetId Int? // Optional, for legacy or non-SR question sets
-  primitiveId   Int? // New: Link to KnowledgePrimitive
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  questionSet   QuestionSet? @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
+  questionSetId Int?
+  createdAt     DateTime            @default(now())
+  reviewDate    DateTime
+  status        String              @default("PENDING")
+  type          String
+  primitiveId   Int?
   primitive     KnowledgePrimitive? @relation(fields: [primitiveId], references: [id])
-  createdAt     DateTime    @default(now())
-  
+  questionSet   QuestionSet?        @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, reviewDate])
-  @@index([primitiveId]) // New index
+  @@index([primitiveId])
 }
 
 model PinnedReview {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          Int                 @id @default(autoincrement())
+  userId      Int
+  createdAt   DateTime            @default(now())
   primitiveId Int?
-  primitive KnowledgePrimitive? @relation(fields: [primitiveId], references: [id])
-  createdAt DateTime @default(now())
-  
+  primitive   KnowledgePrimitive? @relation(fields: [primitiveId], references: [id])
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([primitiveId])
 }
 
-// ============================================================================
-// USER PREFERENCES AND ANALYTICS
-// ============================================================================
-
 model UserBucketPreferences {
-  id                    Int      @id @default(autoincrement())
-  userId                Int      @unique
-  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bucketSize            Int      @default(10)
-  reviewInterval        Int      @default(1)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  
+  id             Int      @id @default(autoincrement())
+  userId         Int      @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  bucketSize     Int      @default(10)
+  reviewInterval Int      @default(1)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
 }
 
 model UserPrimitiveDailySummary {
-  id          Int      @id @default(autoincrement())
+  id          Int                @id @default(autoincrement())
   userId      Int
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime           @default(now())
+  date        DateTime           @db.Date
+  summary     Json
   primitiveId Int
   primitive   KnowledgePrimitive @relation(fields: [primitiveId], references: [id])
-  date        DateTime @db.Date
-  summary     Json
-  createdAt   DateTime @default(now())
-  
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([userId, primitiveId, date])
   @@index([userId])
   @@index([primitiveId])
@@ -503,79 +404,86 @@ model UserPrimitiveDailySummary {
 }
 
 model UserLearningAnalytics {
-  id        Int      @id @default(autoincrement())
-  userId    Int      @unique
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  data      Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  @@index([userId])
+  id                    Int      @id @default(autoincrement())
+  userId                Int
+  date                  DateTime @default(now())
+  totalStudyTimeMinutes Int      @default(0)
+  conceptsReviewed      Int      @default(0)
+  conceptsMastered      Int      @default(0)
+  averageMasteryScore   Float    @default(0)
+  learningEfficiency    Float?
+  focusAreas            String[] @default([])
+  achievements          String[] @default([])
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
 }
 
 model UserMemoryInsight {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  insight   String
-  createdAt DateTime @default(now())
-  
-  @@index([userId])
-  @@index([createdAt])
+  id                Int      @id @default(autoincrement())
+  userId            Int
+  insightType       String
+  title             String
+  content           String
+  relatedPrimitiveIds String[] @default([])
+  confidenceScore   Float
+  isActionable      Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, insightType])
+  @@index([userId, confidenceScore])
 }
 
-// ============================================================================
-// LEARNING PATH MODELS
-// ============================================================================
-
 model LearningPath {
-  id          Int      @id @default(autoincrement())
-  userId      Int
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title       String
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  steps       LearningPathStep[]
-  
-  @@index([userId])
+  id                    Int                @id @default(autoincrement())
+  userId                Int
+  pathName              String
+  description           String?
+  targetMasteryLevel    String
+  estimatedDurationDays Int?
+  isActive              Boolean            @default(true)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  user                  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  steps                 LearningPathStep[]
+
+  @@index([userId, isActive])
 }
 
 model LearningPathStep {
-  id            Int          @id @default(autoincrement())
-  learningPathId Int
-  learningPath   LearningPath @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
-  primitiveId    Int
-  primitive      KnowledgePrimitive @relation(fields: [primitiveId], references: [id])
-  orderIndex     Int
-  createdAt      DateTime    @default(now())
-  
-  @@unique([learningPathId, orderIndex])
+  id                    Int                @id @default(autoincrement())
+  learningPathId        Int
+  primitiveId           String
+  stepOrder             Int
+  isCompleted           Boolean            @default(false)
+  completedAt           DateTime?
+  estimatedTimeMinutes  Int?
+  learningPath          LearningPath       @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
+  primitive             KnowledgePrimitive @relation(fields: [primitiveId], references: [primitiveId], onDelete: Cascade)
+
+  @@unique([learningPathId, stepOrder])
+  @@index([learningPathId, isCompleted])
   @@index([learningPathId])
   @@index([primitiveId])
 }
 
-// ============================================================================
-// KNOWLEDGE GRAPH RELATIONSHIP MODELS (NEW - Sprint 51)
-// ============================================================================
-
 model KnowledgeRelationship {
-  id                    Int                   @id @default(autoincrement())
-  sourcePrimitiveId     Int                   // Source knowledge primitive
-  targetPrimitiveId     Int                   // Target knowledge primitive
-  relationshipType      RelationshipType       // Type of relationship
-  strength              Float                 @default(1.0) // Relationship strength 0-1
-  confidence            Float                 @default(0.8) // AI confidence in relationship
-  source                RelationshipSource     @default(AI_GENERATED)
-  metadata              Json?                 // Additional relationship data
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  
-  // Relations
-  sourcePrimitive       KnowledgePrimitive    @relation("PrerequisiteFor", fields: [sourcePrimitiveId], references: [id], onDelete: Cascade)
-  targetPrimitive       KnowledgePrimitive    @relation("RequiresPrerequisites", fields: [targetPrimitiveId], references: [id], onDelete: Cascade)
-  
+  id                Int                @id @default(autoincrement())
+  sourcePrimitiveId Int
+  targetPrimitiveId Int
+  relationshipType  RelationshipType
+  strength          Float              @default(1.0)
+  confidence        Float              @default(0.8)
+  source            RelationshipSource @default(AI_GENERATED)
+  metadata          Json?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  sourcePrimitive   KnowledgePrimitive @relation("PrerequisiteFor", fields: [sourcePrimitiveId], references: [id], onDelete: Cascade)
+  targetPrimitive   KnowledgePrimitive @relation("RequiresPrerequisites", fields: [targetPrimitiveId], references: [id], onDelete: Cascade)
+
   @@unique([sourcePrimitiveId, targetPrimitiveId, relationshipType])
   @@index([sourcePrimitiveId])
   @@index([targetPrimitiveId])
@@ -585,21 +493,19 @@ model KnowledgeRelationship {
 }
 
 model MasteryCriterionRelationship {
-  id                    Int                   @id @default(autoincrement())
-  sourceCriterionId     Int                   // Source mastery criterion
-  targetCriterionId     Int                   // Target mastery criterion
-  relationshipType      CriterionRelationshipType // Type of relationship
-  strength              Float                 @default(1.0) // Relationship strength 0-1
-  confidence            Float                 @default(0.8) // AI confidence in relationship
-  source                RelationshipSource     @default(AI_GENERATED)
-  metadata              Json?                 // Additional relationship data
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  
-  // Relations
-  sourceCriterion       MasteryCriterion      @relation("CriterionPrerequisiteFor", fields: [sourceCriterionId], references: [id], onDelete: Cascade)
-  targetCriterion       MasteryCriterion      @relation("CriterionRequiresPrerequisites", fields: [targetCriterionId], references: [id], onDelete: Cascade)
-  
+  id                Int                       @id @default(autoincrement())
+  sourceCriterionId Int
+  targetCriterionId Int
+  relationshipType  CriterionRelationshipType
+  strength          Float                     @default(1.0)
+  confidence        Float                     @default(0.8)
+  source            RelationshipSource        @default(AI_GENERATED)
+  metadata          Json?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  sourceCriterion   MasteryCriterion          @relation("CriterionPrerequisiteFor", fields: [sourceCriterionId], references: [id], onDelete: Cascade)
+  targetCriterion   MasteryCriterion          @relation("CriterionRequiresPrerequisites", fields: [targetCriterionId], references: [id], onDelete: Cascade)
+
   @@unique([sourceCriterionId, targetCriterionId, relationshipType])
   @@index([sourceCriterionId])
   @@index([targetCriterionId])
@@ -608,51 +514,146 @@ model MasteryCriterionRelationship {
   @@index([confidence])
 }
 
-// ============================================================================
-// ENUMS
-// ============================================================================
+model Question {
+  id                       Int                       @id @default(autoincrement())
+  questionSetId            Int
+  totalMarksAvailable      Int                       @default(1) @map("marksAvailable")
+  aiGenerated              Boolean                   @default(false)
+  answer                   String?
+  autoMark                 Boolean                   @default(false)
+  conceptTags              String[]
+  createdAt                DateTime                  @default(now())
+  currentMasteryScore      Float?
+  difficultyScore          Float?
+  imageUrls                String[]
+  inCat                    String?
+  lastAnswerCorrect        Boolean?
+  markingCriteria          Json?
+  masteryCriterionId       Int?
+  options                  String[]
+  questionType             String
+  selfMark                 Boolean                   @default(false)
+  text                     String
+  timesAnsweredCorrectly   Int                       @default(0)
+  timesAnsweredIncorrectly Int                       @default(0)
+  updatedAt                DateTime                  @updatedAt
+  insightCatalysts         InsightCatalyst[]
+  masteryCriterion         MasteryCriterion?         @relation(fields: [masteryCriterionId], references: [id])
+  questionSet              QuestionSet               @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
+  questionSetStudySessions QuestionSetStudySession[] @relation("QuestionToQuestionSetStudySession")
+
+  @@index([questionSetId])
+  @@index([masteryCriterionId])
+}
+
+model QuestionSet {
+  id                       Int                       @id @default(autoincrement())
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  isPinned                 Boolean                   @default(false)
+  generatedFromBlueprintId Int?
+  instructions             String?
+  name                     String
+  questions                Question[]
+  generatedFromBlueprint   LearningBlueprint?        @relation(fields: [generatedFromBlueprintId], references: [id])
+  questionSetStudySessions QuestionSetStudySession[]
+  scheduledReviews         ScheduledReview[]
+
+  @@index([generatedFromBlueprintId])
+}
+
+model UserMemory {
+  id                Int                @id @default(autoincrement())
+  primaryGoal       String?
+  userId            Int                @unique
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  cognitiveApproach CognitiveApproach?
+  explanationStyles ExplanationStyle[]
+  interactionStyle  InteractionStyle?
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  userId    Int
+  createdAt DateTime @default(now())
+  expires   DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+enum DifficultyLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum UueStage {
+  UNDERSTAND
+  USE
+  EXPLORE
+}
+
+enum AssessmentType {
+  QUESTION_BASED
+  EXPLANATION_BASED
+  APPLICATION_BASED
+  COMPARISON_BASED
+  CREATION_BASED
+}
+
+enum QuestionDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
 
 enum RelationshipType {
-  PREREQUISITE           // Must be learned before
-  RELATED                // Conceptually related
-  SIMILAR                // Similar concepts
-  ADVANCES_TO            // Builds upon
-  DEMONSTRATES           // Shows application of
-  CONTRADICTS            // Opposes or contradicts
-  SYNONYMOUS             // Same concept, different name
-  PART_OF                // Component of larger concept
+  PREREQUISITE
+  RELATED
+  SIMILAR
+  ADVANCES_TO
+  DEMONSTRATES
+  CONTRADICTS
+  SYNONYMOUS
+  PART_OF
 }
 
 enum CriterionRelationshipType {
-  PREREQUISITE           // Must be mastered before
-  ADVANCES_TO            // Builds upon this criterion
-  RELATED                // Conceptually related
-  SIMILAR                // Similar mastery requirements
-  PART_OF                // Component of larger criterion
-  DEMONSTRATES           // Shows application of this criterion
-  SYNONYMOUS             // Same concept, different criterion
+  PREREQUISITE
+  ADVANCES_TO
+  RELATED
+  SIMILAR
+  PART_OF
+  DEMONSTRATES
+  SYNONYMOUS
 }
 
 enum RelationshipSource {
-  AI_GENERATED           // Discovered by AI analysis
-  USER_CREATED           // Manually created by user
-  EXPERT_VERIFIED        // Validated by domain expert
-  SYSTEM_INFERRED        // Inferred from usage patterns
+  AI_GENERATED
+  USER_CREATED
+  EXPERT_VERIFIED
+  SYSTEM_INFERRED
 }
 
 enum TrackingIntensity {
-  DENSE   // More frequent reviews (0.75× interval)
-  NORMAL  // Standard review frequency
-  SPARSE  // Less frequent reviews (1.5× interval)
+  DENSE
+  NORMAL
+  SPARSE
 }
 
 enum MasteryThresholdLevel {
-  SURVEY      // 60%+ mastery
-  PROFICIENT  // 80%+ mastery
-  EXPERT      // 95%+ mastery
+  SURVEY
+  PROFICIENT
+  EXPERT
 }
 
-// Enums for UserMemory
 enum CognitiveApproach {
   TOP_DOWN
   BOTTOM_UP
@@ -670,92 +671,4 @@ enum InteractionStyle {
   SOCRATIC
 }
 
-// ============================================================================
-// LEGACY MODELS (MINIMAL - FOR COMPATIBILITY)
-// ============================================================================
 
-// Minimal Question model for compatibility with existing code
-model Question {
-  id                         Int                         @id @default(autoincrement())
-  answer                     String?
-  questionSetId              Int
-  createdAt                  DateTime                    @default(now())
-  updatedAt                  DateTime                    @updatedAt
-  options                    String[]
-  questionType               String
-  text                       String
-  conceptTags                String[]
-  lastAnswerCorrect          Boolean?
-  totalMarksAvailable        Int                         @default(1) @map("marksAvailable")
-  markingCriteria            Json?
-  currentMasteryScore        Float?
-  difficultyScore            Float?
-  timesAnsweredCorrectly     Int                         @default(0)
-  timesAnsweredIncorrectly   Int                         @default(0)
-  selfMark                   Boolean                     @default(false)
-  autoMark                   Boolean                     @default(false)
-  aiGenerated                Boolean                     @default(false)
-  inCat                      String?
-  imageUrls                  String[]
-  
-  // Relations
-  questionSet                QuestionSet                 @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
-  insightCatalysts           InsightCatalyst[]
-  questionSetStudySessions   QuestionSetStudySession[]
-  
-  // New relation to MasteryCriterion
-  masteryCriterionId         Int?
-  masteryCriterion           MasteryCriterion? @relation(fields: [masteryCriterionId], references: [id])
-  
-  @@index([questionSetId])
-  @@index([masteryCriterionId])
-}
-
-// Minimal QuestionSet model for compatibility
-model QuestionSet {
-  id                         Int                       @id @default(autoincrement())
-  name                       String
-  createdAt                  DateTime                  @default(now())
-  updatedAt                  DateTime                  @updatedAt
-  instructions               String?
-  isPinned                   Boolean                   @default(false)
-  
-  // Relations
-  questions                  Question[]
-  scheduledReviews           ScheduledReview[]
-  questionSetStudySessions   QuestionSetStudySession[]
-  
-  // Relation to LearningBlueprint
-  generatedFromBlueprintId   Int?
-  generatedFromBlueprint     LearningBlueprint?        @relation(fields: [generatedFromBlueprintId], references: [id], onDelete: SetNull)
-  
-  @@index([generatedFromBlueprintId])
-}
-
-// Minimal UserMemory model for compatibility
-model UserMemory {
-  id                Int                 @id @default(autoincrement())
-  cognitiveApproach CognitiveApproach?
-  explanationStyles ExplanationStyle[]
-  interactionStyle  InteractionStyle?
-  primaryGoal       String?
-  userId            Int                 @unique
-  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-
-  @@index([userId])
-}
-
-// Minimal VerificationToken model for compatibility
-model VerificationToken {
-  id        Int      @id @default(autoincrement())
-  token     String   @unique
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expires   DateTime
-  createdAt DateTime @default(now())
-  
-  @@index([userId])
-  @@index([token])
-}

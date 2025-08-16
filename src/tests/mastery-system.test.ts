@@ -34,10 +34,10 @@ jest.mock('@prisma/client', () => ({
 }));
 
 // Now import the services after mocking
-import { masteryCriterionService } from '../services/masteryCriterion.service';
-import { enhancedSpacedRepetitionService } from '../services/enhancedSpacedRepetition.service';
-import { masteryCalculationService } from '../services/masteryCalculation.service';
-import { enhancedTodaysTasksService } from '../services/enhancedTodaysTasks.service';
+import { masteryCriterionService } from '../services/mastery/masteryCriterion.service';
+import { enhancedSpacedRepetitionService } from '../services/mastery/enhancedSpacedRepetition.service';
+import { masteryCalculationService } from '../services/mastery/masteryCalculation.service';
+import { enhancedTodaysTasksService } from '../services/mastery/enhancedTodaysTasks.service';
 
 describe('Mastery System Integration Tests', () => {
   beforeEach(() => {

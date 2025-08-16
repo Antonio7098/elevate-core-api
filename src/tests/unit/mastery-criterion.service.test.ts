@@ -21,7 +21,8 @@ jest.mock('@prisma/client', () => ({
 }));
 
 // Now import the service after mocking
-import { MasteryCriterionService, CreateCriterionData, UpdateCriterionData } from '../../services/masteryCriterion.service';
+import MasteryCriterionService from '../../services/blueprint-centric/masteryCriterion.service';
+import { CreateCriterionData, UpdateCriterionData } from '../../services/blueprint-centric/masteryCriterion.service';
 
 describe('MasteryCriterionService', () => {
   let service: MasteryCriterionService;
@@ -29,6 +30,8 @@ describe('MasteryCriterionService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     service = new MasteryCriterionService();
+    // Inject mocked Prisma
+    (service as any).prisma = mockPrisma;
   });
 
   describe('createCriterion', () => {

@@ -16,7 +16,6 @@
 
 // Core Blueprint Section Management
 export { default as BlueprintSectionController } from './blueprintSection.controller';
-export { BlueprintSectionController as blueprintSectionController } from './blueprintSection.controller';
 
 // Note Section Management
 export { NoteSectionController, noteSectionController } from './noteSection.controller';
@@ -35,16 +34,6 @@ export { QuestionInstanceController, questionInstanceController } from './questi
 
 // Knowledge Graph (already exists)
 export { default as KnowledgeGraphController } from './knowledgeGraph.controller';
-
-// Export all controller instances
-export {
-  blueprintSectionController,
-  noteSectionController,
-  masteryCriterionController,
-  enhancedSpacedRepetitionController,
-  enhancedTodaysTasksController,
-  questionInstanceController
-};
 
 // ============================================================================
 // LEGACY REPLACEMENT MAPPING

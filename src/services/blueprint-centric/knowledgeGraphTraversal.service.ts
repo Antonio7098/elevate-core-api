@@ -90,10 +90,14 @@ export default class KnowledgeGraphTraversal {
       }
 
       if (depth < maxDepth) {
-        // Get relationships FROM the current node (not TO it)
-        const relationships = await this.getPrimitiveRelationships(nodeId, relationshipTypes);
+        // Get relationships FROM the current node (outgoing relationships)
+        const outgoingRelationships = await this.getPrimitiveRelationships(nodeId, relationshipTypes);
         
-        for (const rel of relationships) {
+        // Get relationships TO the current node (incoming relationships) for bidirectional traversal
+        const incomingRelationships = await this.getPrimitiveRelationshipsTo(nodeId, relationshipTypes);
+        
+        // Process outgoing relationships
+        for (const rel of outgoingRelationships) {
           const targetId = rel.targetPrimitiveId;
           
           // Add edge even if target is visited (for circular relationships)
@@ -107,6 +111,24 @@ export default class KnowledgeGraphTraversal {
           // Only add to queue if not visited
           if (!visited.has(targetId)) {
             queue.push({ nodeId: targetId, depth: depth + 1 });
+          }
+        }
+        
+        // Process incoming relationships (reverse direction)
+        for (const rel of incomingRelationships) {
+          const sourceId = rel.sourcePrimitiveId;
+          
+          // Add edge even if source is visited (for circular relationships)
+          edges.push({
+            source: sourceId,
+            target: nodeId,
+            type: rel.relationshipType,
+            strength: rel.strength || 1.0
+          });
+          
+          // Only add to queue if not visited
+          if (!visited.has(sourceId)) {
+            queue.push({ nodeId: sourceId, depth: depth + 1 });
           }
         }
       }
@@ -140,11 +162,29 @@ export default class KnowledgeGraphTraversal {
       
       visited.add(nodeId);
 
-      // Get prerequisite relationships
-      const relationships = await this.getPrimitiveRelationships(nodeId, ['PREREQUISITE']);
+      // Get prerequisite relationships (both directions)
+      const outgoingPrereqs = await this.getPrimitiveRelationships(nodeId, ['PREREQUISITE']);
+      const incomingPrereqs = await this.getPrimitiveRelationshipsTo(nodeId, ['PREREQUISITE']);
       
-      for (const rel of relationships) {
+      // Process outgoing prerequisites (current node is prerequisite for others)
+      for (const rel of outgoingPrereqs) {
         const prereqId = rel.targetPrimitiveId;
+        
+        if (!visited.has(prereqId)) {
+          const prereqNode = await this.prisma.knowledgePrimitive.findUnique({
+            where: { primitiveId: prereqId }
+          });
+          
+          if (prereqNode) {
+            prerequisites.push(this.mapToGraphNode(prereqNode));
+            queue.push(prereqId);
+          }
+        }
+      }
+      
+      // Process incoming prerequisites (other nodes are prerequisites for current)
+      for (const rel of incomingPrereqs) {
+        const prereqId = rel.sourcePrimitiveId;
         
         if (!visited.has(prereqId)) {
           const prereqNode = await this.prisma.knowledgePrimitive.findUnique({
@@ -208,9 +248,11 @@ export default class KnowledgeGraphTraversal {
       visited.add(nodeId);
 
       // Get all relationships
-      const relationships = await this.getPrimitiveRelationships(nodeId, ['PREREQUISITE', 'RELATED', 'ADVANCES_TO']);
+      const outgoingRelationships = await this.getPrimitiveRelationships(nodeId, ['PREREQUISITE', 'RELATED', 'ADVANCES_TO']);
+      const incomingRelationships = await this.getPrimitiveRelationshipsTo(nodeId, ['PREREQUISITE', 'RELATED', 'ADVANCES_TO']);
       
-      for (const rel of relationships) {
+      // Process outgoing relationships
+      for (const rel of outgoingRelationships) {
         const targetId = rel.targetPrimitiveId;
         
         if (!visited.has(targetId)) {
@@ -218,6 +260,20 @@ export default class KnowledgeGraphTraversal {
           queue.push({
             nodeId: targetId,
             path: [...path, targetId],
+            cost: newCost
+          });
+        }
+      }
+      
+      // Process incoming relationships (reverse direction)
+      for (const rel of incomingRelationships) {
+        const sourceId = rel.sourcePrimitiveId;
+        
+        if (!visited.has(sourceId)) {
+          const newCost = Math.round((cost + (1 - (rel.strength || 1.0))) * 1000) / 1000; // Higher strength = lower cost, round to 3 decimal places
+          queue.push({
+            nodeId: sourceId,
+            path: [...path, sourceId],
             cost: newCost
           });
         }
@@ -315,6 +371,24 @@ export default class KnowledgeGraphTraversal {
   }
 
   /**
+   * Gets relationships TO a knowledge primitive (incoming relationships)
+   */
+  async getPrimitiveRelationshipsTo(
+    nodeId: string | number,
+    relationshipTypes: RelationshipType[]
+  ): Promise<any[]> {
+    // Handle both string and integer IDs for testing
+    const targetId = typeof nodeId === 'string' ? parseInt(nodeId) : nodeId;
+    
+    return this.prisma.knowledgeRelationship.findMany({
+      where: {
+        targetPrimitiveId: targetId,
+        relationshipType: { in: relationshipTypes }
+      }
+    });
+  }
+
+  /**
    * Gets relationships for a mastery criterion
    */
   async getCriterionRelationships(
@@ -327,6 +401,16 @@ export default class KnowledgeGraphTraversal {
         relationshipType: { in: relationshipTypes }
       }
     });
+  }
+
+  /**
+   * Gets relationships by type - added for test compatibility
+   */
+  async getRelationships(
+    nodeId: string | number,
+    relationshipTypes: RelationshipType[]
+  ): Promise<any[]> {
+    return this.getPrimitiveRelationships(nodeId, relationshipTypes);
   }
 
   /**

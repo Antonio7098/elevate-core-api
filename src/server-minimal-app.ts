@@ -1,5 +1,5 @@
 // src/server-minimal-app.ts - Minimal server using minimal app
-import app from './app-minimal';
+import app from './app';
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -21,7 +21,7 @@ async function startServer() {
     
     // Initialize minimal application
     console.log('🔄 Starting minimal application initialization...');
-    const { initializeApplication } = await import('./app-minimal');
+    const { initializeApplication } = await import('./app');
     initializeApplication()
       .then(() => {
         console.log('✅ Minimal application initialization completed successfully');

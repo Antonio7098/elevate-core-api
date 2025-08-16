@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { EnhancedTodaysTasksService } from '../services/enhancedTodaysTasks.service';
+import { EnhancedTodaysTasksService } from '../services/mastery/enhancedTodaysTasks.service';
 import { AuthRequest } from '../middleware/auth.middleware';
 
 const enhancedTodaysTasksService = new EnhancedTodaysTasksService();

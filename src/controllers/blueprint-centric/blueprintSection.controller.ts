@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import BlueprintSectionService from '../../services/blueprint-centric/blueprintSection.service';
 import NoteSectionService from '../../services/blueprint-centric/noteSection.service';
-import { masteryCriterionService } from '../../services/blueprint-centric/masteryCriterion.service';
+import MasteryCriterionService from '../../services/blueprint-centric/masteryCriterion.service';
 import ContentAggregator from '../../services/blueprint-centric/contentAggregator.service';
 import SectionHierarchyManager from '../../services/blueprint-centric/sectionHierarchyManager.service';
 
@@ -191,7 +191,7 @@ export class BlueprintSectionController {
         return res.status(401).json({ error: 'User not authenticated' });
       }
       
-      const progress = await contentAggregator.calculateUueStageProgress(id, userId);
+      const progress = await contentAggregator.calculateUueStageProgress(parseInt(id), userId);
       res.json(progress);
     } catch (error) {
       res.status(400).json({ error: error.message });

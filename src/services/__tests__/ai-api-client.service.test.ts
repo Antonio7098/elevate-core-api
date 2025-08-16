@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { AIAPIClientService, initializeAIAPIClient, getAIAPIClient, shutdownAIAPIClient } from '../ai-api-client.service';
+import { AIAPIClientService, initializeAIAPIClient, getAIAPIClient, shutdownAIAPIClient } from '../ai/ai-api-client.service';
 
 // Mock axios
 jest.mock('axios');

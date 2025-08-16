@@ -2,7 +2,7 @@ import request from 'supertest';
 import { app } from '../../app';
 import prisma from '../../lib/prisma';
 import jwt from 'jsonwebtoken';
-import aiService from '../../services/aiService';
+import aiService from '../../services/ai/aiService';
 
 describe('AI Routes', () => {
   let authToken: string;

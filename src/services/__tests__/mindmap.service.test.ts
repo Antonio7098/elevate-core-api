@@ -1,4 +1,4 @@
-import { MindmapService, MindmapNode, MindmapEdge } from '../mindmap.service';
+import { MindmapService, MindmapNode, MindmapEdge } from '../ai/mindmap.service';
 
 describe('MindmapService', () => {
   let mindmapService: MindmapService;

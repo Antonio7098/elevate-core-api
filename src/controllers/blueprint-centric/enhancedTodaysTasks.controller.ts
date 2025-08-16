@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { EnhancedTodaysTasksService } from '../../services/enhancedTodaysTasks.service';
+import { EnhancedTodaysTasksService } from '../../services/mastery/enhancedTodaysTasks.service';
 import { AuthRequest } from '../../middleware/auth.middleware';
 
 const enhancedTodaysTasksService = new EnhancedTodaysTasksService();
@@ -446,7 +446,7 @@ export class EnhancedTodaysTasksController {
       }
       const userId = req.user.userId;
 
-      const streakInfo = await enhancedTodaysTasksService.getUserCompletionStreak(userId);
+      const streakInfo = await enhancedTodaysTasksService.getCompletionStreak(userId);
 
       res.status(200).json({
         success: true,
