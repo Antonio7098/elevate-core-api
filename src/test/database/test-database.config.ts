@@ -70,12 +70,18 @@ export class TestDatabaseManager {
 
     } catch (error) {
       isDockerAvailable = false;
-      console.warn('⚠️ Docker unavailable, falling back to SQLite for testing');
-      
-      // Fallback to SQLite for testing
-      const sqliteUrl = 'file:./test.db';
-      databaseUrl = sqliteUrl;
-      
+      console.warn('⚠️ Docker unavailable, attempting to use existing DATABASE_URL for testing');
+
+      const fallbackUrl = process.env.DATABASE_URL;
+      if (!fallbackUrl) {
+        throw new Error('Docker is unavailable and no DATABASE_URL is set. Start Docker Desktop or set a valid PostgreSQL DATABASE_URL to run tests.');
+      }
+
+      databaseUrl = fallbackUrl;
+
+      // Apply migrations and generate client for the fallback DB
+      await this.runMigrations(databaseUrl);
+
       prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
       await prisma.$connect();
 
@@ -86,6 +92,7 @@ export class TestDatabaseManager {
         isDockerAvailable: false
       };
 
+      console.log('✅ Connected to fallback DATABASE_URL for tests');
       return this.config;
     }
   }
@@ -113,19 +120,29 @@ export class TestDatabaseManager {
   private async runMigrations(databaseUrl: string): Promise<void> {
     try {
       const projectRoot = path.resolve(__dirname, '../../../');
-      
+      const schemaPath = 'src/db/prisma/schema.prisma';
+
       // Set environment variable for migrations
       const env = { ...process.env, DATABASE_URL: databaseUrl };
       
-      // Run migrations
-      execSync('npx prisma migrate deploy', {
-        cwd: projectRoot,
-        stdio: 'inherit',
-        env
-      });
+      // Try running migrations first; if none exist or it fails, fallback to db push
+      try {
+        execSync(`npx prisma migrate deploy --schema ${schemaPath}`, {
+          cwd: projectRoot,
+          stdio: 'inherit',
+          env
+        });
+      } catch (e) {
+        console.warn('⚠️ prisma migrate deploy failed. Falling back to prisma db push for test DB...');
+        execSync(`npx prisma db push --schema ${schemaPath}`, {
+          cwd: projectRoot,
+          stdio: 'inherit',
+          env
+        });
+      }
 
       // Generate Prisma client
-      execSync('npx prisma generate', {
+      execSync(`npx prisma generate --schema ${schemaPath}`, {
         cwd: projectRoot,
         stdio: 'inherit',
         env

@@ -2,8 +2,10 @@
 import { PrismaClient } from '@prisma/client';
 import { execSync } from 'child_process';
 import { performance } from 'perf_hooks';
+import TestDatabaseManager from '../test/database/test-database.config';
 
-const prisma = new PrismaClient();
+let prisma: PrismaClient;
+let testDbManager: TestDatabaseManager | null = null;
 
 interface TestResult {
   suite: string;
@@ -65,15 +67,39 @@ class ComprehensiveTestRunner {
       console.error('❌ Test execution failed:', error);
       process.exit(1);
     } finally {
-      await prisma.$disconnect();
+      try {
+        if (testDbManager) {
+          await testDbManager.teardown();
+        } else if (prisma) {
+          await prisma.$disconnect();
+        }
+      } catch {
+        // noop
+      }
     }
   }
 
   private async testDatabaseConnection(): Promise<void> {
     console.log('🔌 Testing database connection...');
     try {
-      await prisma.$connect();
-      console.log('✅ Database connection successful');
+      const forceDocker = (process.env.USE_DOCKER_TEST_DB || '').toLowerCase() === 'true';
+      const existingUrl = process.env.DATABASE_URL;
+      if (!forceDocker && existingUrl) {
+        // Use provided DATABASE_URL
+        prisma = new PrismaClient({ datasources: { db: { url: existingUrl } } });
+        await prisma.$connect();
+        console.log('✅ Database connection successful (using existing DATABASE_URL)');
+      } else {
+        // Spin up ephemeral test DB (Postgres via Testcontainers)
+        testDbManager = TestDatabaseManager.getInstance();
+        const config = await testDbManager.setup();
+        prisma = config.prisma;
+
+        // Ensure child processes (Jest, etc.) use the same DB
+        process.env.DATABASE_URL = config.databaseUrl;
+
+        console.log('✅ Database connection successful (provisioned test DB via Testcontainers)');
+      }
     } catch (error) {
       console.error('❌ Database connection failed:', error);
       throw new Error('Cannot run tests without database connection');

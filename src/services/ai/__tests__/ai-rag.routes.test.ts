@@ -5,7 +5,9 @@ import { generateToken } from '../../../utils/jwt';
 
 const prisma = new PrismaClient();
 
-describe('AI RAG Routes', () => {
+const maybeDescribe = (process.env.JEST_SKIP_AI === '1' || process.env.JEST_SKIP_AI === 'true') ? describe.skip : describe;
+
+maybeDescribe('AI RAG Routes', () => {
   let testUser: User;
   let authToken: string;
 

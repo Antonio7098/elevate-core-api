@@ -1,35 +1,79 @@
-# Sprint ##: Backend - Learning Blueprint Foundation
+# Sprint ##: Backend - Learning Blueprint & Unified Content Generation
 
 **Date Range:** [Start Date] - [End Date]
-**Primary Focus:** Core API - Database Schema & Orchestration Endpoint for Source Deconstruction
-**Overview:** This sprint focuses on building the backend foundation for the new "Learning Blueprint" feature. The goal is to create the database model to store the structured blueprint JSON and to implement the Core API endpoint that will orchestrate the two-phase generation process.
+**Primary Focus:** Core API - Implementing the Refined Learning Blueprint Architecture
+**Overview:** This sprint focuses on building the backend foundation for the "Learning Blueprint" feature, based on a revised, more robust data model. The goal is to create a central `LearningSource` entity that holds the original text and its AI-deconstructed blueprint, which can then be used to generate standard, editable `Note` and `QuestionSet` records.
 
 ---
 
 ## I. Planned Tasks & To-Do List
 
 - [ ] **Task 1: Update Prisma Schema (`schema.prisma`)**
-    - [ ] **Sub-task 1.1:** Create a new `LearningBlueprint` model.
-        * Fields: `id`, `content: Json`, and a **unique one-to-one relationship** with `QuestionSet` via `questionSetId`.
-    - [ ] **Sub-task 1.2:** Add the inverse relation `learningBlueprint: LearningBlueprint?` to the `QuestionSet` model.
-    - [ ] **Sub-task 1.3:** Run the migration: `npx prisma migrate dev --name "feat_learning_blueprint"` and regenerate the Prisma Client.
+    - [ ] **Sub-task 1.1 (Create `LearningSource` Model):** Create the new central model to hold the source text.
+        ```prisma
+        model LearningSource {
+          id                    Int      @id @default(autoincrement())
+          title                 String
+          sourceText            String
+          userId                Int
+          folderId              Int
+          user                  User     @relation(fields: [userId], references: [id])
+          folder                Folder   @relation(fields: [folderId], references: [id])
+          
+          learningBlueprint     LearningBlueprint?
+          questionSets          QuestionSet[]
+          notes                 Note[] // A source can generate many notes
+          
+          createdAt DateTime @default(now())
+        }
+        ```
+    - [ ] **Sub-task 1.2 (Create `LearningBlueprint` Model):** Create the model to hold the AI's analysis, with a one-to-one relationship back to `LearningSource`.
+        ```prisma
+        model LearningBlueprint {
+          id               Int      @id @default(autoincrement())
+          content          Json
+          learningSourceId Int      @unique
+          learningSource   LearningSource @relation(fields: [learningSourceId], references: [id], onDelete: Cascade)
+        }
+        ```
+    - [ ] **Sub-task 1.3 (Refactor `Note` Model):** The `Note` model is now unified. Add an optional relation to link it back to a `LearningSource` if it was AI-generated.
+        * Add `learningSourceId: Int?`
+        * Add `learningSource: LearningSource? @relation(fields: [learningSourceId], references: [id], onDelete: SetNull)`
+        * Add `aiGenerated: Boolean @default(false)`
+    - [ ] **Sub-task 1.4 (Refactor `QuestionSet` Model):** Remove the `source` field and add an optional `learningSourceId: Int?` to link it back to a `LearningSource`. Add `aiGenerated: Boolean @default(false)`.
+    - [ ] **Sub-task 1.5 (Apply Migration):** Run `npx prisma migrate dev --name "feat_unified_learning_source"` and regenerate the Prisma Client.
 
-- [ ] **Task 2: Create New "Deconstruction" Endpoint & Service**
-    - [ ] **Sub-task 2.1:** Create a new route: `POST /api/ai/deconstruct-source`. This will be the main endpoint the frontend calls to start the whole process.
-    - [ ] **Sub-task 2.2:** The controller for this endpoint will accept `sourceText`, `title`, and a `folderId`.
-    - [ ] **Sub-task 2.3 (Service Logic):** The service function will orchestrate the two-phase process:
-        1.  First, it creates an empty `QuestionSet` to act as a container.
-        2.  It then calls the **Python AI Service's** new `/api/ai/create-blueprint` endpoint, sending the `sourceText`.
-        3.  Upon receiving the blueprint JSON, it creates a `LearningBlueprint` record in the database, linking it to the newly created `QuestionSet`.
-        4.  It returns the `QuestionSet` (now with its associated blueprint) to the frontend.
+- [ ] **Task 2: Implement the Two-Phase Generation Flow**
+    - [ ] **Sub-task 2.1 (Phase 1 Endpoint - Deconstruction):**
+        * Create a new route: `POST /api/learning-sources`.
+        * The controller will accept `sourceText`, `title`, and `folderId`.
+        * The service logic will create a new `LearningSource` record, call the Python AI Service's `/api/ai/create-blueprint` endpoint, and update the `LearningSource` with the returned blueprint JSON. It returns the new `LearningSource` object.
+    - [ ] **Sub-task 2.2 (Phase 2 Endpoint - Note Generation):**
+        * Create a new route: `POST /api/learning-sources/:id/generate-note`.
+        * The controller accepts a `learningSourceId` and generation parameters (e.g., `noteStyle`, `instructions`).
+        * The service fetches the `LearningSource` (specifically including its blueprint) and `UserMemory`, calls the AI, and then **creates a new record in the standard `Note` table**, linking it to the `learningSourceId` and setting `aiGenerated: true`.
+    - [ ] **Sub-task 2.3 (Phase 2 Endpoint - Question Generation):**
+        * Create a new route: `POST /api/learning-sources/:id/generate-questions`.
+        * Follows the same logic as note generation, but creates a new `QuestionSet` and its `Question`s, linking the set back to the `learningSourceId` and setting `aiGenerated: true`.
 
-- [ ] **Task 3: Refactor Existing Generation Endpoints**
-    - [ ] **Sub-task 3.1:** Modify the existing `POST /api/ai/generate-questions` endpoint. It should now accept a `blueprintId` instead of raw source text. Its logic will now fetch the blueprint and send relevant parts to the Python AI service.
-    - [ ] **Sub-task 3.2:** Do the same for the new "Generate Notes" endpoint. It will also be powered by the pre-existing blueprint.
+- [ ] **Task 3: Update Integration Tests**
+    - [ ] **Sub-task 3.1:** Create a new test suite, `learningSource.routes.test.ts`, to test the new two-phase generation flow.
+    - [ ] **Sub-task 3.2:** The tests must verify that `LearningSource` and `LearningBlueprint` are created correctly.
+    - [ ] **Sub-task 3.3:** The tests must verify that the generation endpoints correctly create records in the `Note` and `QuestionSet` tables and that they are linked to the parent `LearningSource`.
 
-- [ ] **Task 4: Write Integration Tests**
-    - [ ] **Sub-task 4.1:** Write tests for the new `POST /api/ai/deconstruct-source` endpoint, mocking the call to the Python service.
-    - [ ] **Sub-task 4.2:** Update tests for question/note generation to reflect that they are now powered by a blueprint.
+---
+
+## II. Agent's Implementation Summary & Notes
+
+*Instructions for AI Agent (Cascade): For each planned task you complete from Section I, please provide a summary below, including notes on key files modified and any challenges or decisions made.*
+
+**(Agent will fill this section out as work is completed)**
+
+---
+
+## III. Overall Sprint Summary & Review (To be filled out by Antonio)
+
+**(This section to be filled out upon sprint completion)**
 
 ---
 **Signed off:** DO NOT PROCEED WITH THE SPRINT UNLESS SIGNED OFF

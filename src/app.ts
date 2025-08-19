@@ -28,9 +28,10 @@ import sectionAnalyticsRouter from './routes/sectionAnalytics.routes';
 import studySessionsRouter from './routes/mastery/studySessions.routes';
 import contentRecommendationsRouter from './routes/contentRecommendations.routes';
 import { initializeAIAPIClient, shutdownAIAPIClient, getAIAPIClient } from './services/ai/ai-api-client.service';
-import { NestFactory } from '@nestjs/core'; // Temporarily disabled - not used when Swagger is disabled
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import * as swaggerUi from 'swagger-ui-express';
+// Swagger temporarily disabled; remove Nest/Swagger imports to avoid build-time module resolution
+// import { NestFactory } from '@nestjs/core';
+// import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+// import * as swaggerUi from 'swagger-ui-express';
 // AI-RAG imports moved to services/ai directory
 // Note: Swagger generation temporarily disabled during reorganization
 
