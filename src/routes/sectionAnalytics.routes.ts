@@ -28,7 +28,9 @@ router.get('/mastery/:sectionId', (req, res) => {
 });
 
 // GET /api/section-analytics/uue-progress/:sectionId - Get UUE stage progress analytics
-router.get('/uue-progress/:sectionId', masteryCriterionController.getSectionUueProgress);
+router.get('/uue-progress/:sectionId', (req, res) => {
+  res.json({ message: 'Section UUE progress analytics not yet implemented' });
+});
 
 // GET /api/section-analytics/engagement/:sectionId - Get user engagement analytics for a section
 router.get('/engagement/:sectionId', (req, res) => {
@@ -37,7 +39,9 @@ router.get('/engagement/:sectionId', (req, res) => {
 
 // Section content analytics
 // GET /api/section-analytics/content/:sectionId - Get content analytics for a section
-router.get('/content/:sectionId', blueprintSectionController.getSectionContent);
+router.get('/content/:sectionId', (req, res) => {
+  res.json({ message: 'Section content analytics not yet implemented' });
+});
 
 // GET /api/section-analytics/notes/:sectionId - Get note analytics for a section
 router.get('/notes/:sectionId', (req, res) => {
@@ -73,7 +77,9 @@ router.get('/forecast/:sectionId', (req, res) => {
 
 // Blueprint-level analytics
 // GET /api/section-analytics/blueprint/:blueprintId - Get analytics for all sections in a blueprint
-router.get('/blueprint/:blueprintId', blueprintSectionController.getUserContentStats);
+router.get('/blueprint/:blueprintId', (req, res) => {
+  res.json({ message: 'Blueprint analytics not yet implemented' });
+});
 
 // GET /api/section-analytics/blueprint-summary/:blueprintId - Get summary analytics for a blueprint
 router.get('/blueprint-summary/:blueprintId', (req, res) => {

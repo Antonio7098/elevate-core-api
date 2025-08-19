@@ -164,7 +164,7 @@ export class EnhancedSpacedRepetitionController {
         return res.status(401).json({ error: 'User not authenticated' });
       }
 
-      const stats = await getMasteryStats(userId);
+      const stats = await this.enhancedSpacedRepetitionService.getMasteryStats(userId);
 
       res.json({
         success: true,

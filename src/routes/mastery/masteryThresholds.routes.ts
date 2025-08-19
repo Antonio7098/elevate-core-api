@@ -13,62 +13,51 @@ router.use(protect);
  * /api/mastery-thresholds:
  *   tags: [Mastery Thresholds]
  *   description: Mastery threshold customization and management endpoints
+ *   
+ *   NOTE: This endpoint is temporarily disabled while primitive-based 
+ *   spaced repetition is being redone.
  */
 
-// Mastery threshold management
-// GET /api/mastery-thresholds/user/:userId - Get user's mastery thresholds
-router.get('/user/:userId', enhancedSpacedRepetitionController.getUserMasteryThresholds);
+// ============================================================================
+// MASTERY THRESHOLD ROUTES - TEMPORARILY DISABLED
+// ============================================================================
+// These routes are disabled while primitive-based spaced repetition is being redone
+// They will be reimplemented with the new primitive-based approach
 
-// GET /api/mastery-thresholds/section/:sectionId - Get mastery thresholds for a section
-router.get('/section/:sectionId', enhancedSpacedRepetitionController.getSectionMasteryThresholds);
+// Mastery threshold management - TEMPORARILY DISABLED
+// router.get('/user/:userId', enhancedSpacedRepetitionController.getUserMasteryThresholds);
+// router.get('/section/:sectionId', enhancedSpacedRepetitionController.getSectionMasteryThresholds);
+// router.get('/criterion/:criterionId', enhancedSpacedRepetitionController.getCriterionMasteryThreshold);
+// router.post('/criterion/:criterionId', enhancedSpacedRepetitionController.setCriterionMasteryThreshold);
+// router.put('/criterion/:criterionId', enhancedSpacedRepetitionController.setCriterionMasteryThreshold);
+// router.delete('/criterion/:criterionId', enhancedSpacedRepetitionController.setCriterionMasteryThreshold);
 
-// GET /api/mastery-thresholds/criterion/:criterionId - Get mastery threshold for a criterion
-router.get('/criterion/:criterionId', enhancedSpacedRepetitionController.getCriterionMasteryThreshold);
+// Mastery threshold templates - TEMPORARILY DISABLED
+// router.get('/templates', enhancedSpacedRepetitionController.getMasteryThresholdTemplates);
+// router.post('/templates/apply/:templateId', (req, res) => {
+//   res.json({ message: 'Template application not yet implemented' });
+// });
+// router.post('/templates/create', (req, res) => {
+//   res.json({ message: 'Template creation not yet implemented' });
+// });
 
-// POST /api/mastery-thresholds/criterion/:criterionId - Set mastery threshold for a criterion
-router.post('/criterion/:criterionId', enhancedSpacedRepetitionController.setCriterionMasteryThreshold);
+// Mastery threshold analysis - TEMPORARILY DISABLED
+// router.get('/analysis/user/:userId', enhancedSpacedRepetitionController.getUserMasteryThresholdAnalysis);
+// router.get('/analysis/section/:sectionId', enhancedSpacedRepetitionController.getSectionMasteryThresholdAnalysis);
+// router.get('/recommendations/:userId', enhancedSpacedRepetitionController.getMasteryThresholdRecommendations);
 
-// PUT /api/mastery-thresholds/criterion/:criterionId - Update mastery threshold for a criterion (using setCriterionMasteryThreshold)
-router.put('/criterion/:criterionId', enhancedSpacedRepetitionController.setCriterionMasteryThreshold);
+// Mastery threshold bulk operations - TEMPORARILY DISABLED
+// router.post('/bulk-update', enhancedSpacedRepetitionController.bulkUpdateMasteryThresholds);
+// router.post('/bulk-reset', enhancedSpacedRepetitionController.bulkResetMasteryThresholds);
+// router.post('/import', enhancedSpacedRepetitionController.importMasteryThresholds);
+// router.get('/export/:userId', enhancedSpacedRepetitionController.exportMasteryThresholds);
 
-// DELETE /api/mastery-thresholds/criterion/:criterionId - Reset mastery threshold to default (using setCriterionMasteryThreshold with default values)
-router.delete('/criterion/:criterionId', enhancedSpacedRepetitionController.setCriterionMasteryThreshold);
-
-// Mastery threshold templates
-// GET /api/mastery-thresholds/templates - Get available mastery threshold templates
-router.get('/templates', enhancedSpacedRepetitionController.getMasteryThresholdTemplates);
-
-// POST /api/mastery-thresholds/templates/apply/:templateId - Apply a mastery threshold template (placeholder)
-router.post('/templates/apply/:templateId', (req, res) => {
-  res.json({ message: 'Template application not yet implemented' });
+// Temporary placeholder route
+router.get('/', (req, res) => {
+  res.json({ 
+    message: 'Mastery thresholds endpoint temporarily disabled',
+    note: 'This endpoint is being reimplemented with the new primitive-based spaced repetition system'
+  });
 });
-
-// POST /api/mastery-thresholds/templates/create - Create a custom mastery threshold template (placeholder)
-router.post('/templates/create', (req, res) => {
-  res.json({ message: 'Template creation not yet implemented' });
-});
-
-// Mastery threshold analysis
-// GET /api/mastery-thresholds/analysis/user/:userId - Analyze user's mastery threshold effectiveness
-router.get('/analysis/user/:userId', enhancedSpacedRepetitionController.getUserMasteryThresholdAnalysis);
-
-// GET /api/mastery-thresholds/analysis/section/:sectionId - Analyze section mastery threshold effectiveness
-router.get('/analysis/section/:sectionId', enhancedSpacedRepetitionController.getSectionMasteryThresholdAnalysis);
-
-// GET /api/mastery-thresholds/recommendations/:userId - Get mastery threshold recommendations
-router.get('/recommendations/:userId', enhancedSpacedRepetitionController.getMasteryThresholdRecommendations);
-
-// Mastery threshold bulk operations
-// POST /api/mastery-thresholds/bulk-update - Bulk update mastery thresholds
-router.post('/bulk-update', enhancedSpacedRepetitionController.bulkUpdateMasteryThresholds);
-
-// POST /api/mastery-thresholds/bulk-reset - Bulk reset mastery thresholds to defaults
-router.post('/bulk-reset', enhancedSpacedRepetitionController.bulkResetMasteryThresholds);
-
-// POST /api/mastery-thresholds/import - Import mastery thresholds from external source
-router.post('/import', enhancedSpacedRepetitionController.importMasteryThresholds);
-
-// GET /api/mastery-thresholds/export/:userId - Export user's mastery thresholds
-router.get('/export/:userId', enhancedSpacedRepetitionController.exportMasteryThresholds);
 
 export default router;

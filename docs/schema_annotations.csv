@@ -1,0 +1,98 @@
+group,model,field,line_number,action,description,status,priority
+User,User,dailyStudyTimeMinutes,16,DISCUSS,Remove,pending,Medium
+User,User,learningStyle,23,DISCUSS,Can this not be an enum?,pending,Medium
+User,User,experienceLevel,24,DISCUSS,"Enum, and more like age range or something more concrete",pending,Medium
+User,User,autoAdjustment,25,CLARIFY,What is this?,pending,Medium
+User,User,userPreferences,48,CLARIFY,What is this,pending,Medium
+User,User,None,56,PROPOSE,User model seems like it can be tidied up a lot!,pending,Medium
+LearningBlueprint,LearningBlueprint,sourceText,60,DISCUSS,We need to add dealing with new section additions with new sources. Options to organise source content better in blueprint,pending,Medium
+LearningBlueprint,LearningBlueprint,sourceId,65,DISCUSS,Is there a need for source text as well?,pending,Medium
+LearningBlueprint,LearningBlueprint,description,66,DISCUSS,Maybe change to overview?,pending,Medium
+LearningBlueprint,LearningBlueprint,knowledgePrimitives,69,DISCUSS,"Is there a need for this, since we can access through the blueprint sections. IS it legacy? If there is, is there a mechanism for updating when new primitives are added? ANd is this not necessary for mastery criterion, questions as well?",pending,Medium
+LearningBlueprint,LearningBlueprint,generatedQuestionSets,72,REMOVE,This is legacy code!!,pending,Medium
+BlueprintSection,BlueprintSection,description,82,DISCUSS,Overview better?,pending,Medium
+BlueprintSection,BlueprintSection,difficulty,87,DISCUSS,We need a more objective, possibly relative to other content, metric,pending,Medium
+BlueprintSection,BlueprintSection,estimatedTimeMinutes,88,DISCUSS,"Time to what? I think we can get rid of this.m",pending,Medium
+BlueprintSection,BlueprintSection,userCriterionMasteries,99,DISCUSS,"No userPrimitiveProgress or any primitive related fields? Why criterion masteries and not primitve ones?",pending,Medium
+BlueprintSection,BlueprintSection,userSectionPreferences,100,CLARIFY,What is this?,pending,Medium
+BlueprintSection,BlueprintSection,None,108,PROPOSE,"Needs some linking to source text (chunks, line number etc...)",pending,Medium
+NoteSection,NoteSection,plainText,117,MAKE SURE,That there are cascading updates between these three content types,pending,Medium
+NoteSection,NoteSection,contentVersion,118,CLARIFY,What does this mean?,pending,Medium
+NoteSection,NoteSection,blueprintSectionId,119,PROPOSE,We need to automatically pick up changes in blueprints and suggest updating the notes as well,pending,Medium
+NoteSection,NoteSection,generatedFromBlueprint,125,DISCUSS,This is redundant due to the blueprintSectionID??,pending,Medium
+NoteSection,NoteSection,generatedFromBlueprintId,126,DISCUSS,This is redundant due to the blueprintSectionID??,pending,Medium
+NoteSection,NoteSection,None,133,NOTE,"Maybe some notes about the style and instructions that were passed into making the notes? I think we need to work on creating these options.",pending,Medium
+MasteryCriterion,MasteryCriterion,description,141,PROPOSE,"Make this more descriptive like ""lerning objective"" or something",pending,Medium
+MasteryCriterion,MasteryCriterion,weight,145,DISCUSS,"This wil have to change now we have multi primitive linking. I was thinking the weight could be based on the connection type eg. ""primary"", ""secondary"", etc... This was present in the ai api but I dont see it in the junction table here",pending,Medium
+MasteryCriterion,MasteryCriterion,attemptsAllowed,147,REMOVE,Redundant. Remove,pending,Medium
+MasteryCriterion,MasteryCriterion,complexityScore,149,DISCUSS,"Subjective. We need something concrete, relative to rest of material, or remove this.",pending,Medium
+MasteryCriterion,MasteryCriterion,knowledgePrimitiveId,150,CLARIFY,"We have moved to multi primitive linking, using the junction table. Is this necessary? If so, it needs to be changed to String[]",pending,Medium
+MasteryCriterion,MasteryCriterion,masteryThreshold,151,DISCUSS,"Is this not supposed to be ""SURVEY"", ...",pending,Medium
+MasteryCriterion,MasteryCriterion,timeLimit,152,DISCUSS,Redundant, remove,pending,Medium
+MasteryCriterion,MasteryCriterion,difficulty,154,DISCUSS,Again with the subjectivity,pending,Medium
+MasteryCriterion,MasteryCriterion,estimatedPrimitiveCount,155,CLARIFY,Explain why this is needed,pending,Medium
+MasteryCriterion,MasteryCriterion,relationshipComplexity,156,DISCUSS,What this is and why this is needed,pending,Medium
+MasteryCriterion,MasteryCriterion,maxPrimitives,157,DISCUSS,"Maybe this is what you meant by complexity? IS it the amount of connected concepts?",pending,Medium
+MasteryCriterion,MasteryCriterion,knowledgePrimitive,161,DISCUSS,We have multi primitive linking now!,pending,Medium
+MasteryCriterion,MasteryCriterion,questions,169,DISCUSS,Legacy!! Remove,pending,Medium
+MasteryCriterionPrimitive,MasteryCriterionPrimitive,weight,191,DISCUSS,Could be based on the relationship type?,pending,Medium
+MasteryCriterionPrimitive,MasteryCriterionPrimitive,strength,192,CLARIFY,What this means,pending,Medium
+QuestionInstance,QuestionInstance,answer,208,CHANGE,Model answer,pending,Medium
+QuestionInstance,QuestionInstance,context,210,CLARIFY,Is this the context from the source text?,pending,Medium
+QuestionInstance,QuestionInstance,difficulty,211,REMOVE,"Once again, subjective!! Remove unless we can come up with something more grounded or relative",pending,Medium
+QuestionInstance,QuestionInstance,None,224,ADD,"Weshould have mark based questions! eg. 3/4 marks on this attempt! QuestionInstanced need marksAvailable and markingCriteria! And make sure that the ai api knows to create them properly! ie. s56",pending,Medium
+KnowledgePrimitive,KnowledgePrimitive,description,231,DISCUSS,Make this more desctiptive?,pending,Medium
+KnowledgePrimitive,KnowledgePrimitive,primitiveType,232,DISCUSS,"Maybe an enum? We need to generate types for lots of different source types",pending,Medium
+KnowledgePrimitive,KnowledgePrimitive,difficultyLevel,233,REMOVE,Subjective!!,pending,Medium
+KnowledgePrimitive,KnowledgePrimitive,estimatedTimeMinutes,234,REMOVE,Redundant!!,pending,Medium
+KnowledgePrimitive,KnowledgePrimitive,blueprintId,236,CLARIFY,Is this necessary when we have blueprint section,pending,Medium
+KnowledgePrimitive,KnowledgePrimitive,complexityScore,240,CLARIFY,What this means!! Subjective!!,pending,Medium
+KnowledgePrimitive,KnowledgePrimitive,isCoreConcept,243,CLARIFY,What this means,pending,Medium
+KnowledgePrimitive,KnowledgePrimitive,prerequisiteIds,244,DISCUSS,Maybe a junction table for this,pending,Medium
+KnowledgePrimitive,KnowledgePrimitive,relatedConceptIds,245,DISCUSS,Maybe a junction table for this,pending,Medium
+KnowledgePrimitive,KnowledgePrimitive,dailySummaries,257,CLARIFY,What this is,pending,Medium
+KnowledgePrimitive,KnowledgePrimitive,KnowledgePrimitive_Prerequisites_A,260,CLARIFY,What this is??,pending,Medium
+UserCriterionMastery,UserCriterionMastery,isMastered,279,DISCUSS,"Mastered when masteryScore is above the threshold. How is thi updated when mastery score is? WHat if the threshold changes?",pending,Medium
+UserCriterionMastery,UserCriterionMastery,lastThresholdCheckDate,285,CLARIFY,WHat this is,pending,Medium
+UserCriterionMastery,UserCriterionMastery,isMastered,289,REMOVE,Repeat!,pending,Medium
+UserCriterionMastery,UserCriterionMastery,blueprintSectionI,290,CLARIFY,Typo?,pending,Medium
+UserCriterionMastery,UserCriterionMastery,attempts,292,PROPOSE,This section seems bloated,pending,Medium
+UserCriterionMastery,UserCriterionMastery,successfulAttempts,295,PROPOSE,This section seems bloated,pending,Medium
+UserCriterionMastery,UserCriterionMastery,reviewCount,302,REMOVE,Repeat!,pending,Medium
+UserCriterionMastery,UserCriterionMastery,successfulReviews,303,REMOVE,Repeat!,pending,Medium
+UserQuestionAnswer,UserQuestionAnswer,isCorrect,326,DISCUSS,"Necessary for mark based questions (which they all are)",pending,Medium
+UserQuestionAnswer,UserQuestionAnswer,None,343,ADD,"Weshould have mark based questions! eg. 3/4 marks on this attempt! QuestionInstanced need marksAvailable and markingCriteria!",pending,Medium
+UserPrimitiveProgress,UserPrimitiveProgress,easeFactor,352,DISCUSS,"Some mechanism for detecting struggling with a primitive and taking appropriate acction",pending,Medium
+UserPrimitiveProgress,UserPrimitiveProgress,easeFactor,352,REMOVE,"No ease factor rubbish! We infer the difficulty from the history.",pending,Medium
+UserPrimitiveProgress,UserPrimitiveProgress,interval,353,CLARIFY,What this is,pending,Medium
+UserPrimitiveProgress,UserPrimitiveProgress,lapses,354,CLARIFY,What this is,pending,Medium
+UserPrimitiveProgress,UserPrimitiveProgress,masteryLevel,357,CLARIFY,What this is,pending,Medium
+UserPrimitiveProgress,UserPrimitiveProgress,blueprintId,360,DISCUSS,"No blueprint section ID?",pending,Medium
+UserStudySession,UserStudySession,questionSetStudySessions,383,DISCUSS,This can be UserQuestionAnswers?,pending,Medium
+UserStudySession,UserStudySession,questionSetStudySessions,383,REMOVE,Legacy code!,pending,Medium
+QuestionSetStudySession,QuestionSetStudySession,None,407,REMOVE,Legacy code!,pending,Medium
+InsightCatalyst,InsightCatalyst,noteId,414,PROPOSE,Needs updating to blueprint centric, with note section,pending,Medium
+InsightCatalyst,InsightCatalyst,questionId,418,PROPOSE,Needs updating to blueprint centric system,pending,Medium
+ScheduledReview,ScheduledReview,questionSetId,438,PROPOSE,Needs to be linked to a primitive,pending,Medium
+ScheduledReview,ScheduledReview,questionSetId,438,REMOVE,Legacy!!,pending,Medium
+ScheduledReview,ScheduledReview,questionSet,445,REMOVE,Legacy!,pending,Medium
+PinnedReview,PinnedReview,None,467,DISCUSS,"MAybe we can make questions, and criterion pinnable as well?",pending,Medium
+UserBucketPreferences,UserBucketPreferences,None,485,DISCUSS,"Is there a need for indivicual bucket sizes if they are filled sequentially? Maybe a total number of questions/marks/minutes(estimate) per day- study time?",pending,Medium
+UserPrimitiveDailySummary,UserPrimitiveDailySummary,None,512,DISCUSS,The need for this?,pending,Medium
+UserLearningAnalytics,UserLearningAnalytics,None,531,DISCUSS,How to enhance this,pending,Medium
+UserMemoryInsight,UserMemoryInsight,insightType,537,DISCUSS,Could be an enum?,pending,Medium
+UserMemoryInsight,UserMemoryInsight,relatedPrimitiveIds,540,DISCUSS,"Linking criterion, question instances, blueprint sections. Would be usefyl for knowledge tree",pending,Medium
+UserMemoryInsight,UserMemoryInsight,isActionable,542,CLARIFY,The need?,pending,Medium
+LearningPath,LearningPath,None,566,CLARIFY,What this is??,pending,Medium
+LearningPathStep,LearningPathStep,None,585,CLARIFY,What this is??,pending,Medium
+KnowledgeRelationship,KnowledgeRelationship,metadata,596,CLARIFY,What this will be,pending,Medium
+KnowledgeRelationship,KnowledgeRelationship,None,609,CLARIFY,"THis is not linked in the primitive model? Is this just for the knowledge graph?",pending,Medium
+Question,Question,None,664,REMOVE,Legacy!,pending,Medium
+QuestionSet,QuestionSet,None,681,REMOVE,Legacy!,pending,Medium
+UserMemory,UserMemory,None,696,PROPOSE,"How this can be enhanced. Definitely could do with some enums",pending,Medium
+UserPreferences,UserPreferences,None,820,DISCUSS,This seems to be replicated in the user model. Which to keep?,pending,Medium
+UserSectionPreferences,UserSectionPreferences,difficulty,829,REMOVE,or make less subjective!,pending,Medium
+UserSectionPreferences,UserSectionPreferences,timeAllocation,830,REMOVE,WHat does this even mean??,pending,Medium
+UserSectionPreferences,UserSectionPreferences,None,839,CLARIFY,Is this linked to in the blueprint section?,pending,Medium
+UserCriterionPreferences,UserCriterionPreferences,None,858,CLARIFY,WHat the point of this is??,pending,Medium
+UserFeedback,UserFeedback,None,875,PROPOSE,"How to enhance this to be any general feedback about the app, so can choose what page or functionality  or category it apples to",pending,Medium

@@ -13,6 +13,8 @@ declare global {
 }
 
 export class UserMemoryController {
+  private static userMemoryService = new UserMemoryService();
+
   /**
    * Get the authenticated user's memory
    */
@@ -23,7 +25,7 @@ export class UserMemoryController {
         throw new AppError('User not authenticated', 401);
       }
 
-      const userMemory = await UserMemoryService.getUserMemory(userId);
+      const userMemory = await UserMemoryController.userMemoryService.getUserMemory(userId);
       res.status(200).json(userMemory);
     } catch (error) {
       if (error instanceof AppError) {
@@ -47,7 +49,7 @@ export class UserMemoryController {
 
       // Accept only the new fields
       const updateData: UserMemoryUpdateData = req.body;
-      const updatedMemory = await UserMemoryService.updateUserMemory(userId, updateData);
+      const updatedMemory = await UserMemoryController.userMemoryService.updateUserMemory(userId, updateData);
       res.status(200).json(updatedMemory);
     } catch (error) {
       if (error instanceof AppError) {

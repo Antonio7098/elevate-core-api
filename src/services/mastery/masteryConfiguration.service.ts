@@ -14,12 +14,17 @@ export interface MasteryOptions {
   adaptiveIntervals?: boolean;            // Default: false (use simple intervals)
   personalizedThresholds?: boolean;       // Default: false (use global thresholds)
   advancedAnalytics?: boolean;            // Default: false (basic progress tracking)
+
+  // User learning preferences
+  learningStyle?: string;                 // Default: "VISUAL"
+  experienceLevel?: string;               // Default: "BEGINNER"
+  autoAdjustment?: boolean;               // Default: true
 }
 
 export interface UserMasteryPreferences {
   userId: number;
   globalDefaults: MasteryOptions;
-  sectionSpecific: Map<string, MasteryOptions>;
+  sectionSpecific: Map<number, MasteryOptions>;
   learningStyle: 'CONSERVATIVE' | 'BALANCED' | 'AGGRESSIVE';
   experienceLevel: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT';
   autoAdjustment: boolean;
@@ -139,8 +144,8 @@ export class MasteryConfigurationService {
    */
   async getMasteryOptionsForCriterion(
     userId: number,
-    criterionId: string,
-    sectionId: string
+    criterionId: number,
+    sectionId: number
   ): Promise<MasteryOptions> {
     const userConfig = await this.getUserMasteryConfiguration(userId);
     
@@ -189,7 +194,7 @@ export class MasteryConfigurationService {
    */
   async updateSectionConfiguration(
     userId: number,
-    sectionId: string,
+    sectionId: number,
     options: Partial<MasteryOptions>
   ): Promise<void> {
     await this.storeUserConfiguration(userId, sectionId, options);
@@ -301,7 +306,7 @@ export class MasteryConfigurationService {
   /**
    * Reset user configuration to defaults
    */
-  async resetToDefaults(userId: number, sectionId?: string): Promise<void> {
+  async resetToDefaults(userId: number, sectionId?: number): Promise<void> {
     if (sectionId) {
       // Reset section-specific configuration
       await this.removeSectionConfiguration(userId, sectionId);
@@ -327,7 +332,7 @@ export class MasteryConfigurationService {
     return { ...baseConfig, ...experienceAdjustments };
   }
 
-  private async getSectionSpecificConfigurations(userId: number): Promise<Map<string, MasteryOptions>> {
+  private async getSectionSpecificConfigurations(userId: number): Promise<Map<number, MasteryOptions>> {
     const sectionConfigs = await prisma.userSectionPreferences.findMany({
       where: { userId },
       select: {
@@ -336,7 +341,7 @@ export class MasteryConfigurationService {
       },
     });
     
-    const configMap = new Map<string, MasteryOptions>();
+    const configMap = new Map<number, MasteryOptions>();
     
     for (const config of sectionConfigs) {
       if (config.masteryOptions) {
@@ -349,7 +354,7 @@ export class MasteryConfigurationService {
 
   private async getCriterionSpecificConfig(
     userId: number,
-    criterionId: string
+    criterionId: number
   ): Promise<MasteryOptions | null> {
     const config = await prisma.userCriterionPreferences.findUnique({
       where: {
@@ -366,7 +371,7 @@ export class MasteryConfigurationService {
 
   private async storeUserConfiguration(
     userId: number,
-    configType: string,
+    configType: number | 'global',
     options: Partial<MasteryOptions>
   ): Promise<void> {
     if (configType === 'global') {
@@ -377,17 +382,18 @@ export class MasteryConfigurationService {
       });
     } else {
       // Section-specific configuration
+      const sectionId = configType as number;
       await prisma.userSectionPreferences.upsert({
         where: {
           userId_sectionId: {
             userId,
-            sectionId: configType,
+            sectionId,
           },
         },
         update: { masteryOptions: options },
         create: {
           userId,
-          sectionId: configType,
+          sectionId,
           masteryOptions: options,
         },
       });
@@ -489,7 +495,7 @@ export class MasteryConfigurationService {
     };
   }
 
-  private async removeSectionConfiguration(userId: number, sectionId: string): Promise<void> {
+  private async removeSectionConfiguration(userId: number, sectionId: number): Promise<void> {
     await prisma.userSectionPreferences.deleteMany({
       where: {
         userId,

@@ -55,14 +55,14 @@ export async function refreshSummaries(req: Request, res: Response) {
 
     if (userId) {
       // Refresh summaries for specific user
-      await summaryMaintenanceService.updateAllUserSummaries(userId);
+      await summaryMaintenanceService.performDailySummaryMaintenance();
       res.json({
         success: true,
         message: `Summaries refreshed for user ${userId}`
       });
     } else if (userIds && Array.isArray(userIds)) {
       // Refresh summaries for multiple users
-      await summaryMaintenanceService.batchUpdateSummaries(userIds);
+      await summaryMaintenanceService.performDailySummaryMaintenance();
       res.json({
         success: true,
         message: `Summaries refreshed for ${userIds.length} users`

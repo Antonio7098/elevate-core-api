@@ -11,6 +11,7 @@
     "test:unit": "jest src/tests/unit --detectOpenHandles --resetModules",
     "test:integration": "jest src/tests/integration --detectOpenHandles --resetModules",
     "test:performance": "ts-node src/scripts/run-performance-tests.ts",
+    "test:production-readiness": "ts-node src/scripts/run-production-readiness-tests.ts",
     "test:all": "ts-node src/scripts/run-all-tests.ts",
     "test:migration": "jest test/migration --runInBand",
     "test:blueprint": "node test-server-blueprint.js",

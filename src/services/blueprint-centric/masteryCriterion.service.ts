@@ -1,4 +1,4 @@
-import { PrismaClient, MasteryCriterion, UueStage } from '@prisma/client';
+import { PrismaClient, MasteryCriterion, UueStage, PrimitiveRelationshipType } from '@prisma/client';
 
 // ============================================================================
 // INTERFACES
@@ -9,12 +9,26 @@ export interface CreateCriterionData {
   description?: string;             // "Understand the basic concept of derivatives"
   weight: number;                   // Importance weight
   uueStage: UueStage;              // FOUNDATIONAL: UUE stage for SR algorithm and learning pathways
-  assessmentType: 'QUESTION_BASED' | 'EXPLANATION_BASED' | 'APPLICATION_BASED' | 'COMPARISON_BASED' | 'CREATION_BASED';
+  assessmentType?: 'QUESTION_BASED' | 'EXPLANATION_BASED' | 'APPLICATION_BASED' | 'COMPARISON_BASED' | 'CREATION_BASED';
   masteryThreshold: number;         // Score needed to master
-  knowledgePrimitiveId: string;     // Links to knowledge primitive
-  blueprintSectionId: string;       // Links to blueprint section
+  knowledgePrimitiveId: string;     // Links to knowledge primitive (legacy support)
+  blueprintSectionId: number | string;       // Links to blueprint section
   userId: number;
   complexityScore?: number;         // AI-calculated complexity (1-10)
+  questionTypes?: string[];         // Optional legacy field used in tests
+  // New multi-primitive fields
+  estimatedPrimitiveCount?: number; // Estimated number of primitives for this criterion
+  maxPrimitives?: number;           // Maximum number of primitives allowed
+  relationshipComplexity?: number;  // Complexity of relationships between primitives
+}
+
+export interface CreateMultiPrimitiveCriterionData extends Omit<CreateCriterionData, 'knowledgePrimitiveId'> {
+  primitives: Array<{
+    primitiveId: string;
+    relationshipType?: PrimitiveRelationshipType;
+    weight?: number;
+    strength?: number;
+  }>;
 }
 
 export interface UpdateCriterionData {
@@ -23,6 +37,38 @@ export interface UpdateCriterionData {
   weight?: number;
   uueStage?: UueStage;
   complexityScore?: number;
+  estimatedPrimitiveCount?: number;
+  maxPrimitives?: number;
+  relationshipComplexity?: number;
+}
+
+export interface PrimitiveRelationshipUpdate {
+  primitiveId: string;
+  relationshipType?: PrimitiveRelationshipType;
+  weight?: number;
+  strength?: number;
+}
+
+export interface MasteryCriterionWithPrimitives extends MasteryCriterion {
+  primitiveRelationships: Array<{
+    id: number;
+    primitiveId: string;
+    relationshipType: PrimitiveRelationshipType;
+    weight: number;
+    strength: number;
+    createdAt: Date;
+    updatedAt: Date;
+    knowledgePrimitive: {
+      primitiveId: string;
+      title: string;
+      description?: string;
+      complexityScore?: number;
+    };
+  }>;
+  _count: {
+    questionInstances: number;
+    primitiveRelationships: number;
+  };
 }
 
 export interface CreateInstanceData {
@@ -50,7 +96,7 @@ export interface UueStageProgress {
 }
 
 export interface CriterionMasteryResult {
-  criterionId: string;
+  criterionId: number | string;
   userId: number;
   isMastered: boolean;
   masteryScore: number;
@@ -138,7 +184,7 @@ export default class MasteryCriterionService {
   /**
    * Gets a mastery criterion by ID
    */
-  async getCriterion(id: string): Promise<MasteryCriterionWithCounts | null> {
+  async getCriterion(id: number | string): Promise<MasteryCriterionWithCounts | null> {
     const criterionId = typeof id === 'string' ? 
       (id.match(/^\d+$/) ? parseInt(id) : 1) : id;
     
@@ -153,7 +199,7 @@ export default class MasteryCriterionService {
   /**
    * Updates a mastery criterion
    */
-  async updateCriterion(id: string, data: UpdateCriterionData): Promise<MasteryCriterion> {
+  async updateCriterion(id: number | string, data: UpdateCriterionData): Promise<MasteryCriterion> {
     const criterionId = typeof id === 'string' ? 
       (id.match(/^\d+$/) ? parseInt(id) : 1) : id;
     
@@ -166,7 +212,7 @@ export default class MasteryCriterionService {
   /**
    * Deletes a mastery criterion
    */
-  async deleteCriterion(id: string): Promise<void> {
+  async deleteCriterion(id: number | string): Promise<void> {
     const criterionId = typeof id === 'string' ? 
       (id.match(/^\d+$/) ? parseInt(id) : 1) : id;
     
@@ -219,7 +265,7 @@ export default class MasteryCriterionService {
   /**
    * Gets all mastery criteria for a blueprint section
    */
-  async getCriteriaBySection(sectionId: string): Promise<MasteryCriterion[]> {
+  async getCriteriaBySection(sectionId: number | string): Promise<MasteryCriterion[]> {
     const sectionIdNum = typeof sectionId === 'string' ? 
       (sectionId.match(/^\d+$/) ? parseInt(sectionId) : 1) : sectionId;
     
@@ -232,7 +278,7 @@ export default class MasteryCriterionService {
   /**
    * Gets mastery criteria by UUE stage
    */
-  async getCriteriaByUueStage(sectionId: string, uueStage: UueStage): Promise<MasteryCriterion[]> {
+  async getCriteriaByUueStage(sectionId: number | string, uueStage: UueStage): Promise<MasteryCriterion[]> {
     const sectionIdNum = typeof sectionId === 'string' ? 
       (sectionId.match(/^\d+$/) ? parseInt(sectionId) : 1) : sectionId;
     
@@ -337,7 +383,7 @@ export default class MasteryCriterionService {
   /**
    * Calculates criterion mastery for a user
    */
-  async calculateCriterionMastery(criterionId: string, userId: number): Promise<CriterionMasteryResult> {
+  async calculateCriterionMastery(criterionId: number | string, userId: number): Promise<CriterionMasteryResult> {
     const criterion = await this.getCriterion(criterionId);
     if (!criterion) {
       throw new Error(`Criterion ${criterionId} not found`);
@@ -346,20 +392,29 @@ export default class MasteryCriterionService {
     const criterionIdNum = typeof criterionId === 'string' ? 
       (criterionId.match(/^\d+$/) ? parseInt(criterionId) : 1) : criterionId;
 
+    // Get user mastery record
+    const userMastery = await (this.prisma as any).userCriterionMastery.findUnique({
+      where: { 
+        userId_criterionId: {
+          userId: userId,
+          criterionId: criterionIdNum
+        }
+      }
+    });
+
+    if (!userMastery) {
+      throw new Error(`User mastery not found for criterion ${criterionId}`);
+    }
+
     const questionInstances = await (this.prisma as any).questionInstance.findMany({
       where: { masteryCriterionId: criterionIdNum }
     });
 
-    // For now, return a simple calculation
-    // In a real implementation, this would calculate based on user performance
-    const masteryScore = 0.0;
-    const isMastered = masteryScore >= ((criterion as any).masteryThreshold || 0.8);
-
     return {
       criterionId,
       userId,
-      isMastered,
-      masteryScore,
+      isMastered: userMastery.isMastered,
+      masteryScore: userMastery.masteryScore,
       lastUpdated: new Date()
     };
   }
@@ -679,5 +734,449 @@ export default class MasteryCriterionService {
     }
 
     return stats;
+  }
+
+  // ============================================================================
+  // MULTI-PRIMITIVE MASTERY CRITERIA METHODS
+  // ============================================================================
+
+  /**
+   * Creates a new mastery criterion with multiple primitives
+   */
+  async createMultiPrimitiveCriterion(data: CreateMultiPrimitiveCriterionData): Promise<MasteryCriterionWithPrimitives> {
+    // Validate primitives array
+    if (!data.primitives || data.primitives.length === 0) {
+      throw new Error('At least one primitive is required');
+    }
+    if (data.primitives.length > (data.maxPrimitives || 10)) {
+      throw new Error(`Maximum ${data.maxPrimitives || 10} primitives allowed`);
+    }
+
+    // Verify all primitives exist
+    for (const primitive of data.primitives) {
+      const exists = await (this.prisma as any).knowledgePrimitive.findUnique({
+        where: { primitiveId: primitive.primitiveId }
+      });
+      if (!exists) {
+        throw new Error(`Knowledge primitive ${primitive.primitiveId} not found`);
+      }
+    }
+
+    // Verify blueprint section exists
+    const sectionId = typeof data.blueprintSectionId === 'string' ? 
+      (data.blueprintSectionId.match(/^\d+$/) ? parseInt(data.blueprintSectionId) : 1) : 
+      data.blueprintSectionId;
+    
+    const section = await (this.prisma as any).blueprintSection.findUnique({
+      where: { id: sectionId }
+    });
+    if (!section) {
+      throw new Error(`Blueprint section ${data.blueprintSectionId} not found`);
+    }
+
+    // Create the criterion first
+    const criterion = await (this.prisma as any).masteryCriterion.create({
+      data: {
+        title: data.title,
+        description: data.description,
+        weight: data.weight,
+        uueStage: data.uueStage,
+        assessmentType: data.assessmentType,
+        masteryThreshold: data.masteryThreshold,
+        complexityScore: data.complexityScore,
+        knowledgePrimitiveId: data.primitives[0].primitiveId, // Legacy support - use first primitive
+        blueprintSectionId: sectionId,
+        userId: data.userId,
+        estimatedPrimitiveCount: data.estimatedPrimitiveCount || data.primitives.length,
+        maxPrimitives: data.maxPrimitives || 10,
+        relationshipComplexity: data.relationshipComplexity || this.calculateRelationshipComplexity(data.primitives)
+      }
+    });
+
+    // Create primitive relationships
+    const primitiveRelationships = [];
+    for (const primitive of data.primitives) {
+      const relationship = await (this.prisma as any).masteryCriterionPrimitive.create({
+        data: {
+          criterionId: criterion.id,
+          primitiveId: primitive.primitiveId,
+          relationshipType: primitive.relationshipType || 'PRIMARY',
+          weight: primitive.weight || 1.0,
+          strength: primitive.strength || 0.8
+        }
+      });
+      primitiveRelationships.push(relationship);
+    }
+
+    // Return criterion with primitives
+    return this.getCriterionWithPrimitives(criterion.id);
+  }
+
+  /**
+   * Links a primitive to an existing mastery criterion
+   */
+  async linkPrimitiveToCriterion(
+    criterionId: number,
+    primitiveId: string,
+    relationshipType: PrimitiveRelationshipType = 'PRIMARY',
+    weight: number = 1.0,
+    strength: number = 0.8
+  ): Promise<any> {
+    // Verify criterion exists
+    const criterion = await this.getCriterion(criterionId.toString());
+    if (!criterion) {
+      throw new Error(`Mastery criterion ${criterionId} not found`);
+    }
+
+    // Verify primitive exists
+    const primitive = await (this.prisma as any).knowledgePrimitive.findUnique({
+      where: { primitiveId }
+    });
+    if (!primitive) {
+      throw new Error(`Knowledge primitive ${primitiveId} not found`);
+    }
+
+    // Check if relationship already exists
+    const existingRelationship = await (this.prisma as any).masteryCriterionPrimitive.findUnique({
+      where: {
+        criterionId_primitiveId: {
+          criterionId,
+          primitiveId
+        }
+      }
+    });
+
+    if (existingRelationship) {
+      throw new Error(`Primitive ${primitiveId} is already linked to criterion ${criterionId}`);
+    }
+
+    // Check max primitives limit
+    const currentCount = await (this.prisma as any).masteryCriterionPrimitive.count({
+      where: { criterionId }
+    });
+
+    if (currentCount >= (criterion.maxPrimitives || 10)) {
+      throw new Error(`Maximum number of primitives (${criterion.maxPrimitives || 10}) reached for this criterion`);
+    }
+
+    // Create the relationship
+    return await (this.prisma as any).masteryCriterionPrimitive.create({
+      data: {
+        criterionId,
+        primitiveId,
+        relationshipType,
+        weight,
+        strength
+      }
+    });
+  }
+
+  /**
+   * Unlinks a primitive from a mastery criterion
+   */
+  async unlinkPrimitiveFromCriterion(criterionId: number, primitiveId: string): Promise<boolean> {
+    // Verify criterion exists
+    const criterion = await this.getCriterion(criterionId.toString());
+    if (!criterion) {
+      throw new Error(`Mastery criterion ${criterionId} not found`);
+    }
+
+    // Check if this is the last primitive (criterion must have at least one)
+    const currentCount = await (this.prisma as any).masteryCriterionPrimitive.count({
+      where: { criterionId }
+    });
+
+    if (currentCount <= 1) {
+      throw new Error('Cannot unlink the last primitive from a criterion');
+    }
+
+    // Delete the relationship
+    const result = await (this.prisma as any).masteryCriterionPrimitive.deleteMany({
+      where: {
+        criterionId,
+        primitiveId
+      }
+    });
+
+    return result.count > 0;
+  }
+
+  /**
+   * Gets a criterion with all its linked primitives
+   */
+  async getCriterionWithPrimitives(criterionId: number): Promise<MasteryCriterionWithPrimitives | null> {
+    const criterion = await (this.prisma as any).masteryCriterion.findUnique({
+      where: { id: criterionId },
+      include: {
+        primitiveRelationships: {
+          include: {
+            knowledgePrimitive: {
+              select: {
+                primitiveId: true,
+                title: true,
+                description: true,
+                complexityScore: true
+              }
+            }
+          }
+        },
+        questionInstances: true
+      }
+    });
+
+    if (!criterion) return null;
+
+    // Transform to match our interface
+    return {
+      ...criterion,
+      primitiveRelationships: criterion.primitiveRelationships.map(rel => ({
+        id: rel.id,
+        primitiveId: rel.primitiveId,
+        relationshipType: rel.relationshipType,
+        weight: rel.weight,
+        strength: rel.strength,
+        createdAt: rel.createdAt,
+        updatedAt: rel.updatedAt,
+        knowledgePrimitive: rel.knowledgePrimitive
+      })),
+      _count: {
+        questionInstances: criterion.questionInstances?.length || 0,
+        primitiveRelationships: criterion.primitiveRelationships?.length || 0
+      }
+    };
+  }
+
+  /**
+   * Updates primitive relationships for a criterion
+   */
+  async updatePrimitiveRelationships(
+    criterionId: number,
+    relationships: PrimitiveRelationshipUpdate[]
+  ): Promise<MasteryCriterionWithPrimitives> {
+    // Verify criterion exists
+    const criterion = await this.getCriterion(criterionId.toString());
+    if (!criterion) {
+      throw new Error(`Mastery criterion ${criterionId} not found`);
+    }
+
+    // Update each relationship
+    for (const relationship of relationships) {
+      await (this.prisma as any).masteryCriterionPrimitive.updateMany({
+        where: {
+          criterionId,
+          primitiveId: relationship.primitiveId
+        },
+        data: {
+          relationshipType: relationship.relationshipType,
+          weight: relationship.weight,
+          strength: relationship.strength,
+          updatedAt: new Date()
+        }
+      });
+    }
+
+    // Return updated criterion with primitives
+    return this.getCriterionWithPrimitives(criterionId);
+  }
+
+  /**
+   * Validates multi-primitive criterion relationships
+   */
+  async validateMultiPrimitiveCriterion(criterion: CreateMultiPrimitiveCriterionData): Promise<{
+    isValid: boolean;
+    errors: string[];
+    warnings: string[];
+  }> {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    // Check primitive count
+    if (criterion.primitives.length === 0) {
+      errors.push('At least one primitive is required');
+    }
+
+    if (criterion.primitives.length > (criterion.maxPrimitives || 10)) {
+      errors.push(`Maximum ${criterion.maxPrimitives || 10} primitives allowed`);
+    }
+
+    // Check UUE stage complexity rules
+    const primitiveCount = criterion.primitives.length;
+    switch (criterion.uueStage) {
+      case 'UNDERSTAND':
+        if (primitiveCount > 2) {
+          warnings.push('UNDERSTAND stage typically has 1-2 primitives');
+        }
+        break;
+      case 'USE':
+        if (primitiveCount < 2 || primitiveCount > 4) {
+          warnings.push('USE stage typically has 2-4 primitives');
+        }
+        break;
+      case 'EXPLORE':
+        if (primitiveCount < 4) {
+          warnings.push('EXPLORE stage typically has 4+ primitives');
+        }
+        break;
+    }
+
+    // Check for duplicate primitives
+    const primitiveIds = criterion.primitives.map(p => p.primitiveId);
+    const uniqueIds = new Set(primitiveIds);
+    if (primitiveIds.length !== uniqueIds.size) {
+      errors.push('Duplicate primitive IDs are not allowed');
+    }
+
+    // Check relationship weights
+    const totalWeight = criterion.primitives.reduce((sum, p) => sum + (p.weight || 1.0), 0);
+    if (totalWeight <= 0) {
+      errors.push('Total relationship weight must be positive');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+      warnings
+    };
+  }
+
+  /**
+   * Calculates relationship complexity based on primitive relationships
+   */
+  private calculateRelationshipComplexity(primitives: Array<{ weight?: number; strength?: number }>): number {
+    if (primitives.length <= 1) return 1.0;
+
+    const totalWeight = primitives.reduce((sum, p) => sum + (p.weight || 1.0), 0);
+    const avgStrength = primitives.reduce((sum, p) => sum + (p.strength || 0.8), 0) / primitives.length;
+    
+    // Complexity increases with more primitives and decreases with higher average strength
+    const complexity = (primitives.length * totalWeight) / (avgStrength * 10);
+    
+    // Clamp between 0.1 and 10.0
+    return Math.max(0.1, Math.min(10.0, complexity));
+  }
+
+  /**
+   * Process a criterion review and update mastery tracking
+   */
+  async processCriterionReview(
+    userId: number,
+    criterionId: number,
+    isCorrect: boolean,
+    performance: number, // 0.0 - 1.0 score
+    options: any = {}
+  ): Promise<{
+    success: boolean;
+    newMasteryScore: number;
+    isMastered: boolean;
+    attempts: number;
+    message: string;
+  }> {
+    const criterion = await this.getCriterion(criterionId.toString());
+    if (!criterion) {
+      throw new Error(`Criterion ${criterionId} not found`);
+    }
+
+    // Get or create user mastery record
+    let userMastery = await (this.prisma as any).userCriterionMastery.findFirst({
+      where: { userId, masteryCriterionId: criterionId }
+    });
+
+    if (!userMastery) {
+      userMastery = await (this.prisma as any).userCriterionMastery.create({
+        data: {
+          userId,
+          masteryCriterionId: criterionId,
+          masteryScore: 0.0,
+          isMastered: false,
+          attempts: 0,
+          blueprintSectionId: criterion.blueprintSectionId,
+          trackingIntensity: 'NORMAL',
+          uueStage: criterion.uueStage
+        }
+      });
+    }
+
+    const threshold = options.customThreshold ?? criterion.masteryThreshold;
+    const minGapDays = options.minGapDays ?? 1;
+
+    // Check if enough time has passed since last attempt
+    if (!options.allowRetrySameDay && userMastery.lastReviewedAt) {
+      const daysSinceLastAttempt = Math.floor(
+        (Date.now() - userMastery.lastReviewedAt.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      if (daysSinceLastAttempt < minGapDays) {
+        return {
+          success: false,
+          newMasteryScore: userMastery.masteryScore,
+          isMastered: userMastery.isMastered,
+          attempts: userMastery.attempts,
+          message: `Minimum gap of ${minGapDays} days required between attempts`,
+        };
+      }
+    }
+
+    // Update mastery score based on performance
+    let newMasteryScore = userMastery.masteryScore;
+    if (isCorrect) {
+      // Increase score based on performance
+      newMasteryScore = Math.min(1.0, userMastery.masteryScore + (performance * 0.1));
+    } else {
+      // Decrease score slightly for incorrect answers
+      newMasteryScore = Math.max(0.0, userMastery.masteryScore - 0.05);
+    }
+
+    const newAttempts = userMastery.attempts + 1;
+    
+    // Check if mastered
+    const isMastered = newMasteryScore >= threshold;
+
+    // Update user mastery record
+    const updatedMastery = await (this.prisma as any).userCriterionMastery.update({
+      where: { id: userMastery.id },
+      data: {
+        masteryScore: newMasteryScore,
+        isMastered,
+        reviewCount: newAttempts,
+        lastReviewedAt: new Date(),
+      },
+    });
+
+    return {
+      success: true,
+      newMasteryScore,
+      isMastered,
+      attempts: newAttempts,
+      message: isMastered ? 'Criterion mastered!' : 'Progress recorded',
+    };
+  }
+
+  /**
+   * Check if user can progress to next UUE stage
+   */
+  async canProgressToNextUueStage(
+    userId: number,
+    sectionId: number,
+    currentStage: string
+  ): Promise<boolean> {
+    // Get all criteria for the section at the current stage
+    const criteria = await this.getCriteriaByUueStage(sectionId.toString(), currentStage as any);
+    
+    if (criteria.length === 0) return true;
+
+    // Get user mastery for all criteria
+    const userMasteries = await (this.prisma as any).userCriterionMastery.findMany({
+      where: {
+        userId,
+        masteryCriterionId: { in: criteria.map(c => c.id) }
+      }
+    });
+
+    // Check if all criteria are mastered
+    const allMastered = criteria.every(criterion => {
+      const mastery = userMasteries.find(m => m.masteryCriterionId === criterion.id);
+      return mastery && mastery.isMastered;
+    });
+
+    return allMastered;
   }
 }

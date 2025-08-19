@@ -243,7 +243,7 @@ export async function getPrimitiveDetailedStats(
   const criteriaBreakdown = primitive.masteryCriteria.map(criterion => {
     const mastery = criterion.userCriterionMasteries[0];
     return {
-      criterionId: criterion.criterionId,
+      criterionId: String(criterion.criterionId),
       title: criterion.title,
       weight: criterion.weight || 1,
       isMastered: mastery?.isMastered || false,

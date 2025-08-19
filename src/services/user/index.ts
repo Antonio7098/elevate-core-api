@@ -6,9 +6,9 @@
 // ============================================================================
 
 // User Experience Services
-export { default as UserExperienceService } from './userExperience.service';
+export { UserExperienceService, userExperienceService } from './userExperience.service';
 export { default as UserMemoryService } from './userMemory.service';
-export { default as PaymentService } from './payment.service';
+export { PaymentService } from './payment.service';
 
 // Default export for convenience
 export * from './userExperience.service';

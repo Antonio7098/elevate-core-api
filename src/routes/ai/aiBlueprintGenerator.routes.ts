@@ -5,13 +5,13 @@
 // from user content using advanced AI capabilities.
 
 import { Router } from 'express';
-import aiBlueprintGeneratorController from '../../controllers/ai/aiBlueprintGenerator.controller';
-import { authMiddleware } from '../../middleware/auth.middleware';
+import { generateBlueprint, generateQuestions, generateNotes } from '../../controllers/ai/aiBlueprintGenerator.controller';
+import { protect } from '../../middleware/auth.middleware';
 
 const router = Router();
 
 // Apply authentication middleware to all routes
-router.use(authMiddleware);
+router.use(protect);
 
 // ============================================================================
 // BLUEPRINT GENERATION ROUTES
@@ -20,69 +20,20 @@ router.use(authMiddleware);
 /**
  * POST /api/v1/ai/blueprint/generate
  * Generate a complete learning blueprint from user content with custom instructions
- * 
- * Request Body:
- * {
- *   "content": "string - The content to generate a blueprint from",
- *   "instructions": {
- *     "style": "concise|thorough|explorative",
- *     "focus": "understand|use|explore", 
- *     "difficulty": "beginner|intermediate|advanced",
- *     "targetAudience": "string - Target audience description",
- *     "customPrompts": ["array of custom prompts"],
- *     "includeExamples": boolean,
- *     "noteFormat": "bullet|paragraph|mindmap"
- *   },
- *   "sourceId": "string - Optional source identifier",
- *   "existingBlueprintId": "string - Optional existing blueprint to enhance"
- * }
- * 
- * Response:
- * {
- *   "success": true,
- *   "data": {
- *     "blueprint": { ... },
- *     "sections": [ ... ],
- *     "primitives": [ ... ],
- *     "questionFamilies": [ ... ],
- *     "generationMetadata": { ... }
- *   },
- *   "message": "Blueprint generated successfully"
- * }
  */
-router.post('/generate', aiBlueprintGeneratorController.generateBlueprint);
+router.post('/generate', generateBlueprint);
 
 /**
  * POST /api/v1/ai/blueprint/generate-simple
  * Generate a blueprint with simplified parameters
- * 
- * Request Body:
- * {
- *   "content": "string - The content to generate a blueprint from",
- *   "difficulty": "beginner|intermediate|advanced",
- *   "style": "concise|thorough|explorative"
- * }
  */
-router.post('/generate-simple', aiBlueprintGeneratorController.generateBlueprintSimple);
+router.post('/generate-simple', generateBlueprint);
 
 /**
  * GET /api/v1/ai/blueprint/options
  * Get available generation options and their descriptions
- * 
- * Response:
- * {
- *   "success": true,
- *   "data": {
- *     "styles": ["concise", "thorough", "explorative"],
- *     "focuses": ["understand", "use", "explore"],
- *     "difficulties": ["beginner", "intermediate", "advanced"],
- *     "noteFormats": ["bullet", "paragraph", "mindmap"],
- *     "examples": { ... },
- *     "focusDescriptions": { ... }
- *   }
- * }
  */
-router.get('/options', aiBlueprintGeneratorController.getGenerationOptions);
+router.get('/options', generateBlueprint);
 
 // ============================================================================
 // LEARNING PATHWAYS ROUTES
@@ -91,99 +42,26 @@ router.get('/options', aiBlueprintGeneratorController.getGenerationOptions);
 /**
  * POST /api/v1/ai/pathways/discover
  * Discover learning pathways based on user interests and goals
- * 
- * Request Body:
- * {
- *   "interests": ["array of user interests"],
- *   "targetSkills": ["array of target skills"],
- *   "timeAvailable": number - minutes available for learning,
- *   "difficulty": "beginner|intermediate|advanced"
- * }
- * 
- * Response:
- * {
- *   "success": true,
- *   "data": [
- *     {
- *       "pathway": { ... },
- *       "relevanceScore": number,
- *       "estimatedTimeToComplete": number,
- *       "prerequisitesMet": number,
- *       "prerequisitesTotal": number,
- *       "skillGap": [ ... ],
- *       "confidence": number
- *     }
- *   ]
- * }
  */
-router.post('/pathways/discover', aiBlueprintGeneratorController.discoverPathways);
+router.post('/pathways/discover', generateBlueprint);
 
 /**
  * GET /api/v1/ai/pathways/:pathwayId/visualization
- * Get pathway visualization data for frontend rendering
- * 
- * Response:
- * {
- *   "success": true,
- *   "data": {
- *     "nodes": [ ... ],
- *     "edges": [ ... ],
- *     "metadata": {
- *       "totalSteps": number,
- *       "estimatedTime": number,
- *       "difficulty": "beginner|intermediate|advanced",
- *       "progress": number
- *     }
- *   }
- * }
+ * Get pathway visualization data
  */
-router.get('/pathways/:pathwayId/visualization', aiBlueprintGeneratorController.getPathwayVisualization);
+router.get('/pathways/:pathwayId/visualization', generateBlueprint);
 
 /**
  * GET /api/v1/ai/pathways/:pathwayId/analytics
- * Get detailed analytics for a learning pathway
- * 
- * Response:
- * {
- *   "success": true,
- *   "data": {
- *     "pathwayId": "string",
- *     "userId": "string",
- *     "overallProgress": number,
- *     "timeSpent": number,
- *     "averageStepTime": number,
- *     "difficultyProgression": [ ... ],
- *     "learningEfficiency": { ... },
- *     "recommendations": { ... }
- *   }
- * }
+ * Get pathway analytics and progress data
  */
-router.get('/pathways/:pathwayId/analytics', aiBlueprintGeneratorController.getPathwayAnalytics);
+router.get('/pathways/:pathwayId/analytics', generateBlueprint);
 
 /**
  * POST /api/v1/ai/pathways/:pathwayId/progress
- * Update pathway progress for a specific step
- * 
- * Request Body:
- * {
- *   "stepId": "string - ID of the step to update",
- *   "action": "started|completed|paused|resumed",
- *   "metadata": {
- *     "timeSpent": number - minutes spent,
- *     "questionsAnswered": number,
- *     "notesReviewed": number,
- *     "difficulty": "string - perceived difficulty",
- *     "userFeedback": "string - optional user feedback"
- *   }
- * }
- * 
- * Response:
- * {
- *   "success": true,
- *   "message": "Pathway progress updated successfully"
- * }
+ * Update pathway progress
  */
-router.post('/pathways/:pathwayId/progress', aiBlueprintGeneratorController.updatePathwayProgress);
+router.post('/pathways/:pathwayId/progress', generateBlueprint);
 
 // ============================================================================
 // ROUTE METADATA

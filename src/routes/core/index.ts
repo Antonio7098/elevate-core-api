@@ -7,8 +7,6 @@
 
 // Core System Routes
 export { default as cacheManagementRoutes } from './cacheManagement.routes';
-export { default as dashboardRoutes } from './dashboard.routes';
 
 // Default export for convenience
 export * from './cacheManagement.routes';
-export * from './dashboard.routes';

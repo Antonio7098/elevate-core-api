@@ -13,13 +13,17 @@ model User {
   password                    String
   createdAt                   DateTime                    @default(now())
   updatedAt                   DateTime                    @updatedAt
-  dailyStudyTimeMinutes       Int                         @default(0)
+  dailyStudyTimeMinutes       Int                         @default(0) // DISCUSS Remove
   name                        String?
   plan                        String                      @default("free")
   stripeCustomerId            String?                     @unique
   subscriptionId              String?                     @unique
   subscriptionStatus          String?
   subscriptionEndDate         DateTime?
+  learningStyle               String                      @default("VISUAL") \\ DISCUSS Can this not be an enum?
+  experienceLevel             String                      @default("BEGINNER") \\ DISCUSS Enum, and more like age range or something more concrete
+  autoAdjustment             Boolean                     @default(true) CLARIFY What is this?
+  lastUpdated                 DateTime                    @default(now())
   blueprintSections           BlueprintSection[]
   insightCatalysts            InsightCatalyst[]
   knowledgePrimitives         KnowledgePrimitive[]
@@ -41,24 +45,32 @@ model User {
   userQuestionAnswers         UserQuestionAnswer[]
   userStudySessions           UserStudySession[]
   verificationTokens          VerificationToken[]
+  userPreferences             UserPreferences? \\ CLARIFY What is this
+  userSectionPreferences      UserSectionPreferences[]
+  userCriterionPreferences    UserCriterionPreferences[]
+  userFeedback                UserFeedback[]
 
   @@index([email])
 }
 
+// PROPOSE User model seems like it can be tidied up a lot!
+
 model LearningBlueprint {
   id                    Int                  @id @default(autoincrement())
-  sourceText            String
+  sourceText            String // DISCUSS We need to add dealing with new section additions with new sources. Options to organise source content better in blueprint
   blueprintJson         Json
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
   userId                Int
-  sourceId              String?
-  description           String?
+  sourceId              String? // DISCUSS Is there a need for source text as well?
+  description           String? // DISCUSS Maybe change to overview?
   title                 String?
   blueprintSections     BlueprintSection[]
-  knowledgePrimitives   KnowledgePrimitive[]
+  knowledgePrimitives   KnowledgePrimitive[] // DISCUSS Is there a need for this, since we can access through the blueprint sections. IS it legacy? If there is, is there a mechanism for updating when new primitives are added? ANd is this not necessary for mastery criterion, questions as well?
+  generatedNotes        NoteSection[]
   user                  User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  generatedQuestionSets QuestionSet[]
+  generatedQuestionSets QuestionSet[] // REMOVE This is legacy code!!
+  userPrimitiveProgresses UserPrimitiveProgress[]
 
   @@index([userId])
 }
@@ -66,13 +78,14 @@ model LearningBlueprint {
 model BlueprintSection {
   id                     Int                    @id @default(autoincrement())
   title                  String
-  description            String?
+  name                   String
+  description            String? // DISCUSS Overview better?
   blueprintId            Int
   parentSectionId        Int?
   depth                  Int                    @default(0)
   orderIndex             Int                    @default(0)
-  difficulty             DifficultyLevel        @default(BEGINNER)
-  estimatedTimeMinutes   Int?
+  difficulty             DifficultyLevel        @default(BEGINNER) // DUISCUSS We need a more objective, possibly relative to other content, metric
+  estimatedTimeMinutes   Int? // DISCUSS Time to what? I think we can get rid of this.m 
   userId                 Int
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
@@ -81,15 +94,18 @@ model BlueprintSection {
   children               BlueprintSection[]     @relation("SectionHierarchy")
   user                   User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   knowledgePrimitives    KnowledgePrimitive[]
-  masteryCriteria        MasteryCriterion[]
+  masteryCriteria        MasteryCriterion[] // NOTE for ai api: we will need some way of asessing all prerequisites every time a new criterion is added
   notes                  NoteSection[]
-  userCriterionMasteries UserCriterionMastery[]
+  userCriterionMasteries UserCriterionMastery[] // DISCUSS No userPrimitiveProgress or any primitive related fields? Why criterion masteries and not primitve ones?
+  userSectionPreferences UserSectionPreferences[] // CLARIFY What is this?
 
   @@unique([blueprintId, parentSectionId, orderIndex])
   @@index([blueprintId])
   @@index([parentSectionId])
   @@index([userId])
   @@index([depth])
+
+  // PROPOSE Needs some linking to source text (chunks, line number etc...)
 }
 
 model NoteSection {
@@ -98,47 +114,65 @@ model NoteSection {
   content            String
   contentBlocks      Json?
   contentHtml        String?
-  plainText          String?
-  contentVersion     Int               @default(2)
-  blueprintSectionId Int
+  plainText          String? // MAKE SURE That there are cascading updates between these three content types
+  contentVersion     Int               @default(2) // CLARIFY What does this mean?
+  blueprintSectionId Int // PROPOSE We need to automatically pick up changes in blueprints and suggest updating the notes as well
   userId             Int
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
   insightCatalysts   InsightCatalyst[]
   blueprintSection   BlueprintSection  @relation(fields: [blueprintSectionId], references: [id], onDelete: Cascade)
+  generatedFromBlueprint LearningBlueprint? @relation(fields: [generatedFromBlueprintId], references: [id]) // DISCUSS This is redundant due to the blueprintSectionID??
+  generatedFromBlueprintId Int? // DISCUSS This is redundant due to the blueprintSectionID??
   user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([blueprintSectionId])
-  @@index([userId])
+  @@index([userId])generatedFromBlueprint
   @@index([createdAt])
+
+  // NOTE Maybe some notes about the style and instructions that were passed into making the notes? I think we need to work on creating these options.
 }
 
 model MasteryCriterion {
   id                     Int                            @id @default(autoincrement())
+  criterionId            Int                            @default(autoincrement())
+
   title                  String
-  description            String?
+  description            String? // PROPOSE Make this more descriptive like "lerning objective" or something
   userId                 Int
   createdAt              DateTime                       @default(now())
   updatedAt              DateTime                       @updatedAt
-  weight                 Float                          @default(1.0)
+  weight                 Float                          @default(1.0) // DISCUSS This wil have to change now we have multi primitive linking. I was thinking the weight could be based on the connection type eg. "primary", "secondary", etc... This was present in the ai api but I dont see it in the junction table here
   assessmentType         AssessmentType                 @default(QUESTION_BASED)
-  attemptsAllowed        Int                            @default(3)
+  attemptsAllowed        Int                            @default(3) // REMOVE Redundant. Remove
   blueprintSectionId     Int
-  complexityScore        Float?
-  knowledgePrimitiveId   String
-  masteryThreshold       Float                          @default(0.8)
-  timeLimit              Int?
+  complexityScore        Float? // DISCUSS Subjective. We need something concrete, relative to rest of material, or remove this.
+  knowledgePrimitiveId   String // CLARIFY We have moved to multi primitive linking, using the junction table. Is this necessary? If so, it needs to be changed to String[]
+  masteryThreshold       Float                          @default(0.8) // DISCUSS Is this not supposed to be "SURVEY", ...
+  timeLimit              Int? // DISCUSS Redundant, remove
   uueStage               UueStage                       @default(UNDERSTAND)
+  difficulty             Float                          @default(0.5) // DISCUSS Again with the subjectivity
+  estimatedPrimitiveCount Int                           @default(1) // CLARIFY Explain why this is needed
+  relationshipComplexity  Float                         @default(1.0) // DISCUSS What this is and why this is needed
+  maxPrimitives          Int                            @default(10) // DISCUSS Maybe this is what you meant by complexity? IS it the amount of connected concepts?
   insightCatalysts       InsightCatalyst[]
-  blueprintSection       BlueprintSection               @relation(fields: [blueprintSectionId], references: [id], onDelete: Cascade)
-  knowledgePrimitive     KnowledgePrimitive             @relation(fields: [knowledgePrimitiveId], references: [primitiveId], onDelete: Cascade)
+  blueprintSection       BlueprintSection               @relation(fields: [blueprintSectionId], references: [id], onDelete: Cascade) // Redundant. Is linked to sections through primitives
+
+  knowledgePrimitive     KnowledgePrimitive             @relation(fields: [knowledgePrimitiveId], references: [primitiveId], onDelete: Cascade) // DISCUSS We have multi primitive linking now!
+
   user                   User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   prerequisiteFor        MasteryCriterionRelationship[] @relation("CriterionPrerequisiteFor")
+
   requiresPrerequisites  MasteryCriterionRelationship[] @relation("CriterionRequiresPrerequisites")
-  questions              Question[]
+
+  questions              Question[] // DISCUSS Legacy!! Remove
   questionInstances      QuestionInstance[]
   userCriterionMasteries UserCriterionMastery[]
   userQuestionAnswers    UserQuestionAnswer[]
+  primitiveRelationships MasteryCriterionPrimitive[]
+  userCriterionPreferences UserCriterionPreferences[]
+  userFeedback           UserFeedback[]
 
   @@index([knowledgePrimitiveId])
   @@index([blueprintSectionId])
@@ -148,13 +182,33 @@ model MasteryCriterion {
   @@index([complexityScore])
 }
 
+// New junction table for multi-primitive mastery criteria
+model MasteryCriterionPrimitive {
+  id               Int                        @id @default(autoincrement())
+  criterionId      Int
+  primitiveId      String
+  relationshipType PrimitiveRelationshipType  @default(PRIMARY)
+  weight           Float                      @default(1.0) // DISCUSS Could be based on the relationship type?
+  strength         Float                      @default(0.8) // CLARIFY What this means
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+  
+  masteryCriterion MasteryCriterion          @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  knowledgePrimitive KnowledgePrimitive      @relation(fields: [primitiveId], references: [primitiveId], onDelete: Cascade)
+  
+  @@unique([criterionId, primitiveId])
+  @@index([criterionId])
+  @@index([primitiveId])
+  @@index([relationshipType])
+}
+
 model QuestionInstance {
   id                 Int                  @id @default(autoincrement())
   questionText       String
-  answer             String
+  answer             String // CHANGE Model answer
   explanation        String?
-  context            String?
-  difficulty         QuestionDifficulty   @default(MEDIUM)
+  context            String? // CLARIFY Is this the context from the source text?
+  difficulty         QuestionDifficulty   @default(MEDIUM) // REMOVE Once again, subjective!! Remove unless we can come up with something more grounded or relative
   masteryCriterionId Int
   userId             Int
   createdAt          DateTime             @default(now())
@@ -166,28 +220,30 @@ model QuestionInstance {
   @@index([masteryCriterionId])
   @@index([userId])
   @@index([difficulty])
+
+  // ADD Weshould have mark based questions! eg. 3/4 marks on this attempt! QuestionInstanced need marksAvailable and markingCriteria! And make sure that the ai api knows to create them properly! ie. s56
 }
 
 model KnowledgePrimitive {
   id                                   Int                         @id @default(autoincrement())
   primitiveId                          String                      @unique
   title                                String
-  description                          String?
-  primitiveType                        String
-  difficultyLevel                      String
-  estimatedTimeMinutes                 Int?
+  description                          String? // DISCUSS Make this more desctiptive?
+  primitiveType                        String // DISCUSS Maybe an enum? We need to generate types for lots of different source types
+  difficultyLevel                      String // REMOVE Subjective!!
+  estimatedTimeMinutes                 Int? // REMOVE Redundant!!
   userId                               Int
-  blueprintId                          Int
+  blueprintId                          Int // CLARIFY Is this necessary when we have blueprint section
   trackingIntensity                    TrackingIntensity           @default(NORMAL)
   createdAt                            DateTime                    @default(now())
   updatedAt                            DateTime                    @updatedAt
-  complexityScore                      Float?
+  complexityScore                      Float? // CLARIFY What this means!! Subjective!!
   conceptTags                          String[]                    @default([])
   estimatedPrerequisites               Int?
-  isCoreConcept                        Boolean                     @default(false)
-  prerequisiteIds                      String[]                    @default([])
-  relatedConceptIds                    String[]                    @default([])
-  blueprintSectionId                   Int?
+  isCoreConcept                        Boolean                     @default(false) // CLARIFY What this means
+  prerequisiteIds                      String[]                    @default([]) // DISCUSS Maybe a junction table for this
+  relatedConceptIds                    String[]                    @default([]) // DISCUSS Maybe a junction table for this
+  blueprintSectionId                   Int?String
   insightCatalysts                     InsightCatalyst[]
   blueprint                            LearningBlueprint           @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
   blueprintSection                     BlueprintSection?           @relation(fields: [blueprintSectionId], references: [id])
@@ -198,13 +254,14 @@ model KnowledgePrimitive {
   masteryCriteria                      MasteryCriterion[]
   pinnedReviews                        PinnedReview[]
   scheduledReviews                     ScheduledReview[]
-  dailySummaries                       UserPrimitiveDailySummary[]
+  dailySummaries                       UserPrimitiveDailySummary[] // CLARIFY What this is
   userPrimitiveProgresses              UserPrimitiveProgress[]
   userQuestionAnswers                  UserQuestionAnswer[]
-  KnowledgePrimitive_Prerequisites_A   KnowledgePrimitive[]        @relation("Prerequisites")
+  KnowledgePrimitive_Prerequisites_A   KnowledgePrimitive[]        @relation("Prerequisites") // CLARUFY What this is??
   KnowledgePrimitive_Prerequisites_B   KnowledgePrimitive[]        @relation("Prerequisites")
   KnowledgePrimitive_RelatedConcepts_A KnowledgePrimitive[]        @relation("RelatedConcepts")
   KnowledgePrimitive_RelatedConcepts_B KnowledgePrimitive[]        @relation("RelatedConcepts")
+  primitiveRelationships               MasteryCriterionPrimitive[]
 
   @@index([conceptTags])
   @@index([isCoreConcept])
@@ -219,36 +276,54 @@ model KnowledgePrimitive {
 model UserCriterionMastery {
   id                     String            @id @default(cuid())
   userId                 Int
-  isMastered             Boolean           @default(false)
+  isMastered             Boolean           @default(false) // DISCUSS Mastered when masteryScore is above the threshold. How is thi updated when mastery score is? WHat if the threshold changes?
   blueprintSectionId     Int
   consecutiveFailures    Int               @default(0)
   consecutiveIntervals   Int               @default(0)
   currentIntervalStep    Int               @default(0)
   lastReviewedAt         DateTime?
-  lastThresholdCheckDate DateTime?
-  lastTwoAttempts        Float[]
+  lastThresholdCheckDate DateTime? // CLARIFY WHat this is
+  lastTwoAttempts        Float[]onMastery
+  id                     String            @id @default(cuid())
+  userId                 Int
+  isMastered             Boolean           @default(false) // REMOVE Repeat!
+  blueprintSectionI // CLARIFY Typo?
+  lastAttempt            DateTime?
+  attempts               Int               @default(0) // ------ PROPOSE This section seems bloated ------
+  attemptHistory         Json              @default("[]")
+  attemptCount           Int               @default(0)
+  successfulAttempts     Int               @default(0) // ------ PROPOSE This section seems bloated ------
+  criterionId            Int               @default(0)
+  masteredAt             DateTime?
+  lastAttemptedAt        DateTime?
   masteryCriterionId     Int
   masteryScore           Float             @default(0.0)
   nextReviewAt           DateTime?
-  reviewCount            Int               @default(0)
-  successfulReviews      Int               @default(0)
+  reviewCount            Int               @default(0) // REMOVE Repeat!
+  successfulReviews      Int               @default(0) // REMOVE Repeat!
   trackingIntensity      TrackingIntensity @default(NORMAL)
   uueStage               UueStage          @default(UNDERSTAND)
+  primitiveId            String?
+  blueprintId            Int?
+  updatedAt              DateTime          @updatedAt
   blueprintSection       BlueprintSection  @relation(fields: [blueprintSectionId], references: [id], onDelete: Cascade)
   masteryCriterion       MasteryCriterion  @relation(fields: [masteryCriterionId], references: [id], onDelete: Cascade)
   user                   User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, masteryCriterionId])
+  @@unique([userId, criterionId, primitiveId, blueprintId])
   @@index([userId])
   @@index([masteryCriterionId])
   @@index([blueprintSectionId])
   @@index([uueStage])
+  @@index([lastAttempt])
 }
 
 model UserQuestionAnswer {
   id                 Int                 @id @default(autoincrement())
   userId             Int
   questionId         Int
-  isCorrect          Boolean
+  isCorrect          Boolean // DISCUSS Necessary for mark based questions (which they all are)
   createdAt          DateTime            @default(now())
   answerText         String?
   masteryCriterionId Int?
@@ -264,6 +339,8 @@ model UserQuestionAnswer {
   @@index([createdAt])
   @@index([masteryCriterionId])
   @@index([primitiveId])
+
+  // ADD Weshould have mark based questions! eg. 3/4 marks on this attempt! QuestionInstanced need marksAvailable and markingCriteria!
 }
 
 model UserPrimitiveProgress {
@@ -272,14 +349,23 @@ model UserPrimitiveProgress {
   lastReviewedAt  DateTime?
   nextReviewAt    DateTime?
   currentUeeLevel String             @default("Understand")
-  easeFactor      Float              @default(2.5)
-  interval        Float              @default(1.0)
-  lapses          Int                @default(0)
-  primitiveId     Int
-  primitive       KnowledgePrimitive @relation(fields: [primitiveId], references: [id])
+  easeFactor      Float              @default(2.5) // REMOVE No ease factor rubbish! We infer the difficulty from the history. DISCUSS Some mechanism for detecting struggling with a primitive and taking appropriate acction
+  interval        Float              @default(1.0) // CLARIFY What this is
+  lapses          Int                @default(0) // CLARIFY What this is
+  reviewCount     Int                @default(0)
+  successfulReviews Int              @default(0)
+  masteryLevel   String             @default("NOT_STARTED") // CLARIFY What this is
+  trackingIntensity TrackingIntensity @default(NORMAL)
+  primitiveId     String
+  blueprintId     Int? // DISCUSS No blueprint section ID?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  primitive       KnowledgePrimitive @relation(fields: [primitiveId], references: [primitiveId])
+  blueprint       LearningBlueprint? @relation(fields: [blueprintId], references: [id])
   user            User               @relation(fields: [userId], references: [id])
 
   @@unique([userId, primitiveId])
+  @@unique([userId, primitiveId, blueprintId])
   @@index([userId])
   @@index([primitiveId])
   @@index([nextReviewAt])
@@ -294,7 +380,7 @@ model UserStudySession {
   sessionStartedAt         DateTime?
   timeSpentSeconds         Int
   updatedAt                DateTime                  @default(now()) @updatedAt
-  questionSetStudySessions QuestionSetStudySession[]
+  questionSetStudySessions QuestionSetStudySession[] // REMOVE Legacy code! DISCUSS This can be UserQuestionAnswers?
   user                     User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -318,18 +404,18 @@ model QuestionSetStudySession {
   @@unique([sessionId, questionSetId])
   @@index([userId])
   @@index([questionSetId])
-}
+} // REMOVE Legacy code!
 
 model InsightCatalyst {
   id                 Int                 @id @default(autoincrement())
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   userId             Int
-  noteId             Int?
+  noteId             Int? // PROPOSE Needs updating to blueprint centric, with note section
   explanation        String?
   imageUrls          String[]
   masteryCriterionId Int?
-  questionId         Int?
+  questionId         Int? // PROPOSE Needs updating to blueprint centric system
   text               String
   type               String
   primitiveId        Int?
@@ -349,14 +435,14 @@ model InsightCatalyst {
 model ScheduledReview {
   id            Int                 @id @default(autoincrement())
   userId        Int
-  questionSetId Int?
+  questionSetId Int? // REMOVE Legacy!! PROPOSE Needs to be linked to a primitive
   createdAt     DateTime            @default(now())
   reviewDate    DateTime
   status        String              @default("PENDING")
   type          String
   primitiveId   Int?
   primitive     KnowledgePrimitive? @relation(fields: [primitiveId], references: [id])
-  questionSet   QuestionSet?        @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
+  questionSet   QuestionSet?        @relation(fields: [questionSetId], references: [id], onDelete: Cascade) // REMOVE Legacy!
   user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, reviewDate])
@@ -367,12 +453,18 @@ model PinnedReview {
   id          Int                 @id @default(autoincrement())
   userId      Int
   createdAt   DateTime            @default(now())
-  primitiveId Int?
-  primitive   KnowledgePrimitive? @relation(fields: [primitiveId], references: [id])
+  reviewAt    DateTime            @default(now())
+  primitiveId String? 
+  updatedAt   DateTime            @updatedAt
+  primitive   KnowledgePrimitive? @relation(fields: [primitiveId], references: [primitiveId])
+
   user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, primitiveId])
   @@index([userId])
   @@index([primitiveId])
+  @@index([reviewAt])
+  // DISCUSS MAybe we can make questions, and criterion pinnable as well?
 }
 
 model UserBucketPreferences {
@@ -382,9 +474,15 @@ model UserBucketPreferences {
   updatedAt      DateTime @updatedAt
   bucketSize     Int      @default(10)
   reviewInterval Int      @default(1)
+  criticalSize   Int      @default(10)
+  coreSize       Int      @default(15)
+  plusSize       Int      @default(5)
+  masteryThresholdLevel String @default("PROFICIENT")
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+
+  // DISCUSS Is there a need for indivicual bucket sizes if they are filled sequentially? Maybe a total number of questions/marks/minutes(estimate) per day- study time?
 }
 
 model UserPrimitiveDailySummary {
@@ -393,14 +491,25 @@ model UserPrimitiveDailySummary {
   createdAt   DateTime           @default(now())
   date        DateTime           @db.Date
   summary     Json
-  primitiveId Int
-  primitive   KnowledgePrimitive @relation(fields: [primitiveId], references: [id])
+  primitiveId String
+  weightedMasteryScore Float    @default(0.0)
+  masteryLevel String           @default("NOT_STARTED")
+  canProgressToNext Boolean     @default(false)
+  nextReviewAt DateTime?
+  primitiveTitle String?
+  totalCriteria Int              @default(0)
+  masteredCriteria Int           @default(0)
+  lastCalculated DateTime       @default(now())
+  primitive   KnowledgePrimitive @relation(fields: [primitiveId], references: [primitiveId])
   user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, primitiveId, date])
   @@index([userId])
   @@index([primitiveId])
   @@index([date])
+  @@index([lastCalculated])
+
+  // DISCUSS The need for this?
 }
 
 model UserLearningAnalytics {
@@ -418,17 +527,19 @@ model UserLearningAnalytics {
 
   @@unique([userId, date])
   @@index([userId, date])
+
+  // DISCUSS How to enhance this
 }
 
 model UserMemoryInsight {
   id                Int      @id @default(autoincrement())
   userId            Int
-  insightType       String
+  insightType       String // DISCUSS Could be an enum?
   title             String
   content           String
-  relatedPrimitiveIds String[] @default([])
+  relatedPrimitiveIds String[] @default([]) // DISCUSS Linking criterion, question instances, blueprint sections. Would be usefyl for knowledge tree
   confidenceScore   Float
-  isActionable      Boolean  @default(true)
+  isActionable      Boolean  @default(true) // CLARIFY The need?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -451,6 +562,8 @@ model LearningPath {
   steps                 LearningPathStep[]
 
   @@index([userId, isActive])
+
+  // CLARIFY What this is??
 }
 
 model LearningPathStep {
@@ -468,6 +581,8 @@ model LearningPathStep {
   @@index([learningPathId, isCompleted])
   @@index([learningPathId])
   @@index([primitiveId])
+
+  // CLARIFY What this is??
 }
 
 model KnowledgeRelationship {
@@ -478,7 +593,7 @@ model KnowledgeRelationship {
   strength          Float              @default(1.0)
   confidence        Float              @default(0.8)
   source            RelationshipSource @default(AI_GENERATED)
-  metadata          Json?
+  metadata          Json? // CLARIFY What this will be
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   sourcePrimitive   KnowledgePrimitive @relation("PrerequisiteFor", fields: [sourcePrimitiveId], references: [id], onDelete: Cascade)
@@ -490,6 +605,8 @@ model KnowledgeRelationship {
   @@index([relationshipType])
   @@index([strength])
   @@index([confidence])
+
+  // CLARIFY THis is not linked in the primitive model? Is this just for the knowledge graph?
 }
 
 model MasteryCriterionRelationship {
@@ -544,13 +661,14 @@ model Question {
 
   @@index([questionSetId])
   @@index([masteryCriterionId])
-}
+} // REMOVE Legacy!
 
 model QuestionSet {
   id                       Int                       @id @default(autoincrement())
   createdAt                DateTime                  @default(now())
   updatedAt                DateTime                  @updatedAt
   isPinned                 Boolean                   @default(false)
+  isTracked                Boolean                   @default(true)
   generatedFromBlueprintId Int?
   instructions             String?
   name                     String
@@ -560,7 +678,7 @@ model QuestionSet {
   scheduledReviews         ScheduledReview[]
 
   @@index([generatedFromBlueprintId])
-}
+} // REMOVE Legacy!
 
 model UserMemory {
   id                Int                @id @default(autoincrement())
@@ -574,6 +692,8 @@ model UserMemory {
   user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+
+  // PROPOSE How this can be enhanced. Definitely could do with some enums
 }
 
 model VerificationToken {
@@ -669,6 +789,90 @@ enum ExplanationStyle {
 enum InteractionStyle {
   DIRECT
   SOCRATIC
+}
+
+enum PrimitiveRelationshipType {
+  PRIMARY
+  SECONDARY
+  CONTEXTUAL
+}
+
+enum RelationshipStrength {
+  WEAK
+  MODERATE
+  STRONG
+}
+
+model UserPreferences {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  learningStyle  String   @default("VISUAL")
+  experienceLevel String  @default("BEGINNER")
+  autoAdjustment Boolean  @default(true)
+  lastUpdated    DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  masteryOptions Json?    @default("{}")
+
+  @@index([userId])
+
+  // DISCUSS This seems to be replicated in the user model. Which to keep?
+}
+
+model UserSectionPreferences {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @unique
+  sectionId      Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  difficulty     String   @default("MEDIUM") // REMOVE or make less subjective!
+  timeAllocation Int      @default(30) // REMOVE WHat does this even mean??
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  masteryOptions Json?    @default("{}")
+  section        BlueprintSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sectionId])
+  @@unique([userId, sectionId])
+
+`// CLARIFY Is this linked to in the blueprint section?
+}
+
+model UserCriterionPreferences {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @unique
+  criterionId    Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  difficulty     String   @default("MEDIUM")
+  timeAllocation Int      @default(15)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  criterion      MasteryCriterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  masteryOptions Json?    @default("{}")
+  @@index([criterionId])
+  @@unique([userId, criterionId])
+
+  // CLARIFY WHat the point of this is??
+}
+
+model UserFeedback {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  feedback    String
+  rating      Int      @default(0)
+  criterionId Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  criterion   MasteryCriterion? @relation(fields: [criterionId], references: [id])
+
+  @@index([userId])
+  @@index([rating])
+
+  // PROPOSE How to enhance this to be any general feedback about the app, so can choose what page or functionality  or category it apples to
 }
 
 

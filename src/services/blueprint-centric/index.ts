@@ -10,14 +10,15 @@
 // - MasteryCriterionService: Replaces QuestionSet + QuestionFamily + Question
 // - ContentAggregator: New content aggregation and UUE tracking
 // - SectionHierarchyManager: New hierarchy management and validation
+// - BlueprintCentricService: New multi-primitive mastery criteria management
 //
 // ============================================================================
 
 export { default as BlueprintSectionService } from './blueprintSection.service';
 export { default as NoteSectionService } from './noteSection.service';
-export { default as MasteryCriterionService } from './masteryCriterion.service';
 export { default as ContentAggregator } from './contentAggregator.service';
 export { default as SectionHierarchyManager } from './sectionHierarchyManager.service';
+export { default as BlueprintCentricService } from './blueprintCentric.service';
 
 // Sprint 51: Knowledge Graph & RAG Services
 export { default as KnowledgeGraphTraversal } from './knowledgeGraphTraversal.service';
@@ -29,28 +30,8 @@ export { default as RelationshipDiscoveryService } from './relationshipDiscovery
 export { default as LearningPathService } from './learningPath.service';
 
 // Sprint 53: AI Integration & Advanced Features
-export { default as AIBlueprintGenerator } from '../ai/aiBlueprintGenerator.service';
-export { default as LearningPathwaysService } from '../mastery/learningPathways.service';
-
-// Export all interfaces and types
-export * from './blueprintSection.service';
-export * from './noteSection.service';
-export * from './masteryCriterion.service';
-export * from './contentAggregator.service';
-export * from './sectionHierarchyManager.service';
-
-// Sprint 51: Knowledge Graph & RAG Interfaces
-export * from './knowledgeGraphTraversal.service';
-export * from './contextAssembly.service';
-export * from './intelligentContextBuilder.service';
-export * from './vectorStore.service';
-export * from './ragResponseGenerator.service';
-export * from './relationshipDiscovery.service';
-export * from './learningPath.service';
-
-// Sprint 53: AI Integration & Advanced Features
-export * from '../ai/aiBlueprintGenerator.service';
-export * from '../mastery/learningPathways.service';
+export { AIBlueprintGeneratorService } from '../ai/aiBlueprintGenerator.service';
+export { LearningPathwaysService } from '../mastery/learningPathways.service';
 
 // ============================================================================
 // LEGACY REPLACEMENT MAPPING

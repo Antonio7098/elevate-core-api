@@ -31,14 +31,23 @@ describe('EnhancedSpacedRepetitionController', () => {
     // Reset mocks
     jest.clearAllMocks();
     
+    // Create mock services
+    const mockEnhancedSpacedRepetitionService = {
+      getDueCriteria: jest.fn(),
+      getMasteryStats: jest.fn(),
+      updateMasteryProgress: jest.fn(),
+      getNextReview: jest.fn()
+    };
+    
+    const mockEnhancedBatchReviewService = {
+      processBatchReview: jest.fn()
+    };
+    
     // Import the controller
     const { EnhancedSpacedRepetitionController: ControllerClass } = await import('../enhancedSpacedRepetition.controller');
     
-    // Create controller instance
-    controller = new ControllerClass(
-      { getDueCriteria: jest.fn(), getMasteryStats: jest.fn(), updateMasteryProgress: jest.fn(), getNextReview: jest.fn() },
-      { processBatchReview: jest.fn() }
-    );
+    // Create controller instance with mocked services
+    controller = new ControllerClass(mockEnhancedSpacedRepetitionService, mockEnhancedBatchReviewService);
 
     // Setup mock response methods
     mockResponse = {
@@ -63,11 +72,12 @@ describe('EnhancedSpacedRepetitionController', () => {
       ];
 
       // Mock the service method
-      (controller as any).enhancedSpacedRepetitionService.getDueCriteria.mockResolvedValue(mockDueCriteria);
+      const mockEnhancedSpacedRepetitionService = (controller as any).enhancedSpacedRepetitionService;
+      mockEnhancedSpacedRepetitionService.getDueCriteria.mockResolvedValue(mockDueCriteria);
 
       await controller.getDailyTasks(mockRequest as any, mockResponse as Response);
 
-      expect((controller as any).enhancedSpacedRepetitionService.getDueCriteria).toHaveBeenCalledWith(123);
+      expect(mockEnhancedSpacedRepetitionService.getDueCriteria).toHaveBeenCalledWith(123);
       expect(mockResponse.json).toHaveBeenCalledWith({
         success: true,
         data: {
@@ -102,11 +112,12 @@ describe('EnhancedSpacedRepetitionController', () => {
       mockRequest.body = reviewData;
 
       // Mock the service method
-      (controller as any).enhancedSpacedRepetitionService.updateMasteryProgress.mockResolvedValue(undefined);
+      const mockEnhancedSpacedRepetitionService = (controller as any).enhancedSpacedRepetitionService;
+      mockEnhancedSpacedRepetitionService.updateMasteryProgress.mockResolvedValue(undefined);
 
       await controller.submitReviewOutcome(mockRequest as any, mockResponse as Response);
 
-      expect((controller as any).enhancedSpacedRepetitionService.updateMasteryProgress).toHaveBeenCalledWith(123, 'criterion_1', {
+      expect(mockEnhancedSpacedRepetitionService.updateMasteryProgress).toHaveBeenCalledWith(123, 'criterion_1', {
         outcome: 'correct',
         timeSpent: 120,
         reviewedAt: expect.any(Date)
@@ -135,11 +146,12 @@ describe('EnhancedSpacedRepetitionController', () => {
       };
 
       // Mock the service method
-      (controller as any).enhancedSpacedRepetitionService.getMasteryStats.mockResolvedValue(mockStats);
+      const mockEnhancedSpacedRepetitionService = (controller as any).enhancedSpacedRepetitionService;
+      mockEnhancedSpacedRepetitionService.getMasteryStats.mockResolvedValue(mockStats);
 
       await controller.getMasteryStats(mockRequest as any, mockResponse as Response);
 
-      expect((controller as any).enhancedSpacedRepetitionService.getMasteryStats).toHaveBeenCalledWith(123);
+      expect(mockEnhancedSpacedRepetitionService.getMasteryStats).toHaveBeenCalledWith(123);
       expect(mockResponse.json).toHaveBeenCalledWith({
         success: true,
         data: mockStats

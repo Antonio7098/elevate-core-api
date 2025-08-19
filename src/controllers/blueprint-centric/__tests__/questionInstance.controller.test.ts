@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { QuestionInstanceController } from '../questionInstance.controller';
 
 // Mock the services
-jest.mock('../../../services/questionInstance.service', () => ({
+jest.mock('../../../services/mastery/questionInstance.service', () => ({
   questionInstanceService: {
     createQuestionInstance: jest.fn(),
     getQuestionInstance: jest.fn(),
@@ -18,7 +18,7 @@ jest.mock('../../../services/questionInstance.service', () => ({
 }));
 
 // Mock the mastery tracking service
-jest.mock('../../../services/masteryTracking.service', () => ({
+jest.mock('../../../services/mastery/masteryTracking.service', () => ({
   MasteryTrackingService: jest.fn().mockImplementation(() => ({
     updateMasteryScore: jest.fn(),
     getMasteryProgress: jest.fn()
@@ -57,10 +57,10 @@ describe('QuestionInstanceController', () => {
     } as any;
 
     // Replace the mocked service methods with our mock implementations
-    const { questionInstanceService } = require('../../../services/questionInstance.service');
+    const { questionInstanceService } = require('../../../services/mastery/questionInstance.service');
     Object.assign(questionInstanceService, mockQuestionInstanceService);
 
-    const { MasteryTrackingService } = require('../../../services/masteryTracking.service');
+    const { MasteryTrackingService } = require('../../../services/mastery/masteryTracking.service');
     MasteryTrackingService.mockImplementation(() => mockMasteryTrackingService);
 
     // Import the controller after mocking
@@ -373,10 +373,10 @@ describe('QuestionInstanceController', () => {
       ];
 
       mockRequest.query = {
-        userId: '123',
-        focus: 'weakest',
+        criterionId: '123',
         difficulty: 'MEDIUM',
-        limit: '5'
+        limit: '5',
+        excludeAnswered: 'true'
       };
 
       mockQuestionInstanceService.getQuestionRecommendations.mockResolvedValue(mockRecommendations);
@@ -384,24 +384,14 @@ describe('QuestionInstanceController', () => {
       await controller.getQuestionRecommendations(mockRequest as Request, mockResponse as Response);
 
       expect(mockQuestionInstanceService.getQuestionRecommendations).toHaveBeenCalledWith(123, {
+        masteryCriterionId: 123,
         difficulty: 'MEDIUM',
-        excludeAnswered: false,
         limit: 5,
-        masteryCriterionId: undefined
+        excludeAnswered: true
       });
       expect(mockResponse.json).toHaveBeenCalledWith({
         success: true,
-        data: {
-          userId: 123,
-          recommendations: mockRecommendations,
-          totalRecommendations: expect.any(Number),
-          filters: {
-            difficulty: 'MEDIUM',
-            excludeAnswered: undefined,
-            limit: '5',
-            masteryCriterionId: undefined
-          }
-        }
+        data: mockRecommendations
       });
     });
   });
@@ -428,7 +418,7 @@ describe('QuestionInstanceController', () => {
         }
       };
 
-      mockRequest.params = { userId: '123' };
+      mockRequest.params = {};
       mockQuestionInstanceService.getUserQuestionStats.mockResolvedValue(mockStats);
 
       await controller.getUserQuestionStats(mockRequest as Request, mockResponse as Response);
@@ -436,11 +426,7 @@ describe('QuestionInstanceController', () => {
       expect(mockQuestionInstanceService.getUserQuestionStats).toHaveBeenCalledWith(123);
       expect(mockResponse.json).toHaveBeenCalledWith({
         success: true,
-        data: {
-          userId: 123,
-          stats: mockStats,
-          generatedAt: expect.any(String)
-        }
+        data: mockStats
       });
     });
   });
@@ -481,11 +467,7 @@ describe('QuestionInstanceController', () => {
       expect(mockQuestionInstanceService.recordBatchAttempts).toHaveBeenCalledWith(123, mockBatchData.attempts);
       expect(mockResponse.json).toHaveBeenCalledWith({
         success: true,
-        data: {
-          userId: 123,
-          ...mockBatchResult,
-          timestamp: expect.any(String)
-        }
+        data: mockBatchResult
       });
     });
   });

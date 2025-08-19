@@ -143,7 +143,7 @@ describe('Mastery System - Core Logic Tests', () => {
             }
             
             // Then by due date (earlier first)
-            const daysUntilDueA = Math.ceil((task.dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            const daysUntilDueA = Math.ceil((a.dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
             const daysUntilDueB = Math.ceil((b.dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
             
             return daysUntilDueA - daysUntilDueB;

@@ -5,16 +5,10 @@ import dotenv from 'dotenv';
 import prisma from './lib/prisma'; // Import shared prisma instance
 import { authRouter } from './routes/user/auth'; 
 import userRouter from './routes/user/user.routes';
-import folderRouter from './routes/legacy/folder.routes';
-import aiRouter from './routes/ai/ai.routes'; // Temporarily disabled - imports AiRAGService
+
 import reviewRouter from './routes/mastery/review.routes'; // Using minimal review router to avoid heavy Prisma queries
-import standaloneQuestionSetRouter from './routes/legacy/standalone-questionset.routes';
-import standaloneQuestionRouter from './routes/legacy/standalone-question.routes';
-import dashboardRouter from './routes/core/dashboard.routes';
-import todaysTasksRoutes from './routes/mastery/todaysTasks.routes';
-import statsRouter from './routes/mastery/stats.routes';
+
 import noteRouter from './routes/note.routes';
-import insightCatalystRouter from './routes/mastery/insightCatalyst.routes';
 import userMemoryRouter from './routes/user/userMemory.routes';
 import learningBlueprintsRouter from './routes/learning-blueprints.routes'; // Temporarily disabled - imports AiRAGService
 import chatRouter from './routes/ai/chat.routes'; // Temporarily disabled - imports AiRAGService
@@ -180,8 +174,228 @@ import { protect, AuthRequest } from './middleware/auth.middleware';
 app.use('/api/auth', authRouter);
 
 // Health check endpoint (public)
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/health', async (req, res) => {
+  try {
+    const startTime = Date.now();
+    
+    // Basic system health
+    const systemHealth = {
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      version: process.env.npm_package_version || '1.0.0',
+      environment: process.env.NODE_ENV || 'development'
+    };
+
+    // Database health check
+    let databaseHealth: { status: string; responseTime: number; error?: string } = { status: 'unknown', responseTime: 0 };
+    try {
+      const dbStartTime = Date.now();
+      await prisma.$queryRaw`SELECT 1`;
+      const dbResponseTime = Date.now() - dbStartTime;
+      databaseHealth = { 
+        status: 'healthy', 
+        responseTime: dbResponseTime 
+      };
+    } catch (error) {
+      databaseHealth = { 
+        status: 'unhealthy', 
+        responseTime: 0,
+        error: error instanceof Error ? error.message : 'Unknown database error'
+      };
+      systemHealth.status = 'degraded';
+    }
+
+    // Memory usage
+    const memoryUsage = process.memoryUsage();
+    const memoryHealth = {
+      status: memoryUsage.heapUsed < 500 * 1024 * 1024 ? 'healthy' : 'warning', // 500MB threshold
+      heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024),
+      heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024),
+      external: Math.round(memoryUsage.external / 1024 / 1024),
+      rss: Math.round(memoryUsage.rss / 1024 / 1024)
+    };
+
+    // Performance metrics
+    const responseTime = Date.now() - startTime;
+    const performanceHealth = {
+      status: responseTime < 1000 ? 'healthy' : 'warning', // 1 second threshold
+      responseTime,
+      loadAverage: process.cpuUsage()
+    };
+
+    // Overall health assessment
+    const overallHealth = {
+      status: systemHealth.status,
+      checks: {
+        system: systemHealth.status,
+        database: databaseHealth.status,
+        memory: memoryHealth.status,
+        performance: performanceHealth.status
+      },
+      timestamp: systemHealth.timestamp,
+      uptime: systemHealth.uptime,
+      version: systemHealth.version,
+      environment: systemHealth.environment
+    };
+
+    // Set appropriate HTTP status
+    const httpStatus = overallHealth.status === 'healthy' ? 200 : 
+                      overallHealth.status === 'degraded' ? 503 : 500;
+
+    res.status(httpStatus).json({
+      ...overallHealth,
+      details: {
+        database: databaseHealth,
+        memory: memoryHealth,
+        performance: performanceHealth
+      }
+    });
+
+  } catch (error) {
+    console.error('Health check failed:', error);
+    res.status(500).json({
+      status: 'unhealthy',
+      error: 'Health check failed',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Enhanced health endpoint with detailed metrics
+app.get('/health/detailed', async (req, res) => {
+  try {
+    const startTime = Date.now();
+    
+    // Comprehensive system metrics
+    const systemMetrics = {
+      platform: process.platform,
+      arch: process.arch,
+      nodeVersion: process.version,
+      pid: process.pid,
+      uptime: process.uptime(),
+      memoryUsage: process.memoryUsage(),
+      cpuUsage: process.cpuUsage(),
+      resourceUsage: process.resourceUsage()
+    };
+
+    // Database performance metrics
+    let dbMetrics = null;
+    try {
+      const dbStartTime = Date.now();
+      const dbResult = await prisma.$queryRaw`SELECT 1 as test`;
+      const dbResponseTime = Date.now() - dbStartTime;
+      
+      dbMetrics = {
+        status: 'healthy',
+        responseTime: dbResponseTime,
+        connectionPool: {
+          // Note: Prisma doesn't expose connection pool metrics directly
+          // This would need to be implemented with custom monitoring
+        }
+      };
+    } catch (error) {
+      dbMetrics = {
+        status: 'unhealthy',
+        error: error instanceof Error ? error.message : 'Unknown database error'
+      };
+    }
+
+    // Process metrics
+    const processMetrics = {
+      title: process.title,
+      version: process.version,
+      versions: process.versions,
+      config: process.config,
+      env: {
+        NODE_ENV: process.env.NODE_ENV,
+        PORT: process.env.PORT,
+        DATABASE_URL: process.env.DATABASE_URL ? '[REDACTED]' : undefined
+      }
+    };
+
+    const responseTime = Date.now() - startTime;
+    
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      responseTime,
+      system: systemMetrics,
+      database: dbMetrics,
+      process: processMetrics
+    });
+
+  } catch (error) {
+    console.error('Detailed health check failed:', error);
+    res.status(500).json({
+      status: 'unhealthy',
+      error: 'Detailed health check failed',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Performance metrics endpoint
+app.get('/health/performance', async (req, res) => {
+  try {
+    const startTime = Date.now();
+    
+    // Memory metrics
+    const memoryMetrics = {
+      heapUsed: process.memoryUsage().heapUsed,
+      heapTotal: process.memoryUsage().heapTotal,
+      external: process.memoryUsage().external,
+      rss: process.memoryUsage().rss
+    };
+
+    // CPU metrics
+    const cpuMetrics = process.cpuUsage();
+
+    // Resource usage
+    const resourceMetrics = process.resourceUsage();
+
+    // Database performance test
+    let dbPerformance = null;
+    try {
+      const dbStartTime = Date.now();
+      await prisma.$queryRaw`SELECT 1 as test`;
+      const dbResponseTime = Date.now() - dbStartTime;
+      
+      dbPerformance = {
+        responseTime: dbResponseTime,
+        status: dbResponseTime < 100 ? 'excellent' : 
+                dbResponseTime < 500 ? 'good' : 
+                dbResponseTime < 1000 ? 'acceptable' : 'poor'
+      };
+    } catch (error) {
+      dbPerformance = {
+        error: error instanceof Error ? error.message : 'Database test failed',
+        status: 'error'
+      };
+    }
+
+    const responseTime = Date.now() - startTime;
+    
+    res.json({
+      status: 'success',
+      timestamp: new Date().toISOString(),
+      responseTime,
+      metrics: {
+        memory: memoryMetrics,
+        cpu: cpuMetrics,
+        resources: resourceMetrics,
+        database: dbPerformance
+      }
+    });
+
+  } catch (error) {
+    console.error('Performance metrics failed:', error);
+    res.status(500).json({
+      status: 'error',
+      error: 'Performance metrics failed',
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // Log all API requests for debugging
@@ -193,14 +407,10 @@ app.use('/api', (req: express.Request, res: express.Response, next: express.Next
 // Protected Routes (now behind the 'protect' middleware)
 
 app.use('/api/users', userRouter);
-app.use('/api/folders', folderRouter);
-app.use('/api/ai', aiRouter); // Temporarily disabled for debugging
+
 app.use('/api/reviews', reviewRouter); // Using minimal review router to avoid heavy Prisma queries in spaced repetition service
-app.use('/api/dashboard', dashboardRouter);
-app.use('/api/todays-tasks', todaysTasksRoutes);
-app.use('/api/stats', statsRouter);
+
 app.use('/api/notes', noteRouter);
-app.use('/api/insight-catalysts', insightCatalystRouter);
 app.use('/api/user/memory', userMemoryRouter);
 app.use('/api/learning-blueprints', learningBlueprintsRouter); // Commented out to avoid route conflicts
 app.use('/api/blueprints', blueprintsAliasRouter); // Commented out to avoid route conflicts
@@ -219,11 +429,6 @@ app.use('/api/mastery-thresholds', masteryThresholdsRouter);
 app.use('/api/section-analytics', sectionAnalyticsRouter);
 app.use('/api/study-sessions', studySessionsRouter);
 app.use('/api/content-recommendations', contentRecommendationsRouter);
-
-// Additional standalone routes for direct access
-app.use('/api/question-sets', standaloneQuestionSetRouter);
-app.use('/api/questionsets', standaloneQuestionSetRouter);
-app.use('/api/questions', standaloneQuestionRouter);
 
 // Error handling middleware
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

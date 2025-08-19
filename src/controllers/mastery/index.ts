@@ -22,8 +22,4 @@ export {
   startReview
 } from './review.controller';
 
-export * from './insightCatalyst.controller';
 export * from './primitiveSR.controller';
-
-// Export specific functions to avoid conflicts
-export { getMasteryStats } from './stats.controller';

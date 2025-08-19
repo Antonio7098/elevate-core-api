@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import MasteryCriterionService from '../../services/blueprint-centric/masteryCriterion.service';
+import BlueprintCentricService from '../../services/blueprint-centric/blueprintCentric.service';
 import { MasteryThreshold, UueStage, getMasteryStats, updateMasteryScore } from '../../services/mastery/masteryTracking.service';
 import { MasteryCalculationService } from '../../services/mastery/masteryCalculation.service';
 import { enhancedSpacedRepetitionService } from '../../services/mastery/enhancedSpacedRepetition.service';
@@ -7,6 +8,7 @@ import { AuthRequest } from '../../middleware/auth.middleware';
 
 const masteryCalculationService = new MasteryCalculationService();
 const masteryCriterionService = new MasteryCriterionService();
+const blueprintCentricService = new BlueprintCentricService();
 
 // ============================================================================
 // MASTERY CRITERION CONTROLLER
@@ -653,6 +655,226 @@ export class MasteryCriterionController {
     const pointsNeeded = targetMastery - currentMastery;
     const daysEstimated = Math.ceil(pointsNeeded / velocity);
     return `${daysEstimated} days`;
+  }
+
+  // ============================================================================
+  // MULTI-PRIMITIVE MASTERY CRITERIA ENDPOINTS
+  // ============================================================================
+
+  /**
+   * POST /api/mastery-criteria/:id/primitives
+   * Link a primitive to a mastery criterion
+   */
+  async linkPrimitiveToCriterion(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const { primitiveId, relationshipType, weight, strength } = req.body;
+
+      if (!primitiveId) {
+        return res.status(400).json({ error: 'Primitive ID is required' });
+      }
+
+      const criterionId = parseInt(id);
+      if (isNaN(criterionId)) {
+        return res.status(400).json({ error: 'Invalid criterion ID' });
+      }
+
+      const relationship = await masteryCriterionService.linkPrimitiveToCriterion(
+        criterionId,
+        primitiveId,
+        relationshipType || 'PRIMARY',
+        weight || 1.0,
+        strength || 0.8
+      );
+
+      res.status(201).json({
+        success: true,
+        data: relationship
+      });
+    } catch (error) {
+      console.error('Error linking primitive to criterion:', error);
+      res.status(500).json({ error: 'Failed to link primitive to criterion' });
+    }
+  }
+
+  /**
+   * DELETE /api/mastery-criteria/:id/primitives/:primitiveId
+   * Unlink a primitive from a mastery criterion
+   */
+  async unlinkPrimitiveFromCriterion(req: Request, res: Response) {
+    try {
+      const { id, primitiveId } = req.params;
+
+      const criterionId = parseInt(id);
+      if (isNaN(criterionId)) {
+        return res.status(400).json({ error: 'Invalid criterion ID' });
+      }
+
+      const success = await masteryCriterionService.unlinkPrimitiveFromCriterion(
+        criterionId,
+        primitiveId
+      );
+
+      if (success) {
+        res.json({ success: true, message: 'Primitive unlinked successfully' });
+      } else {
+        res.status(404).json({ error: 'Primitive relationship not found' });
+      }
+    } catch (error) {
+      console.error('Error unlinking primitive from criterion:', error);
+      res.status(500).json({ error: 'Failed to unlink primitive from criterion' });
+    }
+  }
+
+  /**
+   * PUT /api/mastery-criteria/:id/primitives/:primitiveId
+   * Update primitive relationship
+   */
+  async updatePrimitiveRelationship(req: Request, res: Response) {
+    try {
+      const { id, primitiveId } = req.params;
+      const { relationshipType, weight, strength } = req.body;
+
+      const criterionId = parseInt(id);
+      if (isNaN(criterionId)) {
+        return res.status(400).json({ error: 'Invalid criterion ID' });
+      }
+
+      const relationships = [{
+        primitiveId,
+        relationshipType,
+        weight,
+        strength
+      }];
+
+      const updatedCriterion = await masteryCriterionService.updatePrimitiveRelationships(
+        criterionId,
+        relationships
+      );
+
+      res.json({
+        success: true,
+        data: updatedCriterion
+      });
+    } catch (error) {
+      console.error('Error updating primitive relationship:', error);
+      res.status(500).json({ error: 'Failed to update primitive relationship' });
+    }
+  }
+
+  /**
+   * GET /api/mastery-criteria/:id/primitives
+   * Get all primitives linked to a criterion
+   */
+  async getCriterionPrimitives(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+
+      const criterionId = parseInt(id);
+      if (isNaN(criterionId)) {
+        return res.status(400).json({ error: 'Invalid criterion ID' });
+      }
+
+      const criterion = await masteryCriterionService.getCriterionWithPrimitives(criterionId);
+      if (!criterion) {
+        return res.status(404).json({ error: 'Criterion not found' });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          criterionId: criterion.id,
+          title: criterion.title,
+          primitives: criterion.primitiveRelationships
+        }
+      });
+    } catch (error) {
+      console.error('Error getting criterion primitives:', error);
+      res.status(500).json({ error: 'Failed to get criterion primitives' });
+    }
+  }
+
+  /**
+   * GET /api/mastery-criteria/:id/relationships
+   * Get all relationships for a criterion
+   */
+  async getCriterionRelationships(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+
+      const criterionId = parseInt(id);
+      if (isNaN(criterionId)) {
+        return res.status(400).json({ error: 'Invalid criterion ID' });
+      }
+
+      const criterion = await masteryCriterionService.getCriterionWithPrimitives(criterionId);
+      if (!criterion) {
+        return res.status(404).json({ error: 'Criterion not found' });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          criterionId: criterion.id,
+          title: criterion.title,
+          relationships: criterion.primitiveRelationships,
+          totalRelationships: criterion.primitiveRelationships.length,
+          estimatedComplexity: criterion.relationshipComplexity
+        }
+      });
+    } catch (error) {
+      console.error('Error getting criterion relationships:', error);
+      res.status(500).json({ error: 'Failed to get criterion relationships' });
+    }
+  }
+
+  /**
+   * POST /api/mastery-criteria/validate
+   * Validate multi-primitive criterion
+   */
+  async validateMultiPrimitiveCriterion(req: Request, res: Response) {
+    try {
+      const { primitives, uueStage } = req.body;
+
+      if (!primitives || !Array.isArray(primitives) || primitives.length === 0) {
+        return res.status(400).json({ error: 'Primitives array is required' });
+      }
+
+      if (!uueStage || !['UNDERSTAND', 'USE', 'EXPLORE'].includes(uueStage)) {
+        return res.status(400).json({ error: 'Valid UUE stage is required' });
+      }
+
+      const validationResult = await blueprintCentricService.validatePrimitiveRelationships(
+        primitives,
+        uueStage
+      );
+
+      res.json({
+        success: true,
+        data: validationResult
+      });
+    } catch (error) {
+      console.error('Error validating multi-primitive criterion:', error);
+      res.status(500).json({ error: 'Failed to validate multi-primitive criterion' });
+    }
+  }
+
+  /**
+   * POST /api/mastery-criteria/generate-multi-primitive
+   * STUB: AI-powered multi-primitive criteria generation
+   */
+  async generateMultiPrimitiveCriteria(req: Request, res: Response) {
+    try {
+      // This is a stub endpoint - will be implemented after AI functionality is available
+      res.status(501).json({
+        success: false,
+        error: 'AI-powered multi-primitive criteria generation not yet implemented',
+        message: 'This endpoint will be available in a future sprint when AI functionality is integrated'
+      });
+    } catch (error) {
+      console.error('Error in generateMultiPrimitiveCriteria stub:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
   }
 }
 

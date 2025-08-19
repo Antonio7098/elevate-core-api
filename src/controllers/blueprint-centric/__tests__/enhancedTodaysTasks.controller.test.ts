@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { AuthRequest } from '../../../middleware/auth.middleware';
 
 // Mock the service
-jest.mock('../../../services/enhancedTodaysTasks.service', () => ({
+jest.mock('../../../services/mastery/enhancedTodaysTasks.service', () => ({
   EnhancedTodaysTasksService: jest.fn().mockImplementation(() => ({
     generateTodaysTasksForUser: jest.fn(),
     getUserCapacityAnalysis: jest.fn(),
@@ -52,7 +52,7 @@ describe('EnhancedTodaysTasksController', () => {
     } as any;
 
     // Replace the mocked service methods with our mock implementations
-    const { EnhancedTodaysTasksService } = require('../../../services/enhancedTodaysTasks.service');
+    const { EnhancedTodaysTasksService } = require('../../../services/mastery/enhancedTodaysTasks.service');
     EnhancedTodaysTasksService.mockImplementation(() => mockEnhancedTodaysTasksService);
 
     // Import the controller after mocking

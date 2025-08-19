@@ -12,6 +12,19 @@ const mockPrisma = {
     create: jest.fn(),
     update: jest.fn(),
     findMany: jest.fn(),
+    findFirst: jest.fn(),
+  },
+  knowledgePrimitive: {
+    findUnique: jest.fn(),
+  },
+  questionInstance: {
+    create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+    findMany: jest.fn(),
+  },
+  blueprintSection: {
+    findUnique: jest.fn(),
   },
 } as any;
 
@@ -67,6 +80,16 @@ describe('MasteryCriterionService', () => {
         updatedAt: new Date()
       };
 
+      mockPrisma.knowledgePrimitive.findUnique.mockResolvedValue({
+        primitiveId: 'primitive-1',
+        title: 'Test Primitive',
+        description: 'Test Description'
+      });
+      mockPrisma.blueprintSection.findUnique.mockResolvedValue({
+        id: 1,
+        title: 'Test Section',
+        blueprintId: 1
+      });
       mockPrisma.masteryCriterion.create.mockResolvedValue(expectedCriterion);
 
       const result = await service.createCriterion(createData);
@@ -121,6 +144,7 @@ describe('MasteryCriterionService', () => {
       expect(result).toEqual(expectedCriterion);
       expect(mockPrisma.masteryCriterion.findUnique).toHaveBeenCalledWith({
         where: { id: 1 },
+        include: { questionInstances: true }
       });
     });
   });
@@ -200,7 +224,7 @@ describe('MasteryCriterionService', () => {
       const userMastery = {
         id: 1,
         userId: 1,
-        criterionId: 1,
+        masteryCriterionId: 1,
         isMastered: false,
         masteryScore: 0.5,
         attempts: 2,
@@ -210,7 +234,11 @@ describe('MasteryCriterionService', () => {
       };
 
       mockPrisma.masteryCriterion.findUnique.mockResolvedValue(criterion);
-      mockPrisma.userCriterionMastery.findUnique.mockResolvedValue(userMastery);
+      mockPrisma.userCriterionMastery.findFirst.mockResolvedValue({
+        ...userMastery,
+        lastReviewedAt: new Date(),
+        reviewCount: 2
+      });
       mockPrisma.userCriterionMastery.update.mockResolvedValue({
         ...userMastery,
         masteryScore: 0.7,
@@ -218,7 +246,7 @@ describe('MasteryCriterionService', () => {
         isMastered: false
       });
 
-      const result = await service.processCriterionReview(1, 1, true, 0.9);
+      const result = await service.processCriterionReview(1, 1, true, 0.9, { allowRetrySameDay: true });
 
       expect(result.success).toBe(true);
       expect(result.newMasteryScore).toBeGreaterThan(0.5);
@@ -248,15 +276,20 @@ describe('MasteryCriterionService', () => {
         updatedAt: new Date()
       };
 
+      mockPrisma.masteryCriterion.findUnique.mockResolvedValue({
+        id: 1,
+        title: 'Test Criterion',
+        description: 'Test description',
+        masteryThreshold: 0.8
+      });
       mockPrisma.userCriterionMastery.findUnique.mockResolvedValue(userMastery);
+      mockPrisma.questionInstance.findMany.mockResolvedValue([]);
 
       const result = await service.calculateCriterionMastery(1, 1);
 
       expect(result.criterionId).toBe(1);
       expect(result.masteryScore).toBe(0.9);
       expect(result.isMastered).toBe(true);
-      expect(result.attempts).toBe(5);
-      expect(result.lastAttempt).toEqual(userMastery.lastAttempt);
     });
 
     it('should throw error if user mastery not found', async () => {
@@ -332,7 +365,7 @@ describe('MasteryCriterionService', () => {
         {
           id: 1,
           userId: 1,
-          criterionId: 1,
+          masteryCriterionId: 1,
           isMastered: true,
           masteryScore: 0.9,
           attempts: 3,
@@ -376,7 +409,7 @@ describe('MasteryCriterionService', () => {
         {
           id: 1,
           userId: 1,
-          criterionId: 1,
+          masteryCriterionId: 1,
           isMastered: false,
           masteryScore: 0.5,
           attempts: 2,

@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { MasteryCriterion, UserCriterionMastery, UueStage, AssessmentType } from '@prisma/client';
+import { MasteryOptions } from './masteryConfiguration.service';
+import { MasteryUpdateResult } from './enhancedBatchReview.service';
 
 const prisma = new PrismaClient();
 
@@ -24,31 +26,17 @@ export interface UpdateCriterionData {
   title?: string;
 }
 
-export interface MasteryUpdateResult {
-  success: boolean;
-  newMasteryScore: number;
-  isMastered: boolean;
-  attempts: number;
-  message: string;
-}
+// MasteryUpdateResult interface moved to enhancedBatchReview.service.ts to avoid conflicts
 
 export interface CriterionMasteryResult {
   criterionId: number;
   masteryScore: number;
   isMastered: boolean;
   attempts: number;
-  lastAttempt: Date;
+  lastAttempt: Date | null;
 }
 
-export interface MasteryOptions {
-  minGapDays?: number;
-  customThreshold?: number;
-  requireDifferentTimeSlots?: boolean;
-  maxAttemptsForMastery?: number;
-  allowRetrySameDay?: boolean;
-  masteryDecayRate?: number;
-  strictMode?: boolean;
-}
+// MasteryOptions interface moved to masteryConfiguration.service.ts to avoid conflicts
 
 export class MasteryCriterionService {
   /**
@@ -121,11 +109,12 @@ export class MasteryCriterionService {
       const daysSinceLastAttempt = this.getDaysDifference(userMastery.lastAttempt, new Date());
       if (daysSinceLastAttempt < minGapDays) {
         return {
-          success: false,
+          criterionId: criterionId.toString(),
+          oldMasteryScore: userMastery.masteryScore,
           newMasteryScore: userMastery.masteryScore,
           isMastered: userMastery.isMastered,
-          attempts: userMastery.attempts,
-          message: `Minimum gap of ${minGapDays} days required between attempts`,
+          stageProgression: false,
+          nextReviewAt: new Date(Date.now() + (minGapDays - daysSinceLastAttempt) * 24 * 60 * 60 * 1000),
         };
       }
     }
@@ -139,7 +128,7 @@ export class MasteryCriterionService {
 
     // Update user mastery record
     const updatedMastery = await prisma.userCriterionMastery.update({
-      where: { id: userMastery.id },
+      where: { userId_masteryCriterionId: { userId, masteryCriterionId: criterionId } },
       data: {
         masteryScore: newMasteryScore,
         isMastered,
@@ -149,11 +138,12 @@ export class MasteryCriterionService {
     });
 
     return {
-      success: true,
+      criterionId: criterionId.toString(),
+      oldMasteryScore: userMastery.masteryScore,
       newMasteryScore,
       isMastered,
-      attempts: newAttempts,
-      message: isMastered ? 'Criterion mastered!' : 'Progress recorded',
+      stageProgression: isMastered && !userMastery.isMastered,
+      nextReviewAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     };
   }
 
@@ -234,7 +224,7 @@ export class MasteryCriterionService {
 
     // All criteria in current stage must be mastered
     for (const criterion of currentStageCriteria) {
-      const userMastery = userMasteries.find(m => m.criterionId === criterion.id);
+      const userMastery = userMasteries.find(m => m.masteryCriterionId === criterion.id);
       if (!userMastery || !userMastery.isMastered) {
         return false;
       }
@@ -257,7 +247,8 @@ export class MasteryCriterionService {
       userMastery = await prisma.userCriterionMastery.create({
         data: {
           userId,
-          criterionId: criterionId,
+          masteryCriterionId: criterionId,
+          blueprintSectionId: criterion.blueprintSectionId,
           masteryScore: 0.0,
           attempts: 0,
         },
@@ -270,9 +261,9 @@ export class MasteryCriterionService {
   private async getUserCriterionMastery(userId: number, criterionId: number): Promise<UserCriterionMastery | null> {
     return await prisma.userCriterionMastery.findUnique({
       where: {
-        userId_criterionId: {
+        userId_masteryCriterionId: {
           userId,
-          criterionId: criterionId,
+          masteryCriterionId: criterionId,
         },
       },
     });
@@ -282,7 +273,7 @@ export class MasteryCriterionService {
     return await prisma.userCriterionMastery.findMany({
       where: {
         userId,
-        criterionId: { in: criterionIds },
+        masteryCriterionId: { in: criterionIds },
       },
     });
   }

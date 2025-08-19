@@ -28,7 +28,7 @@ export interface StageUnlockResult {
 }
 
 export interface LearningPath {
-  sectionId: string;
+  sectionId: number;
   sectionName: string;
   stages: {
     stage: UueStage;
@@ -36,7 +36,7 @@ export interface LearningPath {
     progress: number;
     estimatedCompletion: Date | null;
     criteria: {
-      id: string;
+      id: number;
       description: string;
       status: 'NOT_STARTED' | 'IN_PROGRESS' | 'MASTERED';
       masteryScore: number;
@@ -62,7 +62,7 @@ export class UueStageProgressionService {
    */
   async canProgressToNextUueStage(
     userId: number,
-    sectionId: string,
+    sectionId: number,
     currentStage: UueStage
   ): Promise<StageProgressionResult> {
     // Get current stage criteria and user mastery
@@ -122,7 +122,7 @@ export class UueStageProgressionService {
    */
   async unlockNextStage(
     userId: number,
-    sectionId: string,
+    sectionId: number,
     currentStage: UueStage
   ): Promise<StageUnlockResult | null> {
     const progressionResult = await this.canProgressToNextUueStage(userId, sectionId, currentStage);
@@ -160,7 +160,7 @@ export class UueStageProgressionService {
   /**
    * Get complete learning path for a user
    */
-  async getLearningPath(userId: number, sectionId: string): Promise<LearningPath> {
+  async getLearningPath(userId: number, sectionId: number): Promise<LearningPath> {
     const section = await prisma.blueprintSection.findUnique({
       where: { id: sectionId },
       select: { name: true },
@@ -201,7 +201,7 @@ export class UueStageProgressionService {
    */
   private async getStageStatus(
     userId: number,
-    sectionId: string,
+    sectionId: number,
     stage: UueStage
   ): Promise<LearningPath['stages'][0]> {
     const criteria = await masteryCriterionService.getCriteriaByUueStage(sectionId, stage);
@@ -249,7 +249,7 @@ export class UueStageProgressionService {
   /**
    * Get user's current stage in a section
    */
-  async getCurrentStage(userId: number, sectionId: string): Promise<UueStage> {
+  async getCurrentStage(userId: number, sectionId: number): Promise<UueStage> {
     // Find the highest stage where user has some progress
     for (let i = this.stageOrder.length - 1; i >= 0; i--) {
       const stage = this.stageOrder[i];
@@ -270,7 +270,7 @@ export class UueStageProgressionService {
   /**
    * Get stage completion statistics
    */
-  async getStageCompletionStats(userId: number, sectionId: string): Promise<{
+  async getStageCompletionStats(userId: number, sectionId: number): Promise<{
     totalStages: number;
     completedStages: number;
     currentStage: UueStage;
@@ -301,7 +301,7 @@ export class UueStageProgressionService {
   // Private helper methods
 
   private async getUserMasteriesForCriteria(
-    criterionIds: string[],
+    criterionIds: number[],
     userId: number
   ): Promise<UserCriterionMastery[]> {
     return await prisma.userCriterionMastery.findMany({
@@ -314,8 +314,8 @@ export class UueStageProgressionService {
 
   private async createUserMasteryRecord(
     userId: number,
-    criterionId: string,
-    sectionId: string,
+    criterionId: number,
+    sectionId: number,
     uueStage: UueStage
   ): Promise<void> {
     // Check if record already exists
@@ -347,7 +347,7 @@ export class UueStageProgressionService {
 
   private async recordStageUnlock(
     userId: number,
-    sectionId: string,
+    sectionId: number,
     stage: UueStage
   ): Promise<void> {
     // This could be extended to track stage unlock history
@@ -414,7 +414,7 @@ export class UueStageProgressionService {
 
   private estimateStageCompletion(
     userId: number,
-    sectionId: string,
+    sectionId: number,
     stage: UueStage,
     currentProgress: number
   ): Date | null {

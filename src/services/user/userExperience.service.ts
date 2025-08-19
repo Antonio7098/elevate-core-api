@@ -3,12 +3,13 @@ import { UserCriterionMastery, MasteryCriterion, UueStage } from '@prisma/client
 import { masteryCalculationService } from '../mastery/masteryCalculation.service';
 import { uueStageProgressionService } from '../mastery/uueStageProgression.service';
 import { masteryConfigurationService } from '../mastery/masteryConfiguration.service';
+import { masteryCriterionService } from '../mastery/masteryCriterion.service';
 
 const prisma = new PrismaClient();
 
 export interface PersonalizedLearningPath {
   userId: number;
-  sectionId: string;
+  sectionId: number;
   currentStage: UueStage;
   nextMilestone: string;
   estimatedCompletion: Date;
@@ -23,7 +24,7 @@ export interface PersonalizedLearningPath {
 }
 
 export interface AdaptiveDifficultyAdjustment {
-  criterionId: string;
+  criterionId: number;
   currentDifficulty: number;
   adjustedDifficulty: number;
   reasoning: string;
@@ -37,7 +38,7 @@ export interface AdaptiveDifficultyAdjustment {
 
 export interface UserFeedback {
   userId: number;
-  criterionId: string;
+  criterionId: number;
   feedbackType: 'DIFFICULTY' | 'CONTENT_QUALITY' | 'LEARNING_PACE' | 'INTERFACE';
   rating: number; // 1-5 scale
   comment?: string;
@@ -47,7 +48,7 @@ export interface UserFeedback {
 
 export interface LearningRecommendations {
   userId: number;
-  sectionId: string;
+  sectionId: number;
   immediate: string[];
   shortTerm: string[];
   longTerm: string[];
@@ -61,12 +62,12 @@ export interface LearningRecommendations {
 
 export interface ProgressVisualization {
   userId: number;
-  sectionId: string;
+  sectionId: number;
   stageProgress: {
     stage: UueStage;
     progress: number;
     criteria: {
-      id: string;
+      id: number;
       name: string;
       progress: number;
       status: 'NOT_STARTED' | 'IN_PROGRESS' | 'MASTERED';
@@ -84,7 +85,7 @@ export class UserExperienceService {
    */
   async generatePersonalizedLearningPath(
     userId: number,
-    sectionId: string
+    sectionId: number
   ): Promise<PersonalizedLearningPath> {
     try {
       // Get user's current stage and progress
@@ -137,7 +138,7 @@ export class UserExperienceService {
    */
   async adjustDifficultyAdaptively(
     userId: number,
-    criterionId: string
+    criterionId: number
   ): Promise<AdaptiveDifficultyAdjustment> {
     try {
       // Get current difficulty and user performance
@@ -214,7 +215,7 @@ export class UserExperienceService {
    */
   async generateLearningRecommendations(
     userId: number,
-    sectionId: string
+    sectionId: number
   ): Promise<LearningRecommendations> {
     try {
       // Get user's current progress and preferences
@@ -257,7 +258,7 @@ export class UserExperienceService {
    */
   async createProgressVisualization(
     userId: number,
-    sectionId: string
+    sectionId: number
   ): Promise<ProgressVisualization> {
     try {
       // Get detailed stage progress
@@ -308,7 +309,7 @@ export class UserExperienceService {
    */
   async implementGamification(
     userId: number,
-    sectionId: string
+    sectionId: number
   ): Promise<{
     points: number;
     level: number;
@@ -369,7 +370,7 @@ export class UserExperienceService {
 
   private async generateRecommendedFocus(
     userId: number,
-    sectionId: string,
+    sectionId: number,
     currentStage: UueStage
   ): Promise<string[]> {
     const recommendations: string[] = [];
@@ -389,7 +390,7 @@ export class UserExperienceService {
     });
     
     for (const mastery of userMasteries) {
-      const criterion = await masteryCalculationService.getCriterion(mastery.masteryCriterionId);
+      const criterion = await masteryCriterionService.getCriterion(mastery.masteryCriterionId);
       if (criterion) {
         recommendations.push(`Focus on: ${criterion.description}`);
       }
@@ -416,7 +417,7 @@ export class UserExperienceService {
 
   private async determineUserDifficulty(
     userId: number,
-    sectionId: string
+    sectionId: number
   ): Promise<'EASY' | 'MEDIUM' | 'HARD'> {
     // Analyze user performance to determine appropriate difficulty
     const userPerformance = await this.getOverallUserPerformance(userId, sectionId);
@@ -432,7 +433,7 @@ export class UserExperienceService {
 
   private async calculateDetailedProgress(
     userId: number,
-    sectionId: string,
+    sectionId: number,
     currentStage: UueStage
   ): Promise<{
     overall: number;
@@ -454,7 +455,7 @@ export class UserExperienceService {
     };
   }
 
-  private async getCurrentDifficulty(criterionId: string): Promise<number> {
+  private async getCurrentDifficulty(criterionId: number): Promise<number> {
     // Get criterion difficulty from database
     const criterion = await prisma.masteryCriterion.findUnique({
       where: { id: criterionId },
@@ -466,7 +467,7 @@ export class UserExperienceService {
 
   private async getUserPerformance(
     userId: number,
-    criterionId: string
+    criterionId: number
   ): Promise<{
     successRate: number;
     averageTime: number;
@@ -539,11 +540,10 @@ export class UserExperienceService {
     await prisma.userFeedback.create({
       data: {
         userId: feedback.userId,
-        criterionId: feedback.criterionId,
-        feedbackType: feedback.feedbackType,
+        // Map our richer feedback object to schema fields
+        feedback: feedback.comment ?? feedback.feedbackType,
         rating: feedback.rating,
-        comment: feedback.comment,
-        timestamp: feedback.timestamp,
+        criterionId: feedback.criterionId,
       },
     });
   }
@@ -559,7 +559,7 @@ export class UserExperienceService {
     
     return {
       totalFeedback: userFeedback.length,
-      averageRating: userFeedback.reduce((sum, f) => sum + f.rating, 0) / userFeedback.length,
+      averageRating: userFeedback.length > 0 ? userFeedback.reduce((sum, f) => sum + f.rating, 0) / userFeedback.length : 0,
       commonIssues: this.identifyCommonIssues(userFeedback),
     };
   }
@@ -603,7 +603,7 @@ export class UserExperienceService {
 
   private async getCurrentProgress(
     userId: number,
-    sectionId: string
+    sectionId: number
   ): Promise<any> {
     const learningPath = await uueStageProgressionService.getLearningPath(userId, sectionId);
     return {
@@ -615,7 +615,7 @@ export class UserExperienceService {
 
   private async generateImmediateRecommendations(
     userId: number,
-    sectionId: string,
+    sectionId: number,
     currentProgress: any
   ): Promise<string[]> {
     const recommendations: string[] = [];
@@ -633,7 +633,7 @@ export class UserExperienceService {
 
   private async generateShortTermRecommendations(
     userId: number,
-    sectionId: string,
+    sectionId: number,
     currentProgress: any
   ): Promise<string[]> {
     const recommendations: string[] = [];
@@ -647,7 +647,7 @@ export class UserExperienceService {
 
   private async generateLongTermRecommendations(
     userId: number,
-    sectionId: string,
+    sectionId: number,
     currentProgress: any
   ): Promise<string[]> {
     const recommendations: string[] = [];
@@ -661,7 +661,7 @@ export class UserExperienceService {
 
   private async getUserAchievements(
     userId: number,
-    sectionId: string
+    sectionId: number
   ): Promise<string[]> {
     const achievements: string[] = [];
     
@@ -691,7 +691,7 @@ export class UserExperienceService {
 
   private async calculateUserPoints(
     userId: number,
-    sectionId: string
+    sectionId: number
   ): Promise<number> {
     const userMasteries = await prisma.userCriterionMastery.findMany({
       where: {
@@ -721,7 +721,7 @@ export class UserExperienceService {
 
   private async getUserBadges(
     userId: number,
-    sectionId: string
+    sectionId: number
   ): Promise<string[]> {
     const badges: string[] = [];
     
@@ -744,7 +744,7 @@ export class UserExperienceService {
 
   private async calculateLearningStreaks(
     userId: number,
-    sectionId: string
+    sectionId: number
   ): Promise<{
     current: number;
     longest: number;
@@ -761,7 +761,7 @@ export class UserExperienceService {
 
   private async getUserChallenges(
     userId: number,
-    sectionId: string
+    sectionId: number
   ): Promise<{
     active: string[];
     completed: string[];
@@ -778,7 +778,7 @@ export class UserExperienceService {
 
   private async getOverallUserPerformance(
     userId: number,
-    sectionId: string
+    sectionId: number
   ): Promise<{
     successRate: number;
     averageTime: number;

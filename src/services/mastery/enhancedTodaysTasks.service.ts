@@ -164,14 +164,32 @@ export class EnhancedTodaysTasksService {
       // Mock implementation - in real system this would query the database
       return [
         {
-          id: 1,
+          id: 'mock_criterion_1',
           userId: userId,
           criterionId: 1,
+          masteryCriterionId: 1,
+          blueprintSectionId: 1,
           masteryScore: 0.5,
           isMastered: false,
-          lastAttempt: new Date(),
           attempts: 3,
-          createdAt: new Date(),
+          attemptCount: 3,
+          consecutiveFailures: 0,
+          consecutiveIntervals: 0,
+          currentIntervalStep: 0,
+          lastAttempt: new Date(),
+          lastAttemptedAt: new Date(),
+          lastReviewedAt: new Date(),
+          lastThresholdCheckDate: new Date(),
+          lastTwoAttempts: [0.5, 0.4],
+          attemptHistory: [],
+          nextReviewAt: new Date(),
+          reviewCount: 0,
+          successfulAttempts: 1,
+          successfulReviews: 1,
+          trackingIntensity: 'NORMAL',
+          uueStage: 'UNDERSTAND',
+          primitiveId: 'mock_primitive_1',
+          blueprintId: 1,
           updatedAt: new Date()
         } as UserCriterionMastery
       ];
@@ -1082,9 +1100,9 @@ export class EnhancedTodaysTasksService {
   async getTasksForSection(userId: number, sectionId: number): Promise<DailyTask[]> {
     try {
       // Get criteria for the specific section
-      const sectionCriteria = await (this.prisma as any).masteryCriterion.findMany({
+      const sectionCriteria = await prisma.masteryCriterion.findMany({
         where: {
-          blueprintSectionId: sectionId.toString(),
+          blueprintSectionId: sectionId,
           userId: userId
         },
         include: {
@@ -1096,7 +1114,7 @@ export class EnhancedTodaysTasksService {
       const tasks: DailyTask[] = sectionCriteria.map(criterion => ({
         id: `section_${criterion.id}_${Date.now()}`,
         criterionId: criterion.id.toString(),
-        sectionId: criterion.blueprintSectionId,
+        sectionId: criterion.blueprintSectionId.toString(),
         sectionName: criterion.blueprintSection?.name || 'Unknown Section',
         uueStage: criterion.uueStage,
         description: criterion.description || criterion.title,
@@ -1104,7 +1122,7 @@ export class EnhancedTodaysTasksService {
         estimatedTime: 5, // Default 5 minutes per task
         masteryScore: 0, // Will be populated from mastery progress
         daysOverdue: 0, // Will be calculated from due dates
-        questionTypes: criterion.questionTypes || ['multiple-choice']
+        questionTypes: ['multiple-choice'] // Default question type since it's not in the Prisma model
       }));
       
       return tasks;
@@ -1117,15 +1135,15 @@ export class EnhancedTodaysTasksService {
   /**
    * Get tasks for a specific UUE stage
    */
-  async getTasksForUueStage(userId: number, stage: string): Promise<DailyTask[]> {
+  async getTasksForUueStage(userId: number, stage: UueStage): Promise<DailyTask[]> {
     try {
       // Validate UUE stage
-      if (!['UNDERSTAND', 'USE', 'EXPLORE'].includes(stage)) {
+      if (!['UNDERSTAND', 'USE', 'EXPLORE'].includes(stage as string)) {
         throw new Error('Invalid UUE stage');
       }
       
       // Get criteria for the specific UUE stage
-      const stageCriteria = await (this.prisma as any).masteryCriterion.findMany({
+      const stageCriteria = await prisma.masteryCriterion.findMany({
         where: {
           uueStage: stage,
           userId: userId
@@ -1139,7 +1157,7 @@ export class EnhancedTodaysTasksService {
       const tasks: DailyTask[] = stageCriteria.map(criterion => ({
         id: `stage_${criterion.id}_${Date.now()}`,
         criterionId: criterion.id.toString(),
-        sectionId: criterion.blueprintSectionId,
+        sectionId: criterion.blueprintSectionId.toString(),
         sectionName: criterion.blueprintSection?.name || 'Unknown Section',
         uueStage: criterion.uueStage,
         description: criterion.description || criterion.title,
@@ -1147,7 +1165,7 @@ export class EnhancedTodaysTasksService {
         estimatedTime: 5, // Default 5 minutes per task
         masteryScore: 0, // Will be populated from mastery progress
         daysOverdue: 0, // Will be calculated from due dates
-        questionTypes: criterion.questionTypes || ['multiple-choice']
+        questionTypes: ['multiple-choice'] // Default question type since it's not in the Prisma model
       }));
       
       return tasks;

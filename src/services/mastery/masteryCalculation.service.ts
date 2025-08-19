@@ -65,9 +65,9 @@ export class MasteryCalculationService {
   ): Promise<number> {
     const userMastery = await prisma.userCriterionMastery.findUnique({
       where: {
-        userId_criterionId: {
+        userId_masteryCriterionId: {
           userId,
-          criterionId,
+          masteryCriterionId: criterionId,
         },
       },
     });
@@ -87,7 +87,7 @@ export class MasteryCalculationService {
     userId: number
   ): Promise<UueStageMasteryResult> {
     // Get all criteria for this stage
-    const criteria = await masteryCriterionService.getCriteriaByUueStage(sectionId, uueStage);
+    const criteria = await masteryCriterionService.getCriteriaByUueStage(parseInt(sectionId), uueStage);
     
     if (criteria.length === 0) {
       return {

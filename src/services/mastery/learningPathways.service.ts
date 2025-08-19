@@ -23,7 +23,7 @@ import {
   GenerationDifficulty 
 } from '../../types/aiGeneration.types';
 import { monitoringService } from '../core/monitoring.service';
-import { performanceOptimizationService } from '../core/performanceOptimization.service';
+import PerformanceOptimizationService from '../core/performanceOptimization.service';
 
 const prisma = new PrismaClient();
 

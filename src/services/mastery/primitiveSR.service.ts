@@ -1,4 +1,4 @@
-import { MasteryThresholdLevel } from '@prisma/client';
+import { UueStage } from '@prisma/client';
 import prisma from '../../lib/prisma';
 import { addDays, format } from 'date-fns';
 
@@ -8,7 +8,7 @@ function calculateWeightedMastery(totalWeight: number, masteredWeight: number): 
   return masteredWeight / totalWeight;
 }
 
-function canProgressFromLevel(mastery: number, threshold: MasteryThresholdLevel): boolean {
+function canProgressFromLevel(mastery: number, threshold: string): boolean {
   switch (threshold) {
     case 'SURVEY':
       return mastery >= 0.6;
@@ -36,13 +36,13 @@ function calculateQuestionsFromWeightedMastery(
 
 async function selectQuestionsForPrimitive(
   primitiveId: string,
-  currentUeeLevel: string,
+  currentUeeLevel: UueStage,
   questionCount: number,
   userId: number
 ): Promise<any[]> {
   // Get mastery criteria ordered by weight (highest first)
   const criteria = await prisma.masteryCriterion.findMany({
-    where: { primitiveId, ueeLevel: currentUeeLevel },
+    where: { knowledgePrimitiveId: primitiveId, uueStage: currentUeeLevel },
     include: {
       questions: true,
       userCriterionMasteries: { where: { userId } }
@@ -64,7 +64,7 @@ async function selectQuestionsForPrimitive(
   
   for (const criterion of highWeightUnmastered) {
     if (remainingQuestions <= 0) break;
-    const questions = criterion.questions.slice(0, Math.min(2, remainingQuestions));
+    const questions = (criterion.questions || []).slice(0, Math.min(2, remainingQuestions));
     selectedQuestions.push(...questions.map(q => ({ ...q, criterionId: criterion.criterionId })));
     remainingQuestions -= questions.length;
   }
@@ -77,20 +77,20 @@ async function selectQuestionsForPrimitive(
   
   for (const criterion of mediumWeight) {
     if (remainingQuestions <= 0) break;
-    const questions = criterion.questions.slice(0, Math.min(1, remainingQuestions));
+    const questions = (criterion.questions || []).slice(0, Math.min(1, remainingQuestions));
     selectedQuestions.push(...questions.map(q => ({ ...q, criterionId: criterion.criterionId })));
     remainingQuestions -= questions.length;
   }
 
   // Phase 3: Fill remaining slots with any available questions
   const remaining = criteria.filter(c => 
-    c.questions.length > 0 && 
+    (c.questions?.length ?? 0) > 0 && 
     !selectedQuestions.some(sq => sq.criterionId === c.criterionId)
   );
   
   for (const criterion of remaining) {
     if (remainingQuestions <= 0) break;
-    const questions = criterion.questions.slice(0, Math.min(1, remainingQuestions));
+    const questions = (criterion.questions || []).slice(0, Math.min(1, remainingQuestions));
     selectedQuestions.push(...questions.map(q => ({ ...q, criterionId: criterion.criterionId })));
     remainingQuestions -= questions.length;
   }
@@ -136,12 +136,14 @@ export async function updateDailySummariesForUser(userId: number) {
 
     await prisma.userPrimitiveDailySummary.upsert({
       where: {
-        userId_primitiveId: {
+        userId_primitiveId_date: {
           userId,
-          primitiveId: primitive.primitiveId
+          primitiveId: primitive.primitiveId,
+          date: new Date()
         }
       },
       create: {
+        summary: {},
         userId,
         primitiveId: primitive.primitiveId,
         primitiveTitle: primitive.title,
@@ -150,7 +152,8 @@ export async function updateDailySummariesForUser(userId: number) {
         totalCriteria,
         masteredCriteria,
         weightedMasteryScore: weightedMastery,
-        canProgressToNext: canProgress
+        canProgressToNext: canProgress,
+        date: new Date()
       },
       update: {
         masteryLevel,
@@ -212,7 +215,7 @@ export async function generateDailyTasks(userId: number) {
     const bucketSize = bucket === 'critical' ? criticalCap : 
                        bucket === 'core' ? coreCap : plusCap;
     const totalInBucket = bucket === 'critical' ? critical.length :
-                          bucket === 'core' ? core.length : plus.length;
+                           bucket === 'core' ? core.length : plus.length;
     
     const questionCount = calculateQuestionsFromWeightedMastery(
       s.weightedMasteryScore,
@@ -222,7 +225,18 @@ export async function generateDailyTasks(userId: number) {
     
     const questions = await selectQuestionsForPrimitive(
       s.primitiveId,
-      s.masteryLevel,
+      ((lvl: string) => {
+        switch (lvl) {
+          case 'UNDERSTAND':
+            return 'UNDERSTAND';
+          case 'USE':
+            return 'USE';
+          case 'EXPLORE':
+            return 'EXPLORE';
+          default:
+            return 'UNDERSTAND';
+        }
+      })(s.masteryLevel) as UueStage,
       questionCount,
       userId
     );
@@ -432,7 +446,7 @@ export async function processBatchReviewOutcomes(
             where: {
               userId_criterionId_primitiveId_blueprintId: {
                 userId,
-                criterionId,
+                criterionId: parseInt(criterionId),
                 primitiveId,
                 blueprintId
               }
@@ -458,7 +472,7 @@ export async function processBatchReviewOutcomes(
 
             criterionUpdates.set(criterionKey, {
               userId,
-              criterionId,
+              criterionId: parseInt(criterionId),
               primitiveId,
               blueprintId,
               attemptCount,
@@ -562,8 +576,16 @@ export async function checkUeeProgression(
   // Get criteria for current UEE level
   const criteria = await prisma.masteryCriterion.findMany({
     where: {
-      primitiveId,
-      ueeLevel: progress.masteryLevel
+      knowledgePrimitiveId: primitiveId,
+      uueStage: ((level) => {
+        const map: Record<string, UueStage> = {
+          UNDERSTAND: 'UNDERSTAND',
+          USE: 'USE',
+          EXPLORE: 'EXPLORE',
+          NOT_STARTED: 'UNDERSTAND'
+        };
+        return map[level] ?? 'UNDERSTAND';
+      })(progress.masteryLevel)
     },
     include: {
       userCriterionMasteries: {
@@ -722,7 +744,7 @@ export async function getPinnedReviews(userId: number): Promise<Array<{
   const pinnedReviews = await prisma.pinnedReview.findMany({
     where: { userId },
     include: {
-      knowledgePrimitive: {
+      primitive: {
         select: {
           title: true
         }
@@ -733,7 +755,7 @@ export async function getPinnedReviews(userId: number): Promise<Array<{
 
   return pinnedReviews.map(pr => ({
     primitiveId: pr.primitiveId,
-    primitiveTitle: pr.knowledgePrimitive.title,
+    primitiveTitle: pr.primitive?.title ?? '',
     reviewAt: pr.reviewAt
   }));
 }

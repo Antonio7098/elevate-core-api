@@ -1,15 +1,8 @@
-import { Module } from '@nestjs/common';
-import { AiRAGController } from './ai-rag.controller';
-import { AiRAGService } from './ai-rag.service';
-import { AIAPIClientService } from './ai-api-client.service';
-// If you have a shared AuthModule that exports AuthenticatedGuard, import it here.
-// import { AuthModule } from '../auth/auth.module'; 
-// import { PrismaModule } from '../prisma/prisma.module'; // Path TBD or PrismaClient might be globally available
+// src/services/ai/ai-rag.module.ts - TEMPORARILY DISABLED
+// TODO: AI RAG module temporarily disabled - this is a NestJS module but we're using Express
+// This will be properly implemented once the architecture is aligned
 
-@Module({
-  imports: [/* PrismaModule, AuthModule */], // PrismaModule path TBD or global, AuthModule TBD
-  controllers: [AiRAGController],
-  providers: [AiRAGService, AIAPIClientService],
-  exports: [AiRAGService], // Export if other modules need to use AiRAGService
-})
-export class AiRAGModule {}
+// Temporarily disabled - AI RAG module being reworked
+// TODO: Re-enable when architecture is properly aligned
+
+export const AiRAGModule = {};

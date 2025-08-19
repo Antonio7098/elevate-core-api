@@ -1,5 +1,4 @@
 import { PrismaClient, UserMemory, CognitiveApproach, ExplanationStyle, InteractionStyle } from '@prisma/client';
-import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -14,7 +13,7 @@ export class UserMemoryService {
   /**
    * Get or create a user's memory record
    */
-  static async getUserMemory(userId: number): Promise<UserMemory> {
+  async getUserMemory(userId: number): Promise<UserMemory> {
     try {
       // Try to find existing user memory
       let userMemory = await prisma.userMemory.findUnique({
@@ -43,7 +42,7 @@ export class UserMemoryService {
   /**
    * Update a user's memory record
    */
-  static async updateUserMemory(userId: number, data: UserMemoryUpdateData): Promise<UserMemory> {
+  async updateUserMemory(userId: number, data: UserMemoryUpdateData): Promise<UserMemory> {
     try {
       // First ensure the user memory exists
       await this.getUserMemory(userId);
@@ -59,4 +58,6 @@ export class UserMemoryService {
       throw new Error('Failed to update user memory');
     }
   }
-} 
+}
+
+export default UserMemoryService; 

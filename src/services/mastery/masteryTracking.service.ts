@@ -2,6 +2,17 @@ import { PrismaClient, UserCriterionMastery } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// Define the MasteryUpdateResult type
+interface MasteryUpdateResult {
+  success: boolean;
+  oldMasteryScore: number;
+  newMasteryScore: number;
+  isMastered: boolean;
+  stageProgression: boolean;
+  nextStage: UueStage | null;
+  message?: string;
+}
+
 // ============================================================================
 // MASTERY TRACKING SERVICE
 // ============================================================================
@@ -44,15 +55,7 @@ export interface StageProgress {
   prerequisites: string[];
 }
 
-export interface MasteryUpdateResult {
-  success: boolean;
-  oldMasteryScore: number;
-  newMasteryScore: number;
-  isMastered: boolean;
-  stageProgression: boolean;
-  nextStage: UueStage | null;
-  message: string;
-}
+// MasteryUpdateResult interface moved to enhancedBatchReview.service.ts to avoid conflicts
 
 export interface MasteryThresholdConfig {
   threshold: MasteryThreshold;

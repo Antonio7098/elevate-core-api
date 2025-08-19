@@ -6,7 +6,7 @@
 // ============================================================================
 
 // User Management Routes
-export { default as authRoutes } from './auth';
+export { authRouter as authRoutes } from './auth';
 export { default as userRoutes } from './user.routes';
 export { default as paymentRoutes } from './payment.routes';
 export { default as userMemoryRoutes } from './userMemory.routes';

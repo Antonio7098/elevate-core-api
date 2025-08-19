@@ -561,7 +561,13 @@ export class EnhancedTodaysTasksController {
         return;
       }
 
-      const stageTasks = await enhancedTodaysTasksService.getTasksForUueStage(userId, stage);
+      // Validate UUE stage
+      if (!['UNDERSTAND', 'USE', 'EXPLORE'].includes(stage)) {
+        res.status(400).json({ message: 'Invalid UUE stage. Must be UNDERSTAND, USE, or EXPLORE.' });
+        return;
+      }
+
+      const stageTasks = await enhancedTodaysTasksService.getTasksForUueStage(userId, stage as 'UNDERSTAND' | 'USE' | 'EXPLORE');
 
       res.status(200).json({
         success: true,
